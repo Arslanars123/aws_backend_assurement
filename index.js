@@ -823,13 +823,7 @@ app.get("/get-supers", async (req, res) => {
 
 app.get("/get-professions", async (req, res) => {
   try {
-    const { companyId, projectId } = req.query;
-    const query = addFilters({}, companyId, projectId);
-    console.log(query);
-    const professions = await db
-      .collection("professions")
-      .find(query, { projection: { password: 0 } })
-      .toArray();
+    const professions = await db.collection("inputs").find({}).toArray();
     res.status(200).json(professions);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch professions" });
