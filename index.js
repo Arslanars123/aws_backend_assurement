@@ -821,7 +821,16 @@ app.get("/get-supers", async (req, res) => {
   }
 });
 
-app.get("/get-professions", async (req, res) => {
+app.get("/get-global-professions", async (req, res) => {
+  try {
+    const professions = await db.collection("inputs").find({}).toArray();
+    res.status(200).json(professions);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch professions" });
+  }
+});
+
+app.get("/get-company-professions", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
 
@@ -833,10 +842,58 @@ app.get("/get-professions", async (req, res) => {
     if (projectId) {
       query.projectId = projectId;
     }
-    const professions = await db.collection("inputs").find(query).toArray();
+    const professions = await db
+      .collection("professions")
+      .find(query)
+      .toArray();
     res.status(200).json(professions);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch professions" });
+  }
+});
+
+app.post("/add/professions_in_a_company", async (req, res) => {
+  try {
+    const { professions } = req.body;
+
+    if (!professions || professions.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "No professions provided in the request!" });
+    }
+
+    // Loop through each profession to either create or update
+    for (const profession of professions) {
+      const { professionID, companyId, ...professionDetails } = profession;
+
+      // Check if the profession exists by professionID and companyId
+      const existingProfession = await db.collection("professions").findOne({
+        professionID: professionID,
+        companyId: companyId,
+      });
+
+      if (existingProfession) {
+        // If the profession exists, update it with the new details
+        await db.collection("professions").updateOne(
+          { professionID: professionID, companyId: companyId },
+          {
+            $set: professionDetails, // Update all fields except professionID and companyId
+          }
+        );
+      } else {
+        // If the profession does not exist, insert a new document
+        await db.collection("professions").insertOne({
+          ...profession, // Insert the entire profession object, including professionID and companyId
+        });
+      }
+    }
+
+    res
+      .status(200)
+      .json({ success: "Professions added/updated successfully!" });
+  } catch (error) {
+    console.error("Error adding/updating professions:", error);
+    res.status(500).json({ error: "Failed to add or update professions" });
   }
 });
 
