@@ -836,8 +836,8 @@ app.post("/add/professions_in_a_company", async (req, res) => {
     let SubjectMatterIdArray = [];
     // Loop through each profession to either create or update
     for (const profession of professions) {
+      delete profession?._id;
       const { professionID, companyId, ...professionDetails } = profession;
-
       SubjectMatterIdArray.push(profession.SubjectMatterId);
       // Check if the profession exists by professionID and companyId
       const existingProfession = await db.collection("professions").findOne({
