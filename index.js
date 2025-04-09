@@ -566,36 +566,7 @@ app.get("/get-checks", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
 
-    //let query = addFilters({}, companyId, projectId);
-    let query = {};
-    let query2 = {};
-    if (companyId) {
-      query2.selectedCompany = companyId;
-    }
-    if (projectId) {
-      query2.selectedProjects = projectId;
-    }
-    const activatedRecords = await db
-      .collection("user_checks")
-      .find(query2)
-      .toArray();
-
-    let activatedCheckIds = activatedRecords.map((record) => record.checkId);
-    // Convert check IDs to ObjectIds if they are valid
-    activatedCheckIds = activatedCheckIds.map((id) =>
-      ObjectId.isValid(id) ? new ObjectId(id) : id
-    );
-
-    if (activatedCheckIds.length === 0) {
-      return res.status(200).json([]);
-    }
-
-    query._id = { $in: activatedCheckIds };
-
-    const checks = await db
-      .collection("checks")
-      .find(query, { projection: { password: 0 } })
-      .toArray();
+    const checks = await db.collection("checks").find({}).toArray();
 
     res.status(200).json(checks);
   } catch (error) {
@@ -4218,6 +4189,26 @@ app.post(
     }
   }
 );
+
+app.post("/add-project", async (req, res) => {
+  try {
+    const { name, address, postCode, city, startDate, companyId } = req.body;
+    const checks = await db.collection("checks").find({}).toArray();
+    const result = await db.collection("projects").insertOne({
+      name,
+      address,
+      postCode,
+      city,
+      startDate,
+      companyId,
+      checks,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    console.log("error");
+    res.status(500).json({ error: "Failed to create project" });
+  }
+});
 
 app.post(
   "/store-project",
