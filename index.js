@@ -2446,7 +2446,7 @@ app.post(
 
         // Optionally, store Excel data into a separate collection in the database
         if (excelRows.length > 0) {
-          // await db.collection("tasks").insertMany(excelRows);
+          await db.collection("tasks").insertMany(excelRows);
         }
         if (excelRows2.length > 0) {
           await db.collection("inputs").insertMany(excelRows2);
