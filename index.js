@@ -854,7 +854,7 @@ app.get("/get-company-professions", async (req, res) => {
 
 app.post("/add/professions_in_a_company", async (req, res) => {
   try {
-    const { professions } = req.body;
+    const { professions, projectsId } = req.body;
 
     if (!professions || professions.length === 0) {
       return res
@@ -862,10 +862,12 @@ app.post("/add/professions_in_a_company", async (req, res) => {
         .json({ error: "No professions provided in the request!" });
     }
 
+    let SubjectMatterIdArray = [];
     // Loop through each profession to either create or update
     for (const profession of professions) {
       const { professionID, companyId, ...professionDetails } = profession;
 
+      SubjectMatterIdArray.push(profession.SubjectMatterId);
       // Check if the profession exists by professionID and companyId
       const existingProfession = await db.collection("professions").findOne({
         professionID: professionID,
@@ -888,12 +890,48 @@ app.post("/add/professions_in_a_company", async (req, res) => {
       }
     }
 
+    if (projectsId) {
+      const allTasks = await db
+        .collection("tasks")
+        .find({ SubjectMatterId: { $in: SubjectMatterIdArray } })
+        .sort({ Index: 1 }) // Apply sorting here
+        .toArray();
+
+      if (allTasks && allTasks.length > 0) {
+        await db.collection("projects").updateOne(
+          { _id: new ObjectId(projectsId) },
+          {
+            $push: {
+              tasks: { $each: allTasks },
+            },
+          },
+          { upsert: true }
+        );
+      }
+    }
+
     res
       .status(200)
       .json({ success: "Professions added/updated successfully!" });
   } catch (error) {
     console.error("Error adding/updating professions:", error);
     res.status(500).json({ error: "Failed to add or update professions" });
+  }
+});
+
+app.post("/get-project-detail", async (req, res) => {
+  try {
+    const { projectId } = req.body;
+    const project = await db
+      .collection("projects")
+      .findOne({ _id: new ObjectId(projectId) });
+
+    if (!project) {
+      return res.status(404).json({ error: "project not found" });
+    }
+    res.status(200).json(project);
+  } catch (error) {
+    console.log("error", error);
   }
 });
 
