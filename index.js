@@ -2657,17 +2657,10 @@ app.post(
   "/store-standard",
   upload.fields([
     { name: "file", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
   ]),
   async (req, res) => {
     try {
-      const { projectsId, companyId } = req.body;
-
-      // Initialize variables for files
-      let picture = null;
       let file = null;
-      let pictures = [];
-
       // Handle Excel file upload
       if (req.files["file"] && req.files["file"].length > 0) {
         file = req.files["file"][0]; // Get the uploaded file
@@ -2684,14 +2677,6 @@ app.post(
 
         if (excelRows.length > 50) {
           excelRows = excelRows.slice(0, 50); // Limit to the first 50 rows
-        }
-
-        if (excelRows.length > 0) {
-          excelRows = excelRows.map((row) => ({
-            ...row,
-            projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
-            companyId,
-          }));
         }
 
         // Optionally, store Excel data into a separate collection in the database
