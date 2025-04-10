@@ -115,6 +115,8 @@ app.post("/store-user", upload.single("picture"), async (req, res) => {
     // Get the file information
     const picture = req.file ? req.file.filename : null;
 
+    const parsedUserProfession = JSON.parse(req.body.userProfession);
+
     // Insert the data into the database
     const result = await db.collection("users").insertOne({
       username,
@@ -132,6 +134,7 @@ app.post("/store-user", upload.single("picture"), async (req, res) => {
       isProjectManager,
       type,
       mainId,
+      userProfession: parsedUserProfession,
     });
 
     res.status(201).json(result);
@@ -444,6 +447,29 @@ app.get("/get-admins", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch Admins" });
   }
 });
+
+app.get("/get-project-managers", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+
+    const query = { isProjectManager: "yes" };
+    if (companyId && companyId !== "null") {
+      query.companyId = companyId;
+    }
+
+    if (projectId && projectId !== "null") {
+      // Convert comma-separated projectId to an array and apply the $in operator
+      query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
+    }
+
+    const users = await db.collection("users").find(query).toArray();
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch Admins" });
+  }
+});
+
 app.get("/get-users", async (req, res) => {
   try {
     const { projectId } = req.query;
