@@ -2387,32 +2387,32 @@ app.post(
   ]),
   async (req, res) => {
     try {
-      const {
-        project,
-        Index,
-        professionGroup,
-        Type,
-        item,
-        Activity,
-        criteria,
-        time,
-        method,
-        serialNumber,
-        comment,
-        drawing,
-        buildingPart,
-        projectsId,
-        companyId,
-        SubjectMatterId,
-        ControlId,
-      } = req.body;
+      // const {
+      //   project,
+      //   Index,
+      //   professionGroup,
+      //   Type,
+      //   item,
+      //   Activity,
+      //   criteria,
+      //   time,
+      //   method,
+      //   serialNumber,
+      //   comment,
+      //   drawing,
+      //   buildingPart,
+      //   projectsId,
+      //   companyId,
+      //   SubjectMatterId,
+      //   ControlId,
+      // } = req.body;
 
-      console.log(req.files); // Log files to inspect
+      // console.log(req.files); // Log files to inspect
 
       // Initialize variables for files
-      let picture = null;
+      // let picture = null;
       let file = null;
-      let pictures = [];
+      // let pictures = [];
 
       // Handle Excel file upload
       if (req.files["file"] && req.files["file"].length > 0) {
@@ -2426,28 +2426,25 @@ app.post(
         let excelRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]); // Convert sheet to JSON
         let excelRows2 = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName2]); // Convert sheet to JSON
 
-        // Log the parsed Excel rows
-        console.log("Excel Rows:", excelRows);
-
         if (excelRows.length > 50) {
           excelRows = excelRows.slice(0, 50); // Limit to the first 50 rows
         }
         if (excelRows2.length > 50) {
           excelRows2 = excelRows2.slice(0, 50); // Limit to the first 50 rows
         }
-        if (excelRows.length > 0) {
-          excelRows = excelRows.map((row) => ({
-            ...row,
-            projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
-            companyId,
-          }));
-        }
+
         if (excelRows2.length > 0) {
-          excelRows2 = excelRows2.map((row) => ({
-            ...row,
-            projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
-            companyId,
-          }));
+          excelRows2 = excelRows2.map((row) => {
+            if (row.EuroCode && typeof row.EuroCode === "string") {
+              row.EuroCode = row.EuroCode.replace(/\s*(and|&)\s*/gi, ",")
+                .split(",")
+                .map((code) => code.trim())
+                .filter(Boolean);
+            } else if (row.EuroCode && !Array.isArray(row.EuroCode)) {
+              row.EuroCode = [row.EuroCode];
+            }
+            return row;
+          });
         }
 
         // Optionally, store Excel data into a separate collection in the database
@@ -2460,36 +2457,35 @@ app.post(
       }
 
       // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
+      // if (req.files["pictures"] && req.files["pictures"].length > 0) {
+      //   pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+      // }
 
       // Insert the main task data into the database
-      const result = await db.collection("tasks").insertOne({
-        project,
-        Index,
-        professionGroup,
-        Type,
-        item,
-        Activity,
-        criteria,
-        time,
-        method,
-        serialNumber,
-        comment,
-        drawing,
-        buildingPart,
-        picture, // Single picture (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
-        companyId,
-        SubjectMatterId,
-        ControlId,
-      });
+      // const result = await db.collection("tasks").insertOne({
+      //   project,
+      //   Index,
+      //   professionGroup,
+      //   Type,
+      //   item,
+      //   Activity,
+      //   criteria,
+      //   time,
+      //   method,
+      //   serialNumber,
+      //   comment,
+      //   drawing,
+      //   buildingPart,
+      //   picture, // Single picture (null if not uploaded)
+      //   pictures, // Array of multiple files (empty if not uploaded)
+      //   projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
+      //   companyId,
+      //   SubjectMatterId,
+      //   ControlId,
+      // });
 
       res.status(201).json({
         message: "Task and Excel data stored successfully!",
-        taskId: result.insertedId,
       });
     } catch (error) {
       console.error("Error:", error);
