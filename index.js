@@ -765,12 +765,9 @@ app.get("/get-levels", async (req, res) => {
 
 app.get("/get-statics", async (req, res) => {
   try {
-    const { companyId, projectId } = req.query;
-    const query = addFilters({}, companyId, projectId);
-
     const statics = await db
-      .collection("statics")
-      .find(query, { projection: { password: 0 } })
+      .collection("standards")
+      .find({ DS_GroupId: { $nin: ["B1", "B2", "B3"] } })
       .toArray();
     res.status(200).json(statics);
   } catch (error) {
