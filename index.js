@@ -2965,6 +2965,7 @@ app.post(
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
         professionId,
+        createdAt: new Date(),
       });
 
       res.status(201).json(result);
@@ -4176,6 +4177,12 @@ app.post("/add-project", async (req, res) => {
   try {
     const { name, address, postCode, city, startDate, companyId } = req.body;
     const checks = await db.collection("checks").find({}).toArray();
+
+    const checksWithCreatedAt = checks.map((check) => ({
+      ...check,
+      createdAt: new Date(),
+    }));
+
     const result = await db.collection("projects").insertOne({
       name,
       address,
@@ -4183,7 +4190,8 @@ app.post("/add-project", async (req, res) => {
       city,
       startDate,
       companyId,
-      checks,
+      checks: checksWithCreatedAt,
+      createdAt: new Date(),
     });
     res.status(201).json(result);
   } catch (error) {
