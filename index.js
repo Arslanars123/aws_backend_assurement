@@ -5229,6 +5229,18 @@ app.get("/api/company-checks", async (req, res) => {
   }
 });
 
+app.get("/get-checklist", async (req, res) => {
+  try {
+    const docs = await db
+      .collection("standards")
+      .find({ DS_GroupId: { $in: ["B1", "B2", "B3"] } })
+      .toArray();
+    res.json({ success: true, data: docs });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 // 7. Check authentication status
 app.get("/users/authenticated", authenticateToken, (req, res) => {
   res.status(200).json({ authenticated: true, user: req.user });
