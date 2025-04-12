@@ -115,7 +115,9 @@ app.post("/store-user", upload.single("picture"), async (req, res) => {
     // Get the file information
     const picture = req.file ? req.file.filename : null;
 
-    const parsedUserProfession = JSON.parse(req.body.userProfession);
+    let parsedUserProfession;
+    if (req?.body?.userProfession)
+      parsedUserProfession = JSON.parse(req?.body?.userProfession);
 
     // Insert the data into the database
     const result = await db.collection("users").insertOne({
@@ -141,6 +143,35 @@ app.post("/store-user", upload.single("picture"), async (req, res) => {
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "Failed to create user" });
+  }
+});
+
+app.post("/updateUser", async (req, res) => {
+  try {
+    const { userIds, projectId } = req.body;
+
+    const objectIds = userIds.map((id) => new ObjectId(id));
+
+    const bulkOps = objectIds.map((userId) => ({
+      updateOne: {
+        filter: { _id: userId },
+        update: {
+          $addToSet: {
+            projectsId: projectId,
+          },
+        },
+      },
+    }));
+
+    const result = await db.collection("users").bulkWrite(bulkOps);
+
+    res.json({
+      message: "Users updated successfully",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Failed to update users" });
   }
 });
 
