@@ -2145,6 +2145,63 @@ app.post(
 );
 
 app.post(
+  "/submit-task",
+  upload.fields([{ name: "pictures", maxCount: 10 }]),
+  async (req, res) => {
+    try {
+      const { comment, buildingParts, drawing, projectId, taskId } = req.body;
+
+      const parsedBuildingParts = buildingParts
+        ? JSON.parse(buildingParts)
+        : null;
+
+      const parsedDrawing = drawing ? JSON.parse(drawing) : null;
+
+      // Log files to debug
+      console.log(req.files);
+
+      // Initialize variables
+      let pictures = [];
+
+      // Handle multiple pictures
+      if (req.files["pictures"] && req.files["pictures"].length > 0) {
+        pictures = req.files["pictures"].map((file) => file.filename);
+      }
+
+      // Update the specific task in the project
+      const result = await db.collection("projects").findOneAndUpdate(
+        {
+          _id: new ObjectId(projectId),
+          "tasks._id": new ObjectId(taskId),
+        },
+        {
+          $set: {
+            "tasks.$.comment": comment,
+            "tasks.$.buildingParts": parsedBuildingParts,
+            "tasks.$.drawing": parsedDrawing,
+            "tasks.$.pictures": pictures,
+            "tasks.$.isSubmitted": true,
+          },
+        },
+        { returnDocument: "after" }
+      );
+
+      if (!result) {
+        return res.status(404).json({ error: "Project or task not found" });
+      }
+
+      res.status(200).json({
+        message: "Task updated successfully",
+        check: result.value,
+      });
+    } catch (error) {
+      console.error("Error updating check:", error);
+      res.status(500).json({ error: "Failed to update check" });
+    }
+  }
+);
+
+app.post(
   "/update-part/:id",
   upload.fields([
     { name: "picture", maxCount: 1 }, // Single file field
