@@ -4325,6 +4325,16 @@ app.post("/add-project", async (req, res) => {
       createdAt: new Date(),
     }));
 
+    const staticDocumentCheckList = await db
+      .collection("standards")
+      .find({ DS_GroupId: { $in: ["B1", "B2", "B3"] } })
+      .toArray();
+
+    const staticReportRegistration = await db
+      .collection("standards")
+      .find({ DS_GroupId: { $nin: ["B1", "B2", "B3"] } })
+      .toArray();
+
     const result = await db.collection("projects").insertOne({
       name,
       address,
@@ -4333,6 +4343,8 @@ app.post("/add-project", async (req, res) => {
       startDate,
       companyId,
       checks: checksWithCreatedAt,
+      staticDocumentCheckList,
+      staticReportRegistration,
       createdAt: new Date(),
     });
     res.status(201).json(result);
