@@ -1614,10 +1614,7 @@ app.get(
       const query =
         companyId && companyId != "null" ? { companyId: companyId } : {};
       console.log(query);
-      const projects = await db
-        .collection("projects")
-        .find(query, { projection: { password: 0 } })
-        .toArray();
+      const projects = await db.collection("projects").find(query).toArray();
 
       res.status(200).json(projects);
     } catch (error) {
