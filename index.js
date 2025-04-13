@@ -2275,6 +2275,50 @@ app.post("/submit-static-document-checklist", async (req, res) => {
   }
 });
 
+app.post("/submit-static-report", async (req, res) => {
+  try {
+    const {
+      projectId,
+      staticReportId,
+      profession,
+      controlPlan,
+      comment,
+      date,
+      drawing,
+    } = req.body;
+
+    const result = await db.collection("projects").findOneAndUpdate(
+      {
+        _id: new ObjectId(projectId),
+        "staticReportRegistration._id": new ObjectId(staticReportId),
+      },
+      {
+        $set: {
+          "staticReportRegistration.$.profession": profession,
+          "staticReportRegistration.$.controlPlan": controlPlan,
+          "staticReportRegistration.$.comment": comment,
+          "staticReportRegistration.$.selectedDate": date,
+          "staticReportRegistration.$.drawing": drawing,
+          "staticReportRegistration.$.isSubmitted": true,
+        },
+      },
+      { returnDocument: "after" }
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: "Project or task not found" });
+    }
+
+    res.status(200).json({
+      message: "check list  updated successfully",
+      check: result.value,
+    });
+  } catch (error) {
+    console.error("Error updating check:", error);
+    res.status(500).json({ error: "Failed to update check" });
+  }
+});
+
 app.post(
   "/update-part/:id",
   upload.fields([
