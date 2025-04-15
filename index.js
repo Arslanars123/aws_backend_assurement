@@ -2143,7 +2143,11 @@ app.post(
 
 app.post(
   "/submit-task",
-  upload.fields([{ name: "pictures", maxCount: 10 }]),
+  upload.fields([
+    { name: "pictures", maxCount: 10 },
+    { name: "annotatedImage", maxCount: 10 },
+  ]),
+
   async (req, res) => {
     try {
       const { comment, buildingParts, drawing, projectId, taskId } = req.body;
@@ -2165,6 +2169,15 @@ app.post(
         pictures = req.files["pictures"].map((file) => file.filename);
       }
 
+      let annotatedImage = null;
+
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        annotatedImage = req.files["annotatedImage"][0].filename;
+      }
+
       // Update the specific task in the project
       const result = await db.collection("projects").findOneAndUpdate(
         {
@@ -2178,6 +2191,7 @@ app.post(
             "tasks.$.drawing": parsedDrawing,
             "tasks.$.pictures": pictures,
             "tasks.$.isSubmitted": true,
+            "tasks.$.annotatedImage": annotatedImage,
           },
         },
         { returnDocument: "after" }
