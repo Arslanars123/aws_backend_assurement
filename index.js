@@ -397,6 +397,39 @@ app.get("/get-subs", async (req, res) => {
   }
 });
 
+app.post("/get-filter-users", async (req, res) => {
+  try {
+    const { companyId, projectId, roles, taskId } = req.body;
+
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId),
+    });
+
+    const task = project?.tasks?.find((t) => t._id.toString() === taskId);
+
+    if (!task) {
+      return res.status(404).json({ error: "Task not found in project" });
+    }
+
+    const query = {
+      companyId: companyId,
+      projectsId: { $in: [projectId] },
+      "userProfession.SubjectMatterId": task?.SubjectMatterId,
+    };
+
+    if (roles && roles.length > 0) {
+      query.role = { $in: roles };
+    }
+
+    // Fetch users from the database
+    const users = await db.collection("users").find(query).toArray();
+
+    res.status(200).json(users); // Respond with the filtered users
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
 // GET /get-workers?companyId=123&projectId=999&professionsId=abc,xyz
 app.get("/get-workers", async (req, res) => {
   try {
@@ -2150,13 +2183,16 @@ app.post(
 
   async (req, res) => {
     try {
-      const { comment, buildingParts, drawing, projectId, taskId } = req.body;
+      const { comment, buildingParts, drawing, projectId, taskId, user } =
+        req.body;
 
       const parsedBuildingParts = buildingParts
         ? JSON.parse(buildingParts)
         : null;
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
+
+      const parsedUser = user ? JSON.parse(user) : null;
 
       // Log files to debug
       console.log(req.files);
@@ -2192,6 +2228,7 @@ app.post(
             "tasks.$.pictures": pictures,
             "tasks.$.isSubmitted": true,
             "tasks.$.annotatedImage": annotatedImage,
+            "tasks.$.user": parsedUser,
           },
         },
         { returnDocument: "after" }
