@@ -2970,38 +2970,52 @@ app.post(
 app.post(
   "/store-deviation",
   upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
+    { name: "pictures", maxCount: 10 },
+    { name: "annotatedImage", maxCount: 10 },
   ]),
   async (req, res) => {
     try {
-      const { serialNumber, comment, projectsId, companyId, profession } =
-        req.body;
-      console.log(req.files); // Log files to inspect
+      const {
+        companyId,
+        projectId,
+        comment,
+        profession,
+        buildingParts,
+        drawing,
+      } = req.body;
 
-      // Initialize variables for files
-      let picture = null;
+      const parsedBuildingParts = buildingParts
+        ? JSON.parse(buildingParts)
+        : null;
+
+      const parsedDrawing = drawing ? JSON.parse(drawing) : null;
+
+      const parsedProfession = profession ? JSON.parse(profession) : null;
+
       let pictures = [];
-
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
         pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
       }
 
+      let annotatedImage = null;
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        annotatedImage = req.files["annotatedImage"][0].filename;
+      }
+
       // Insert the data into the database
       const result = await db.collection("deviations").insertOne({
-        serialNumber,
-        comment,
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
-        profession,
+        projectsId: Array.isArray(projectId) ? projectId : [projectId], // Convert to array if it's not already an array
+        comment,
+        profession: parsedProfession,
+        buildingParts: parsedBuildingParts,
+        drawing: parsedDrawing,
+        pictures,
       });
 
       res.status(201).json(result);
