@@ -401,21 +401,22 @@ app.post("/get-filter-users", async (req, res) => {
   try {
     const { companyId, projectId, roles, taskId } = req.body;
 
-    const project = await db.collection("projects").findOne({
-      _id: new ObjectId(projectId),
-    });
-
-    const task = project?.tasks?.find((t) => t._id.toString() === taskId);
-
-    if (!task) {
-      return res.status(404).json({ error: "Task not found in project" });
+    let task;
+    if (taskId) {
+      const project = await db.collection("projects").findOne({
+        _id: new ObjectId(projectId),
+      });
+      task = project?.tasks?.find((t) => t._id.toString() === taskId);
     }
 
     const query = {
       companyId: companyId,
       projectsId: { $in: [projectId] },
-      "userProfession.SubjectMatterId": task?.SubjectMatterId,
     };
+
+    if (task) {
+      query.userProfession.SubjectMatterId = task?.SubjectMatterId;
+    }
 
     if (roles && roles.length > 0) {
       query.role = { $in: roles };
@@ -4229,49 +4230,27 @@ app.post(
 
 app.post(
   "/store-note",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
+  upload.fields([{ name: "pictures", maxCount: 10 }]),
   async (req, res) => {
     try {
-      // Receive the new fields
-      const {
-        item,
-        recipient,
-        drawing,
-        projectsId,
-        companyId,
-        profession,
-        users,
-      } = req.body;
-      console.log(req.files); // Log files to inspect
-
-      // Initialize variables for files
-      let picture = null;
+      const { companyId, projectsId, item, projectUsers, drawing } = req.body;
       let pictures = [];
 
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
+      const parsedDrawing = drawing ? JSON.parse(drawing) : null;
+      const parsedProjectUsers = drawing ? JSON.parse(projectUsers) : null;
 
-      // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
         pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
       }
 
       // Insert the data into the database
       const result = await db.collection("notes").insertOne({
-        item,
-        recipient,
-        drawing,
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
-        profession,
-        users: users.split(","),
+        item,
+        users: parsedProjectUsers,
+        drawing: parsedDrawing,
+        pictures,
       });
 
       res.status(201).json(result);
