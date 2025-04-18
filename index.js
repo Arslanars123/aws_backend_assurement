@@ -399,7 +399,8 @@ app.get("/get-subs", async (req, res) => {
 
 app.post("/get-filter-users", async (req, res) => {
   try {
-    const { companyId, projectId, roles, taskId } = req.body;
+    const { companyId, projectId, roles, taskId, professionsIds, projectsId } =
+      req.body;
 
     let task;
     if (taskId) {
@@ -409,16 +410,24 @@ app.post("/get-filter-users", async (req, res) => {
       task = project?.tasks?.find((t) => t._id.toString() === taskId);
     }
 
-    const query = {
-      companyId: companyId,
-      projectsId: { $in: [projectId] },
-    };
+    const query = {};
+
+    if (companyId && companyId !== "null") query.companyId = companyId;
+
+    if (projectId && projectId !== "null")
+      query.projectsId = { $in: [projectId] };
+
+    if (projectsId?.length)
+      query.projectsId = { $in: projectsId.split(",").map((id) => id.trim()) };
 
     if (task) {
-      query.userProfession.SubjectMatterId = task?.SubjectMatterId;
+      query["userProfession.SubjectMatterId"] = task?.SubjectMatterId;
     }
 
-    if (roles && roles.length > 0) {
+    if (professionsIds?.length) {
+      query["userProfession._id"] = { $in: professionsIds };
+    }
+    if (roles?.length) {
       query.role = { $in: roles };
     }
 
