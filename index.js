@@ -904,10 +904,10 @@ app.get("/get-company-professions", async (req, res) => {
 
     const query = {};
 
-    if (companyId) {
+    if (companyId && companyId !== "null") {
       query.companyId = companyId;
     }
-    if (projectId) {
+    if (projectId && projectId !== "null") {
       query.projectsId = { $in: [projectId] };
     }
     const professions = await db
