@@ -920,62 +920,64 @@ app.get("/get-company-professions", async (req, res) => {
   }
 });
 
+async function addOrUpdateProfessions({ professions, projectsId }) {
+  if (!professions || professions.length === 0) {
+    throw new Error("No professions provided in the request!");
+  }
+
+  let SubjectMatterIdArray = [];
+
+  for (const profession of professions) {
+    delete profession?._id;
+    const { professionID, companyId, ...professionDetails } = profession;
+    SubjectMatterIdArray.push(profession.SubjectMatterId);
+
+    const existingProfession = await db.collection("professions").findOne({
+      professionID,
+      companyId,
+    });
+
+    if (existingProfession) {
+      await db
+        .collection("professions")
+        .updateOne({ professionID, companyId }, { $set: professionDetails });
+    } else {
+      await db.collection("professions").insertOne({
+        ...profession,
+      });
+    }
+  }
+
+  if (projectsId) {
+    const allTasks = await db
+      .collection("tasks")
+      .find({ SubjectMatterId: { $in: SubjectMatterIdArray } })
+      .sort({ Index: 1 })
+      .toArray();
+
+    if (allTasks?.length > 0) {
+      await db
+        .collection("projects")
+        .updateOne(
+          { _id: new ObjectId(projectsId) },
+          { $push: { tasks: { $each: allTasks } } },
+          { upsert: true }
+        );
+    }
+  }
+
+  return true;
+}
+
 app.post("/add/professions_in_a_company", async (req, res) => {
   try {
     const { professions, projectsId } = req.body;
 
-    if (!professions || professions.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "No professions provided in the request!" });
-    }
-
-    let SubjectMatterIdArray = [];
-    // Loop through each profession to either create or update
-    for (const profession of professions) {
-      delete profession?._id;
-      const { professionID, companyId, ...professionDetails } = profession;
-      SubjectMatterIdArray.push(profession.SubjectMatterId);
-      // Check if the profession exists by professionID and companyId
-      const existingProfession = await db.collection("professions").findOne({
-        professionID: professionID,
-        companyId: companyId,
+    if (professions?.length > 0) {
+      await addOrUpdateProfessions({
+        professions,
+        projectsId,
       });
-
-      if (existingProfession) {
-        // If the profession exists, update it with the new details
-        await db.collection("professions").updateOne(
-          { professionID: professionID, companyId: companyId },
-          {
-            $set: professionDetails, // Update all fields except professionID and companyId
-          }
-        );
-      } else {
-        // If the profession does not exist, insert a new document
-        await db.collection("professions").insertOne({
-          ...profession, // Insert the entire profession object, including professionID and companyId
-        });
-      }
-    }
-
-    if (projectsId) {
-      const allTasks = await db
-        .collection("tasks")
-        .find({ SubjectMatterId: { $in: SubjectMatterIdArray } })
-        .sort({ Index: 1 }) // Apply sorting here
-        .toArray();
-
-      if (allTasks && allTasks.length > 0) {
-        await db.collection("projects").updateOne(
-          { _id: new ObjectId(projectsId) },
-          {
-            $push: {
-              tasks: { $each: allTasks },
-            },
-          },
-          { upsert: true }
-        );
-      }
     }
 
     res
@@ -4451,44 +4453,140 @@ app.post(
   }
 );
 
-app.post("/add-project", async (req, res) => {
-  try {
-    const { name, address, postCode, city, startDate, companyId } = req.body;
-    const checks = await db.collection("checks").find({}).toArray();
+app.post(
+  "/add-project",
+  upload.fields([
+    { name: "addDrawingPictures", maxCount: 10 },
+    { name: "planPictures", maxCount: 10 },
+  ]),
+  async (req, res) => {
+    try {
+      const {
+        basicDetails,
+        professions,
+        addUsers,
+        addDrawing,
+        plan,
+        certificateSchema,
+        companyId,
+      } = req.body;
 
-    const checksWithCreatedAt = checks.map((check) => ({
-      ...check,
-      createdAt: new Date(),
-    }));
+      const parsedBasicDetails =
+        typeof basicDetails === "string"
+          ? JSON.parse(basicDetails)
+          : basicDetails;
 
-    const staticDocumentCheckList = await db
-      .collection("standards")
-      .find({ DS_GroupId: { $in: ["B1", "B2", "B3"] } })
-      .toArray();
+      const parsedProfessions =
+        typeof professions === "string" ? JSON.parse(professions) : professions;
 
-    const staticReportRegistration = await db
-      .collection("standards")
-      .find({ DS_GroupId: { $nin: ["B1", "B2", "B3"] } })
-      .toArray();
+      const parsedAddUsers =
+        typeof addUsers === "string" ? JSON.parse(addUsers) : addUsers;
 
-    const result = await db.collection("projects").insertOne({
-      name,
-      address,
-      postCode,
-      city,
-      startDate,
-      companyId,
-      checks: checksWithCreatedAt,
-      staticDocumentCheckList,
-      staticReportRegistration,
-      createdAt: new Date(),
-    });
-    res.status(201).json(result);
-  } catch (error) {
-    console.log("error");
-    res.status(500).json({ error: "Failed to create project" });
+      const parsedAddDrawing =
+        typeof addDrawing === "string" ? JSON.parse(addDrawing) : addDrawing;
+
+      const parsedPlan = typeof plan === "string" ? JSON.parse(plan) : plan;
+
+      const parsedCertificateSchema =
+        typeof plan === "string"
+          ? JSON.parse(certificateSchema)
+          : certificateSchema;
+
+      // Attach uploaded files
+      const addDrawingPictures =
+        req.files["addDrawingPictures"]?.map((file) => file.filename) || [];
+      const planPictures =
+        req.files["planPictures"]?.map((file) => file.filename) || [];
+
+      const checks = await db.collection("checks").find({}).toArray();
+
+      const checksWithCreatedAt = checks.map((check) => ({
+        ...check,
+        createdAt: new Date(),
+      }));
+
+      const staticDocumentCheckList = await db
+        .collection("standards")
+        .find({ DS_GroupId: { $in: ["B1", "B2", "B3"] } })
+        .toArray();
+
+      const staticReportRegistration = await db
+        .collection("standards")
+        .find({ DS_GroupId: { $nin: ["B1", "B2", "B3"] } })
+        .toArray();
+
+      const result = await db.collection("projects").insertOne({
+        ...parsedBasicDetails,
+        companyId,
+        checks: checksWithCreatedAt,
+        staticDocumentCheckList,
+        staticReportRegistration,
+        createdAt: new Date(),
+      });
+
+      const newProjectId = result.insertedId;
+
+      if (parsedProfessions?.length > 0) {
+        await addOrUpdateProfessions({
+          professions: parsedProfessions,
+          projectsId: newProjectId,
+        });
+      }
+
+      if (parsedAddUsers) {
+        const allUserIds = Object.values(parsedAddUsers)
+          .flat()
+          .map((user) => user._id);
+
+        const objectIds = allUserIds.map((id) => new ObjectId(id));
+
+        const bulkOps = objectIds.map((userId) => ({
+          updateOne: {
+            filter: { _id: userId },
+            update: {
+              $addToSet: {
+                projectsId: newProjectId,
+              },
+            },
+          },
+        }));
+
+        const result = await db.collection("users").bulkWrite(bulkOps);
+      }
+
+      if (parsedAddDrawing) {
+        const result = await db.collection("draws").insertOne({
+          ...parsedAddDrawing,
+          pictures: addDrawingPictures,
+          companyId,
+          projectsId: [newProjectId],
+        });
+      }
+
+      if (parsedCertificateSchema) {
+        const result = await db.collection("schemes").insertOne({
+          ...parsedCertificateSchema,
+          projectsId: [newProjectId], // Convert to array if it's not already an array
+          companyId,
+        });
+      }
+
+      if (parsedPlan) {
+        const result = await db.collection("plans").insertOne({
+          ...parsedPlan,
+          pictures: planPictures,
+          projectsId: [newProjectId],
+          companyId,
+        });
+      }
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.log("error");
+      res.status(500).json({ error: "Failed to create project" });
+    }
   }
-});
+);
 
 app.post(
   "/store-project",
