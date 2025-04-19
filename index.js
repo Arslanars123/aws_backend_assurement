@@ -4524,11 +4524,21 @@ app.post(
         createdAt: new Date(),
       });
 
-      const newProjectId = result.insertedId;
+      const newProjectId = result.insertedId?.toString();
 
       if (parsedProfessions?.length > 0) {
+        const updatedProfessions = parsedProfessions.map((profession) => {
+          const filteredProjectsId =
+            profession?.projectsId?.filter((id) => id !== null) || [];
+
+          return {
+            ...profession,
+            projectsId: [...filteredProjectsId, newProjectId],
+          };
+        });
+
         await addOrUpdateProfessions({
-          professions: parsedProfessions,
+          professions: updatedProfessions,
           projectsId: newProjectId,
         });
       }
