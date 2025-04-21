@@ -606,7 +606,7 @@ app.post("/update-company-status/:id", async (req, res) => {
 
 app.get("/get-tasks", async (req, res) => {
   try {
-    const tasks = await db.collection("tasks").find(query).toArray();
+    const tasks = await db.collection("tasks").find({}).toArray();
 
     res.status(200).json(tasks);
   } catch (error) {
@@ -3490,48 +3490,23 @@ app.post(
   }
 );
 
-app.post(
-  "/store-description",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
-  async (req, res) => {
-    try {
-      // Receive the new fields: desc1 and desc2
-      const { desc1, desc2, companyId } = req.body;
-      console.log(req.files); // Log files to inspect
+app.post("/store-description", async (req, res) => {
+  try {
+    // Receive the new fields: desc1 and desc2
+    const { desc1, desc2, desc3 } = req.body;
 
-      // Initialize variables for files
-      let picture = null;
-      let pictures = [];
+    const result = await db.collection("descriptions").insertOne({
+      desc1,
+      desc2,
+      desc3,
+    });
 
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
-
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
-
-      // Insert the data into the database
-      const result = await db.collection("descriptions").insertOne({
-        desc1, // Add the desc1 field
-        desc2, // Add the desc2 field
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        companyId,
-      });
-
-      res.status(201).json(result);
-    } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create task" });
-    }
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Failed to create task" });
   }
-);
+});
 
 app.post(
   "/update-description/:id",
