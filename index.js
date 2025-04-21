@@ -606,25 +606,6 @@ app.post("/update-company-status/:id", async (req, res) => {
 
 app.get("/get-tasks", async (req, res) => {
   try {
-    const { companyId, projectId, SubjectMatterId, types } = req.query;
-
-    // Base filters for companyId, projectId (if you have an existing helper):
-    const query = addFilters({}, companyId, projectId);
-
-    // 1. If "matters" is provided, split by commas
-    //    => tasks whose "SubjectMatterId" is in that array
-    if (SubjectMatterId) {
-      query.SubjectMatterId = SubjectMatterId;
-    }
-
-    // 2. If "types" is provided, split by commas
-    //    => tasks whose "Type" is in that array
-    if (types) {
-      const typesArray = types.split(",").map((t) => t.trim());
-      query.Type = { $in: typesArray };
-    }
-
-    // Now find tasks matching the combined query
     const tasks = await db.collection("tasks").find(query).toArray();
 
     res.status(200).json(tasks);
