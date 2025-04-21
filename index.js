@@ -3147,6 +3147,7 @@ app.post(
         contactPerson,
         picture,
         pictures,
+        status: "activate",
       });
 
       res.status(201).json(result);
