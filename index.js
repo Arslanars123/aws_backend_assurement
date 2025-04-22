@@ -1111,7 +1111,7 @@ app.post(
 
       // Add fields dynamically to the updateData object if they are provided
       if (username) updateData.username = username;
-      if (password) updateData.password = await bcrypt.hash(password, 10);
+      if (password) updateData.password = password; //await bcrypt.hash(password, 10);
       if (role) updateData.role = role;
       if (address) updateData.address = address;
       if (city) updateData.city = city;
@@ -1127,9 +1127,6 @@ app.post(
         updateData.picture = req.file.filename; // Store only the filename in the database
       }
       if (type) updateData.type = type;
-      //
-      const projectsArray = projectsId.split(",");
-      updateData.projectsId = projectsArray;
 
       const result = await db
         .collection("users")
@@ -1174,15 +1171,6 @@ app.post("/users/login", async (req, res) => {
     const user = await db.collection("users").findOne({ username, password });
     if (!user) {
       return res.status(404).json({ error: "Invalid username or password" });
-    }
-
-    if (user.companyId) {
-      const company = await db
-        .collection("companies")
-        .findOne({ _id: new ObjectId(user.companyId) });
-      if (company && company.picture) {
-        user.picture = company.picture;
-      }
     }
 
     const token = jwt.sign(
@@ -3149,8 +3137,6 @@ app.post(
     try {
       const { name, casenr, phone, address, contactPerson } = req.body;
 
-      console.log("here" + pictures2);
-
       const updateData = {};
 
       // Dynamically add provided fields to updateData
@@ -3160,24 +3146,12 @@ app.post(
       if (address) updateData.address = address;
       if (contactPerson) updateData.contactPerson = contactPerson;
 
-      if (picture2) {
-        updateData.picture = picture2; // Use the existing picture if provided in the request
-      }
-
       // Handle single file upload (picture)
       if (req.files["picture"] && req.files["picture"].length > 0) {
         updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
       }
 
       let picturesArray = [];
-      if (!pictures2) {
-        updateData.pictures = [];
-      }
-
-      if (pictures2) {
-        picturesArray = pictures2.split(","); // Splitting by comma
-        updateData.pictures = picturesArray;
-      }
 
       // Handle multiple file uploads (pictures)
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
