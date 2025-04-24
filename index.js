@@ -375,6 +375,27 @@ app.get("/get-inspectors", async (req, res) => {
   }
 });
 
+app.get("/get-independent-controller", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+
+    const query = { role: "Independent Controller" };
+    if (companyId && companyId !== "null") {
+      query.companyId = companyId;
+    }
+
+    if (projectId && projectId !== "null") {
+      query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
+    }
+
+    const users = await db.collection("users").find(query).toArray();
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch Inspectors" });
+  }
+});
+
 app.get("/get-subs", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
@@ -885,10 +906,10 @@ app.get("/get-company-professions", async (req, res) => {
 
     const query = {};
 
-    if (companyId && companyId !== "null") {
+    if (companyId && companyId !== "null" && companyId !== "undefined") {
       query.companyId = companyId;
     }
-    if (projectId && projectId !== "null") {
+    if (projectId && projectId !== "null" && projectId !== "undefined") {
       query.projectsId = { $in: [projectId] };
     }
     const professions = await db
@@ -2391,8 +2412,10 @@ app.post(
         updateData.pictures = [...existingFiles, ...newFiles];
       }
 
-      const projectsArray = projectsId.split(",");
-      updateData.projectsId = projectsArray;
+      if (projectsId) {
+        const projectsArray = projectsId.split(",");
+        updateData.projectsId = projectsArray;
+      }
 
       // Update the user document in the database
       const result = await db
@@ -4387,6 +4410,13 @@ app.post(
   }
 );
 
+const isObjectNotEmpty = (obj) =>
+  obj &&
+  Object.keys(obj).length > 0 &&
+  Object.values(obj).some(
+    (v) => v !== "" && v !== null && !(Array.isArray(v) && v.length === 0)
+  );
+
 app.post(
   "/add-project",
   upload.fields([
@@ -4410,6 +4440,14 @@ app.post(
           ? JSON.parse(basicDetails)
           : basicDetails;
 
+      const isBasicDetailsValid = parsedBasicDetails?.name?.trim();
+
+      if (!isBasicDetailsValid) {
+        return res
+          .status(400)
+          .json({ error: "All basic details must be filled." });
+      }
+
       const parsedProfessions =
         typeof professions === "string" ? JSON.parse(professions) : professions;
 
@@ -4422,18 +4460,16 @@ app.post(
       const parsedPlan = typeof plan === "string" ? JSON.parse(plan) : plan;
 
       const parsedCertificateSchema =
-        typeof plan === "string"
+        typeof certificateSchema === "string"
           ? JSON.parse(certificateSchema)
           : certificateSchema;
 
-      // Attach uploaded files
       const addDrawingPictures =
         req.files["addDrawingPictures"]?.map((file) => file.filename) || [];
       const planPictures =
         req.files["planPictures"]?.map((file) => file.filename) || [];
 
       const checks = await db.collection("checks").find({}).toArray();
-
       const checksWithCreatedAt = checks.map((check) => ({
         ...check,
         createdAt: new Date(),
@@ -4482,24 +4518,26 @@ app.post(
           .flat()
           .map((user) => user._id);
 
-        const objectIds = allUserIds.map((id) => new ObjectId(id));
+        if (allUserIds?.length) {
+          const objectIds = allUserIds.map((id) => new ObjectId(id));
 
-        const bulkOps = objectIds.map((userId) => ({
-          updateOne: {
-            filter: { _id: userId },
-            update: {
-              $addToSet: {
-                projectsId: newProjectId,
+          const bulkOps = objectIds.map((userId) => ({
+            updateOne: {
+              filter: { _id: userId },
+              update: {
+                $addToSet: {
+                  projectsId: newProjectId,
+                },
               },
             },
-          },
-        }));
+          }));
 
-        const result = await db.collection("users").bulkWrite(bulkOps);
+          await db.collection("users").bulkWrite(bulkOps);
+        }
       }
 
-      if (parsedAddDrawing) {
-        const result = await db.collection("draws").insertOne({
+      if (isObjectNotEmpty(parsedAddDrawing)) {
+        await db.collection("draws").insertOne({
           ...parsedAddDrawing,
           pictures: addDrawingPictures,
           companyId,
@@ -4507,16 +4545,16 @@ app.post(
         });
       }
 
-      if (parsedCertificateSchema) {
-        const result = await db.collection("schemes").insertOne({
+      if (isObjectNotEmpty(parsedCertificateSchema)) {
+        await db.collection("schemes").insertOne({
           ...parsedCertificateSchema,
-          projectsId: [newProjectId], // Convert to array if it's not already an array
+          projectsId: [newProjectId],
           companyId,
         });
       }
 
-      if (parsedPlan) {
-        const result = await db.collection("plans").insertOne({
+      if (isObjectNotEmpty(parsedPlan)) {
+        await db.collection("plans").insertOne({
           ...parsedPlan,
           pictures: planPictures,
           projectsId: [newProjectId],
@@ -4526,7 +4564,7 @@ app.post(
 
       res.status(201).json(result);
     } catch (error) {
-      console.log("error");
+      console.log("error", error);
       res.status(500).json({ error: "Failed to create project" });
     }
   }
