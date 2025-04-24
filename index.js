@@ -1820,7 +1820,7 @@ app.get(
       const level = await db
         .collection("levels")
         .findOne({ _id: new ObjectId(req.params.id) });
-      if (!user) {
+      if (!level) {
         return res.status(404).json({ error: "level not found" });
       }
       res.status(200).json(level);
@@ -2331,6 +2331,7 @@ app.post("/submit-static-report", async (req, res) => {
       projectId,
       staticReportId,
       profession,
+      user,
       controlPlan,
       comment,
       date,
@@ -2345,6 +2346,7 @@ app.post("/submit-static-report", async (req, res) => {
       {
         $set: {
           "staticReportRegistration.$.profession": profession,
+          "staticReportRegistration.$.user": user,
           "staticReportRegistration.$.controlPlan": controlPlan,
           "staticReportRegistration.$.comment": comment,
           "staticReportRegistration.$.selectedDate": date,
@@ -2855,8 +2857,10 @@ app.post(
         updateData.pictures = [...existingFiles, ...newFiles];
       }
 
-      const projectsArray = projectsId.split(",");
-      updateData.projectsId = projectsArray;
+      if (projectsId) {
+        const projectsArray = projectsId.split(",");
+        updateData.projectsId = projectsArray;
+      }
 
       // Update the task document in the database
       const result = await db
