@@ -4239,17 +4239,41 @@ app.post(
 
 app.post(
   "/store-note",
-  upload.fields([{ name: "pictures", maxCount: 10 }]),
+  upload.fields([
+    { name: "pictures", maxCount: 10 },
+    { name: "annotatedImage", maxCount: 10 },
+  ]),
   async (req, res) => {
     try {
-      const { companyId, projectsId, item, projectUsers, drawing } = req.body;
+      const {
+        companyId,
+        projectsId,
+        item,
+        projectUsers,
+        drawing,
+        projectManager,
+      } = req.body;
       let pictures = [];
 
+      let annotatedImage = null;
+
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
-      const parsedProjectUsers = drawing ? JSON.parse(projectUsers) : null;
+
+      const parsedProjectUsers = projectUsers ? JSON.parse(projectUsers) : null;
+
+      const parsedProjectManager = projectManager
+        ? JSON.parse(projectManager)
+        : null;
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
         pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+      }
+
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        annotatedImage = req.files["annotatedImage"][0].filename;
       }
 
       // Insert the data into the database
@@ -4258,8 +4282,10 @@ app.post(
         companyId,
         item,
         users: parsedProjectUsers,
+        projectManager: parsedProjectManager,
         drawing: parsedDrawing,
         pictures,
+        annotatedImage,
       });
 
       res.status(201).json(result);
