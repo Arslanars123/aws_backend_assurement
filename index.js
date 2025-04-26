@@ -2378,20 +2378,23 @@ app.post("/submit-static-report", async (req, res) => {
       drawing,
     } = req.body;
 
+    const professionKey = profession.SubjectMatterId;
+    const updatePath = `professionAssociatedData.${professionKey}.staticReportRegistration`;
+
     const result = await db.collection("projects").findOneAndUpdate(
       {
         _id: new ObjectId(projectId),
-        "staticReportRegistration._id": new ObjectId(staticReportId),
+        [`${updatePath}._id`]: new ObjectId(staticReportId),
       },
       {
         $set: {
-          "staticReportRegistration.$.profession": profession,
-          "staticReportRegistration.$.user": user,
-          "staticReportRegistration.$.controlPlan": controlPlan,
-          "staticReportRegistration.$.comment": comment,
-          "staticReportRegistration.$.selectedDate": date,
-          "staticReportRegistration.$.drawing": drawing,
-          "staticReportRegistration.$.isSubmitted": true,
+          [`${updatePath}.$.profession`]: profession,
+          [`${updatePath}.$.user`]: user,
+          [`${updatePath}.$.controlPlan`]: controlPlan,
+          [`${updatePath}.$.comment`]: comment,
+          [`${updatePath}.$.selectedDate`]: date,
+          [`${updatePath}.$.drawing`]: drawing,
+          [`${updatePath}.$.isSubmitted`]: true,
         },
       },
       { returnDocument: "after" }
