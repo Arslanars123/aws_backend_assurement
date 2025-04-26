@@ -2329,34 +2329,39 @@ app.post("/submit-static-document-checklist", async (req, res) => {
       date,
     } = req.body;
 
+    const professionKey = profession.SubjectMatterId;
+    const updatePath = `professionAssociatedData.${professionKey}.staticDocumentCheckList`;
+
     const result = await db.collection("projects").findOneAndUpdate(
       {
         _id: new ObjectId(projectId),
-        "staticDocumentCheckList._id": new ObjectId(staticDocumentCheckListId),
+        [`${updatePath}._id`]: new ObjectId(staticDocumentCheckListId),
       },
       {
         $set: {
-          "staticDocumentCheckList.$.profession": profession,
-          "staticDocumentCheckList.$.controlPlan": controlPlan,
-          "staticDocumentCheckList.$.comment": comment,
-          "staticDocumentCheckList.$.selectedDate": date,
-          "staticDocumentCheckList.$.isSubmitted": true,
+          [`${updatePath}.$.profession`]: profession,
+          [`${updatePath}.$.controlPlan`]: controlPlan,
+          [`${updatePath}.$.comment`]: comment,
+          [`${updatePath}.$.selectedDate`]: date,
+          [`${updatePath}.$.isSubmitted`]: true,
         },
       },
       { returnDocument: "after" }
     );
 
     if (!result) {
-      return res.status(404).json({ error: "Project or task not found" });
+      return res
+        .status(404)
+        .json({ error: "Project or checklist item not found" });
     }
 
     res.status(200).json({
-      message: "check list  updated successfully",
-      check: result.value,
+      message: "Checklist item updated successfully",
+      check: result,
     });
   } catch (error) {
-    console.error("Error updating check:", error);
-    res.status(500).json({ error: "Failed to update check" });
+    console.error("Error updating checklist item:", error);
+    res.status(500).json({ error: "Failed to update checklist item" });
   }
 });
 
