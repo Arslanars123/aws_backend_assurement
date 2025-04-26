@@ -929,6 +929,18 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
 
   let SubjectMatterIdArray = [];
 
+  const staticDocumentCheckList = await db
+    .collection("standards")
+    .find({ DS_GroupId: { $in: ["B1", "B2", "B3"] } })
+    .toArray();
+
+  const staticReportRegistration = await db
+    .collection("standards")
+    .find({ DS_GroupId: { $nin: ["B1", "B2", "B3"] } })
+    .toArray();
+
+  const professionAssociatedData = {};
+
   for (const profession of professions) {
     delete profession?._id;
     const { professionID, companyId, ...professionDetails } = profession;
@@ -938,6 +950,13 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
       professionID,
       companyId,
     });
+
+    const subjectMatterIdKey = `${profession.SubjectMatterId}`;
+
+    professionAssociatedData[subjectMatterIdKey] = {
+      staticDocumentCheckList,
+      staticReportRegistration,
+    };
 
     if (existingProfession) {
       await db
@@ -957,15 +976,31 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
       .sort({ Index: 1 })
       .toArray();
 
-    if (allTasks?.length > 0) {
-      await db
-        .collection("projects")
-        .updateOne(
-          { _id: new ObjectId(projectsId) },
-          { $push: { tasks: { $each: allTasks } } },
-          { upsert: true }
-        );
-    }
+    const project = await db
+      .collection("projects")
+      .findOne({ _id: new ObjectId(projectsId) });
+
+    const existingProfessionData = project?.professionAssociatedData || {};
+
+    const mergedProfessionData = {
+      ...professionAssociatedData,
+      ...existingProfessionData,
+      // ...Object.fromEntries(
+      //   Object.entries(professionAssociatedData).filter(
+      //     ([key]) => !existingProfessionData.hasOwnProperty(key)
+      //   )
+      // ),
+    };
+
+    await db.collection("projects").updateOne(
+      { _id: new ObjectId(projectsId) },
+      {
+        $push: { tasks: { $each: allTasks } },
+        $set: { professionAssociatedData: mergedProfessionData },
+      },
+
+      { upsert: true }
+    );
   }
 
   return true;
@@ -4479,22 +4514,10 @@ app.post(
         createdAt: new Date(),
       }));
 
-      const staticDocumentCheckList = await db
-        .collection("standards")
-        .find({ DS_GroupId: { $in: ["B1", "B2", "B3"] } })
-        .toArray();
-
-      const staticReportRegistration = await db
-        .collection("standards")
-        .find({ DS_GroupId: { $nin: ["B1", "B2", "B3"] } })
-        .toArray();
-
       const result = await db.collection("projects").insertOne({
         ...parsedBasicDetails,
         companyId,
         checks: checksWithCreatedAt,
-        staticDocumentCheckList,
-        staticReportRegistration,
         createdAt: new Date(),
       });
 
