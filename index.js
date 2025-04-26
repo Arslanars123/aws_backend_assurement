@@ -4105,53 +4105,47 @@ app.post(
 
 app.post(
   "/store-new",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
+  upload.fields([{ name: "annotatedImage", maxCount: 10 }]),
   async (req, res) => {
     try {
-      // Receive the new fields
       const {
-        item,
         supplementory,
         time,
-        discipline,
-        drawing,
+        item,
+        projectManager,
+        recipients,
         projectsId,
         companyId,
-        profession,
-        users,
+        drawing,
       } = req.body;
-      console.log(req.files); // Log files to inspect
 
-      // Initialize variables for files
-      let picture = null;
-      let pictures = [];
+      let annotatedImage = null;
 
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        annotatedImage = req.files["annotatedImage"][0].filename;
       }
 
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
+      const parsedDrawing = drawing ? JSON.parse(drawing) : null;
+      const parsedProjectManager = projectManager
+        ? JSON.parse(projectManager)
+        : null;
+
+      const parsedRecipients = recipients ? JSON.parse(recipients) : null;
 
       // Insert the data into the database
       const result = await db.collection("news").insertOne({
-        item,
         supplementory,
         time,
-        discipline,
-        drawing,
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
+        item,
+        projectManager: parsedProjectManager,
+        recipients: parsedRecipients,
         companyId,
-        profession,
-        users: users.split(","),
+        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
+        annotatedImage,
+        drawing: parsedDrawing,
       });
 
       res.status(201).json(result);
