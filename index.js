@@ -1059,10 +1059,10 @@ app.get("/get-groups", async (req, res) => {
 
 app.get("/get-deviations", async (req, res) => {
   try {
-    const { companyId, projectId, profession } = req.query;
+    const { companyId, projectId, type } = req.query;
     const query = addFilters({}, companyId, projectId);
-    if (profession) {
-      query.profession = profession;
+    if (type) {
+      query.type = type;
     }
     const deviations = await db.collection("deviations").find(query).toArray();
     res.status(200).json(deviations);
@@ -3033,6 +3033,7 @@ app.post(
         profession,
         buildingParts,
         drawing,
+        type,
       } = req.body;
 
       const parsedBuildingParts = buildingParts
@@ -3062,6 +3063,7 @@ app.post(
       const result = await db.collection("deviations").insertOne({
         companyId,
         projectsId: Array.isArray(projectId) ? projectId : [projectId], // Convert to array if it's not already an array
+        type,
         comment,
         profession: parsedProfession,
         buildingParts: parsedBuildingParts,
