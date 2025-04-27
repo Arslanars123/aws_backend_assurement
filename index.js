@@ -3876,7 +3876,7 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
     const {
       profession,
       item,
-      independentD,
+      independentController,
       x,
       text,
       exc,
@@ -3891,13 +3891,17 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
     const parsedProfessions =
       typeof profession === "string" ? JSON.parse(profession) : profession;
 
+    const parsedIndependentController =
+      typeof independentController === "string"
+        ? JSON.parse(independentController)
+        : independentController;
     const picture = req.file ? req.file.filename : null;
 
     // Insert the data into the database
     const result = await db.collection("gammas").insertOne({
       profession: parsedProfessions,
       item,
-      independentD,
+      independentController: parsedIndependentController,
       x,
       text,
       exc,
