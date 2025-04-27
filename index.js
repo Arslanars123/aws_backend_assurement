@@ -4379,48 +4379,24 @@ app.post(
   }
 );
 
-app.post(
-  "/store-plan",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
-  async (req, res) => {
-    try {
-      const { name, description, projectsId, companyId } = req.body; // Use 'name' and 'description' instead of 'username'
-      console.log(req.files); // Log files to inspect
+app.post("/store-plan", async (req, res) => {
+  try {
+    const { name, description, projectsId, companyId } = req.body; // Use 'name' and 'description' instead of 'username'
 
-      // Initialize variables for files
-      let picture = null;
-      let pictures = [];
+    const result = await db.collection("plans").insertOne({
+      name,
+      description,
+      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
+      companyId,
+    });
 
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
-
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
-
-      // Insert the data into the database
-      const result = await db.collection("plans").insertOne({
-        name, // Use 'name' instead of 'username'
-        description, // Use 'description'
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
-        companyId,
-      });
-
-      res.status(201).json(result);
-    } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create plan" });
-    }
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Failed to create plan" });
   }
-);
+});
+
 app.post(
   "/update-plan/:id",
   upload.fields([
