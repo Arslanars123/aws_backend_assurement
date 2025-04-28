@@ -693,9 +693,12 @@ app.get("/get-controls", async (req, res) => {
 });
 app.get("/get-gammas", async (req, res) => {
   try {
-    const { companyId, projectId } = req.query;
+    const { companyId, projectId, point } = req.query;
     const query = addFilters({}, companyId, projectId);
 
+    if (point) {
+      query.point = point;
+    }
     const controls = await db.collection("gammas").find(query).toArray();
     res.status(200).json(controls);
   } catch (error) {
@@ -1066,6 +1069,21 @@ app.get("/get-deviations", async (req, res) => {
     }
     const deviations = await db.collection("deviations").find(query).toArray();
     res.status(200).json(deviations);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch deviations" });
+  }
+});
+
+app.get("/get-special-control", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+    const query = addFilters({}, companyId, projectId);
+
+    const specialControl = await db
+      .collection("specialcontrol")
+      .find(query)
+      .toArray();
+    res.status(200).json(specialControl);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch deviations" });
   }
@@ -3018,6 +3036,7 @@ app.post(
     }
   }
 );
+
 app.post(
   "/store-deviation",
   upload.fields([
@@ -3061,6 +3080,67 @@ app.post(
 
       // Insert the data into the database
       const result = await db.collection("deviations").insertOne({
+        companyId,
+        projectsId: Array.isArray(projectId) ? projectId : [projectId], // Convert to array if it's not already an array
+        type,
+        comment,
+        profession: parsedProfession,
+        buildingParts: parsedBuildingParts,
+        drawing: parsedDrawing,
+        pictures,
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Failed to create deviation" });
+    }
+  }
+);
+
+app.post(
+  "/store-special-control",
+  upload.fields([
+    { name: "pictures", maxCount: 10 },
+    { name: "annotatedImage", maxCount: 10 },
+  ]),
+  async (req, res) => {
+    try {
+      const {
+        companyId,
+        projectId,
+        comment,
+        profession,
+        buildingParts,
+        drawing,
+        type,
+      } = req.body;
+
+      const parsedBuildingParts = buildingParts
+        ? JSON.parse(buildingParts)
+        : null;
+
+      const parsedDrawing = drawing ? JSON.parse(drawing) : null;
+
+      const parsedProfession = profession ? JSON.parse(profession) : null;
+
+      let pictures = [];
+
+      // Handle multiple pictures upload
+      if (req.files["pictures"] && req.files["pictures"].length > 0) {
+        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+      }
+
+      let annotatedImage = null;
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        annotatedImage = req.files["annotatedImage"][0].filename;
+      }
+
+      // Insert the data into the database
+      const result = await db.collection("specialcontrol").insertOne({
         companyId,
         projectsId: Array.isArray(projectId) ? projectId : [projectId], // Convert to array if it's not already an array
         type,
