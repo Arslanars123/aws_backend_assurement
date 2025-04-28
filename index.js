@@ -4658,15 +4658,6 @@ app.post(
         }
       }
 
-      if (isObjectNotEmpty(parsedAddDrawing)) {
-        await db.collection("draws").insertOne({
-          ...parsedAddDrawing,
-          pictures: addDrawingPictures,
-          companyId,
-          projectsId: [newProjectId],
-        });
-      }
-
       if (isObjectNotEmpty(parsedCertificateSchema)) {
         await db.collection("schemes").insertOne({
           ...parsedCertificateSchema,
@@ -4675,12 +4666,25 @@ app.post(
         });
       }
 
+      let planId = "";
       if (isObjectNotEmpty(parsedPlan)) {
-        await db.collection("plans").insertOne({
+        const plan = await db.collection("plans").insertOne({
           ...parsedPlan,
           pictures: planPictures,
           projectsId: [newProjectId],
           companyId,
+        });
+
+        planId = plan.insertedId?.toString();
+      }
+
+      if (isObjectNotEmpty(parsedAddDrawing)) {
+        await db.collection("draws").insertOne({
+          ...parsedAddDrawing,
+          pictures: addDrawingPictures,
+          companyId,
+          projectsId: [newProjectId],
+          planId,
         });
       }
 
