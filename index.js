@@ -1076,8 +1076,11 @@ app.get("/get-deviations", async (req, res) => {
 
 app.get("/get-special-control", async (req, res) => {
   try {
-    const { companyId, projectId } = req.query;
+    const { companyId, projectId, specialControleId } = req.query;
     const query = addFilters({}, companyId, projectId);
+
+    if(specialControleId)
+      query._id = new ObjectId(specialControleId);
 
     const specialControl = await db
       .collection("specialcontrol")
