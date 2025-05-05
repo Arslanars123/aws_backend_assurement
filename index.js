@@ -148,20 +148,29 @@ app.post("/store-user", upload.single("picture"), async (req, res) => {
 
 app.post("/updateUser", async (req, res) => {
   try {
-    const { userIds, projectId } = req.body;
+    const { userIds, projectId, userRole } = req.body;
 
     const objectIds = userIds.map((id) => new ObjectId(id));
 
-    const bulkOps = objectIds.map((userId) => ({
-      updateOne: {
-        filter: { _id: userId },
-        update: {
-          $addToSet: {
-            projectsId: projectId,
-          },
+    const bulkOps = objectIds.map((userId) => {
+      const updateQuery = {
+        $addToSet: {
+          projectsId: projectId,
         },
-      },
-    }));
+      };
+
+      // Conditionally update userRole if it's provided
+      if (userRole !== undefined) {
+        updateQuery.$set = { userRole };
+      }
+
+      return {
+        updateOne: {
+          filter: { _id: userId },
+          update: updateQuery,
+        },
+      };
+    });
 
     const result = await db.collection("users").bulkWrite(bulkOps);
 
@@ -174,6 +183,7 @@ app.post("/updateUser", async (req, res) => {
     res.status(500).json({ error: "Failed to update users" });
   }
 });
+
 
 // 2. Get all users
 app.get(
@@ -545,18 +555,20 @@ app.get("/get-admins", async (req, res) => {
 
 app.get("/get-project-managers", async (req, res) => {
   try {
-    const { companyId, projectId } = req.query;
+    const { companyId, projectId, userRole } = req.query;
 
     const query = { isProjectManager: "yes" };
-    if (companyId && companyId !== "null") {
+    if (companyId && companyId !== "null") 
       query.companyId = companyId;
-    }
+    
 
-    if (projectId && projectId !== "null") {
-      // Convert comma-separated projectId to an array and apply the $in operator
+    if (projectId && projectId !== "null") 
       query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
-    }
+    
 
+    if(userRole && userRole !== "null")
+      query.userRole = userRole;
+    
     const users = await db.collection("users").find(query).toArray();
 
     res.status(200).json(users);
@@ -1695,17 +1707,14 @@ app.post(
 );
 app.get(
   "/get-projects",
-  //authenticateToken,
-  //authorizeRoles(["admin"]),
   async (req, res) => {
     try {
-      const { companyId } = req.query; // Get companyId from query parameters
+      const { companyId } = req.query;
 
-      // If companyId is provided, filter projects by companyId, else return all projects
       const query =
         companyId && companyId != "null" ? { companyId: companyId } : {};
-      console.log(query);
-      const projects = await db.collection("projects").find(query).toArray();
+
+        const projects = await db.collection("projects").find(query).toArray();
 
       res.status(200).json(projects);
     } catch (error) {
