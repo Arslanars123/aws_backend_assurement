@@ -4962,37 +4962,15 @@ app.post(
 
 app.post(
   "/store-scheme",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
   async (req, res) => {
     try {
-      const { item, level, startDate, projectsId, companyId } = req.body; // Use the new fields instead of 'username'
-      console.log(req.files); // Log files to inspect
-
-      // Initialize variables for files
-      let picture = null;
-      let pictures = [];
-
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
-
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
-
-      // Insert the data into the database
+      const { item, level, startDate, projectsId, companyId } = req.body;
+  
       const result = await db.collection("schemes").insertOne({
-        item, // 'item' field
-        level, // 'level' field
-        startDate, // 'startDate' field
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
+        item,
+        level, 
+        startDate, 
+        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         companyId,
       });
 
