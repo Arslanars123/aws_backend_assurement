@@ -184,7 +184,6 @@ app.post("/updateUser", async (req, res) => {
   }
 });
 
-
 // 2. Get all users
 app.get(
   "/get-usersbb",
@@ -558,17 +557,13 @@ app.get("/get-project-managers", async (req, res) => {
     const { companyId, projectId, userRole } = req.query;
 
     const query = { isProjectManager: "yes" };
-    if (companyId && companyId !== "null") 
-      query.companyId = companyId;
-    
+    if (companyId && companyId !== "null") query.companyId = companyId;
 
-    if (projectId && projectId !== "null") 
+    if (projectId && projectId !== "null")
       query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
-    
 
-    if(userRole && userRole !== "null")
-      query.userRole = userRole;
-    
+    if (userRole && userRole !== "null") query.userRole = userRole;
+
     const users = await db.collection("users").find(query).toArray();
 
     res.status(200).json(users);
@@ -1091,8 +1086,7 @@ app.get("/get-special-control", async (req, res) => {
     const { companyId, projectId, specialControleId } = req.query;
     const query = addFilters({}, companyId, projectId);
 
-    if(specialControleId)
-      query._id = new ObjectId(specialControleId);
+    if (specialControleId) query._id = new ObjectId(specialControleId);
 
     const specialControl = await db
       .collection("specialcontrol")
@@ -1705,23 +1699,20 @@ app.post(
     }
   }
 );
-app.get(
-  "/get-projects",
-  async (req, res) => {
-    try {
-      const { companyId } = req.query;
+app.get("/get-projects", async (req, res) => {
+  try {
+    const { companyId } = req.query;
 
-      const query =
-        companyId && companyId != "null" ? { companyId: companyId } : {};
+    const query =
+      companyId && companyId != "null" ? { companyId: companyId } : {};
 
-        const projects = await db.collection("projects").find(query).toArray();
+    const projects = await db.collection("projects").find(query).toArray();
 
-      res.status(200).json(projects);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch projects" });
-    }
+    res.status(200).json(projects);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch projects" });
   }
-);
+});
 
 app.get(
   "/get-project-detail/:id",
@@ -4960,27 +4951,24 @@ app.post(
   }
 );
 
-app.post(
-  "/store-scheme",
-  async (req, res) => {
-    try {
-      const { item, level, startDate, projectsId, companyId } = req.body;
-  
-      const result = await db.collection("schemes").insertOne({
-        item,
-        level, 
-        startDate, 
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
-        companyId,
-      });
+app.post("/store-scheme", async (req, res) => {
+  try {
+    const { item, level, startDate, projectsId, companyId } = req.body;
 
-      res.status(201).json(result);
-    } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create scheme" });
-    }
+    const result = await db.collection("schemes").insertOne({
+      item,
+      level,
+      startDate,
+      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
+      companyId,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Failed to create scheme" });
   }
-);
+});
 
 app.post(
   "/update-scheme/:id",
@@ -5745,6 +5733,46 @@ app.get("/get-checklist", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+app.post("/remove-user-from-project", async (req, res) => {
+  try {
+    const { userId, projectId } = req.body;
+
+    if (!userId || !projectId) {
+      return res.status(400).json({
+        error: "Both userId and projectId are required",
+      });
+    }
+
+    const result = await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      {
+        $pull: { projectsId: projectId },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (result.modifiedCount === 0) {
+      return res.status(400).json({
+        error: "User was not assigned to this project",
+      });
+    }
+
+    res.status(200).json({
+      message: "User removed from project successfully",
+      result,
+    });
+  } catch (error) {
+    console.error("Error removing user from project:", error);
+    res.status(500).json({
+      error: "Failed to remove user from project",
+    });
+  }
+});
+
 // 7. Check authentication status
 app.get("/users/authenticated", authenticateToken, (req, res) => {
   res.status(200).json({ authenticated: true, user: req.user });
