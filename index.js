@@ -5736,20 +5736,28 @@ app.get("/get-checklist", async (req, res) => {
 
 app.post("/remove-user-from-project", async (req, res) => {
   try {
-    const { userId, projectId } = req.body;
+    const { userId, projectId, isRemovedProjectManagerRole } = req.body;
 
+    // Validate required fields
     if (!userId || !projectId) {
       return res.status(400).json({
         error: "Both userId and projectId are required",
       });
     }
 
-    const result = await db.collection("users").updateOne(
-      { _id: new ObjectId(userId) },
-      {
-        $pull: { projectsId: projectId },
-      }
-    );
+    // Build update operation
+    const updateOperation = {
+      $pull: { projectsId: projectId },
+    };
+
+    if (isRemovedProjectManagerRole) {
+      updateOperation.$set = { userRole: null };
+    }
+
+    // Update user document
+    const result = await db
+      .collection("users")
+      .updateOne({ _id: new ObjectId(userId) }, updateOperation);
 
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: "User not found" });
