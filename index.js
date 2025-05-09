@@ -1262,7 +1262,16 @@ app.post("/users/login", async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "Invalid username or password" });
     }
+    if (user?.role === "Admin") {
+      const companyId = user?.companyId;
+      const adminCompany = await db
+        .collection("companies")
+        .findOne({ _id: new ObjectId(companyId) });
 
+      if (adminCompany?.status === "deactivate")
+        res.status(500).json({ error: "Your company is deactivated" });
+      return;
+    }
     const token = jwt.sign(
       { id: user._id, username: user.username, role: user.role },
       JWT_SECRET,
