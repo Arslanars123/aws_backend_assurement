@@ -912,7 +912,7 @@ app.get("/get-global-professions", async (req, res) => {
 
 app.get("/get-company-professions", async (req, res) => {
   try {
-    const { companyId, projectId } = req.query;
+    const { companyId, projectId, SubjectMatterId } = req.query;
 
     const query = {};
 
@@ -922,6 +922,13 @@ app.get("/get-company-professions", async (req, res) => {
     if (projectId && projectId !== "null" && projectId !== "undefined") {
       query.projectsId = { $in: [projectId] };
     }
+    if (
+      SubjectMatterId &&
+      SubjectMatterId !== "null" &&
+      SubjectMatterId !== "undefined"
+    )
+      query.SubjectMatterId = { $in: SubjectMatterId };
+
     const professions = await db
       .collection("professions")
       .find(query)
