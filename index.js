@@ -2346,6 +2346,37 @@ app.post("/submit-checklist", async (req, res) => {
   }
 });
 
+app.post("/approv-task", async (req, res) => {
+  try {
+    const { projectId, taskId, isActive } = req.body;
+
+    const result = await db.collection("projects").findOneAndUpdate(
+      {
+        _id: new ObjectId(projectId),
+        "tasks._id": new ObjectId(taskId),
+      },
+      {
+        $set: {
+          "tasks.$.isActive": isActive,
+        },
+      },
+      { returnDocument: "after" }
+    );
+
+    if (!result) {
+      return res.status(404).json({ error: "Project or task not found" });
+    }
+
+    res.status(200).json({
+      message: "task list  updated successfully",
+      check: result.value,
+    });
+  } catch (error) {
+    console.error("Error updating check:", error);
+    res.status(500).json({ error: "Failed to update check" });
+  }
+});
+
 app.post("/submit-static-document-checklist", async (req, res) => {
   try {
     const {
