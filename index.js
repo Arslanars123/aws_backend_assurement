@@ -14,12 +14,12 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 app.use("/uploads", express.static("uploads"));
-// app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public")));
 
-// // Serve React for all other routes
-// app.get("*", (req, res) => {
-//   res.sendFile(path.join(__dirname, "public", "index.html"));
-// });
+// Serve React for all other routes
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // MongoDB configuration
 const uri =
