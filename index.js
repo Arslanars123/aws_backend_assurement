@@ -1268,9 +1268,10 @@ app.post("/users/login", async (req, res) => {
         .collection("companies")
         .findOne({ _id: new ObjectId(companyId) });
 
-      if (adminCompany?.status === "deactivate")
+      if (adminCompany?.status === "deactivate") {
         res.status(500).json({ error: "Your company is deactivated" });
-      return;
+        return;
+      }
     }
     const token = jwt.sign(
       { id: user._id, username: user.username, role: user.role },
