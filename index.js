@@ -8,6 +8,7 @@ const cors = require("cors");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const path = require("path");
+require("dotenv").config();
 
 // Initialize app and middleware
 const app = express();
@@ -22,8 +23,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // });
 
 // MongoDB configuration
-const uri =
-  "mongodb+srv://testusername:testuserpassword@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority&appName=Cluster0";
+const uri = process.env.MONGODB_BASE_URI;
 //const uri = "mongodb://localhost:27017/";
 const client = new MongoClient(uri);
 const dbName = "construction_db";
