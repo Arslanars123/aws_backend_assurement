@@ -1,0 +1,1 @@
+import{r as t,f as i,n as E}from"./index-Ccc50bvq.js";function R({children:n,in:e,onExited:c,mountOnEnter:l,unmountOnExit:o}){const r=t.useRef(null),s=t.useRef(e),f=i(c);t.useEffect(()=>{e?s.current=!0:f(r.current)},[e,f]);const a=E(r,n.ref),u=t.cloneElement(n,{ref:a});return e?u:o||!s.current&&l?null:u}export{R as N};
