@@ -2449,54 +2449,62 @@ app.post("/submit-static-document-checklist", async (req, res) => {
   }
 });
 
-app.post("/submit-static-report", async (req, res) => {
-  try {
-    const {
-      projectId,
-      staticReportId,
-      profession,
-      user,
-      controlPlan,
-      comment,
-      date,
-      drawing,
-    } = req.body;
+app.post(
+  "/submit-static-report",
+  upload.fields([{ name: "annotatedImage", maxCount: 10 }]),
+  async (req, res) => {
+    try {
+      const { projectId, staticReportId, comment, date } = req.body;
+      const profession = JSON.parse(req.body.profession);
+      const user = JSON.parse(req.body.user);
+      const controlPlan = JSON.parse(req.body.controlPlan);
+      const drawing = JSON.parse(req.body.drawing);
 
-    const professionKey = profession.SubjectMatterId;
-    const updatePath = `professionAssociatedData.${professionKey}.staticReportRegistration`;
+      const professionKey = profession.SubjectMatterId;
+      const updatePath = `professionAssociatedData.${professionKey}.staticReportRegistration`;
 
-    const result = await db.collection("projects").findOneAndUpdate(
-      {
-        _id: new ObjectId(projectId),
-        [`${updatePath}._id`]: new ObjectId(staticReportId),
-      },
-      {
-        $set: {
-          [`${updatePath}.$.profession`]: profession,
-          [`${updatePath}.$.user`]: user,
-          [`${updatePath}.$.controlPlan`]: controlPlan,
-          [`${updatePath}.$.comment`]: comment,
-          [`${updatePath}.$.selectedDate`]: date,
-          [`${updatePath}.$.drawing`]: drawing,
-          [`${updatePath}.$.isSubmitted`]: true,
+      let annotatedImage = null;
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        annotatedImage = req.files["annotatedImage"][0].filename;
+      }
+
+      const result = await db.collection("projects").findOneAndUpdate(
+        {
+          _id: new ObjectId(projectId),
+          [`${updatePath}._id`]: new ObjectId(staticReportId),
         },
-      },
-      { returnDocument: "after" }
-    );
+        {
+          $set: {
+            [`${updatePath}.$.profession`]: profession,
+            [`${updatePath}.$.user`]: user,
+            [`${updatePath}.$.controlPlan`]: controlPlan,
+            [`${updatePath}.$.comment`]: comment,
+            [`${updatePath}.$.selectedDate`]: date,
+            [`${updatePath}.$.drawing`]: drawing,
+            [`${updatePath}.$.isSubmitted`]: true,
+            [`${updatePath}.$.annotatedImage`]: annotatedImage,
+          },
+        },
+        { returnDocument: "after" }
+      );
 
-    if (!result) {
-      return res.status(404).json({ error: "Project or task not found" });
+      if (!result) {
+        return res.status(404).json({ error: "Project or task not found" });
+      }
+
+      res.status(200).json({
+        message: "check list  updated successfully",
+        check: result.value,
+      });
+    } catch (error) {
+      console.error("Error updating check:", error);
+      res.status(500).json({ error: "Failed to update check" });
     }
-
-    res.status(200).json({
-      message: "check list  updated successfully",
-      check: result.value,
-    });
-  } catch (error) {
-    console.error("Error updating check:", error);
-    res.status(500).json({ error: "Failed to update check" });
   }
-});
+);
 
 app.post(
   "/update-part/:id",
