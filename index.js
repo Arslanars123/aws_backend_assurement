@@ -15,6 +15,8 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 app.use("/uploads", express.static("uploads"));
+app.use(express.json()); // to parse JSON body
+
 app.use(express.static(path.join(__dirname, "public")));
 
 // // Serve React for all other routes
@@ -5012,23 +5014,18 @@ app.post(
   }
 );
 
-app.post("/store-scheme", async (req, res) => {
-  try {
-    const { item, level, startDate, projectsId, companyId } = req.body;
+app.post("/store-scheme", upload.none(), async (req, res) => {
+  const { item, level, startDate, projectsId, companyId } = req.body;
 
-    const result = await db.collection("schemes").insertOne({
-      item,
-      level,
-      startDate,
-      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
-      companyId,
-    });
+  const result = await db.collection("schemes").insertOne({
+    item,
+    level,
+    startDate,
+    projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
+    companyId,
+  });
 
-    res.status(201).json(result);
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Failed to create scheme" });
-  }
+  res.status(201).json(result);
 });
 
 app.post(
