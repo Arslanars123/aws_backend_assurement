@@ -1197,11 +1197,10 @@ app.post(
         phone,
         name,
         picture2,
-        projectsId,
-        companyId,
         isProjectManager,
         type,
         mainId,
+        userProfession,
       } = req.body;
 
       const updateData = {};
@@ -1217,7 +1216,14 @@ app.post(
       if (phone) updateData.phone = phone;
       if (name) updateData.name = name;
       if (mainId) updateData.mainId = mainId;
-      if (isProjectManager) updateData.isProjectManager = isProjectManager;
+      if (isProjectManager) {
+        const parsedProjectManager = JSON.parse(isProjectManager);
+        updateData.isProjectManager = parsedProjectManager;
+      }
+      if (userProfession) {
+        const parsedUserProfession = JSON.parse(userProfession);
+        updateData.userProfession = parsedUserProfession;
+      }
       updateData.picture = picture2;
       // If an image is uploaded, include its path in the update
       if (req.file) {
