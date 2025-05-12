@@ -2411,6 +2411,7 @@ app.post("/submit-static-document-checklist", async (req, res) => {
       controlPlan,
       comment,
       date,
+      projectManager,
     } = req.body;
 
     const professionKey = profession.SubjectMatterId;
@@ -2428,6 +2429,7 @@ app.post("/submit-static-document-checklist", async (req, res) => {
           [`${updatePath}.$.comment`]: comment,
           [`${updatePath}.$.selectedDate`]: date,
           [`${updatePath}.$.isSubmitted`]: true,
+          [`${updatePath}.$.projectManager`]: projectManager,
         },
       },
       { returnDocument: "after" }
