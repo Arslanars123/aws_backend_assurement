@@ -1,0 +1,1 @@
+import{P as a,r as i,d as u,j as n,e as f}from"./index-CRUsPvgo.js";a.string,a.bool,a.bool,a.bool,a.bool;const p=i.forwardRef(({bsPrefix:e,className:s,fluid:o=!1,rounded:r=!1,roundedCircle:l=!1,thumbnail:d=!1,...t},m)=>(e=u(e,"img"),n.jsx("img",{ref:m,...t,className:f(s,o&&`${e}-fluid`,r&&"rounded",l&&"rounded-circle",d&&`${e}-thumbnail`)})));p.displayName="Image";export{p as I};

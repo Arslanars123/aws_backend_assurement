@@ -1,1 +1,0 @@
-import{r as e}from"./index-Bhcfarzr.js";function s(){const[,t]=e.useReducer(n=>!n,!1);return t}const a=e.createContext(null),c=(t,n=null)=>t!=null?String(t):n||null,u=a,o=e.createContext(null);o.displayName="NavContext";const l=e.createContext(null);l.displayName="NavbarContext";export{o as N,u as S,l as c,c as m,s as u};
