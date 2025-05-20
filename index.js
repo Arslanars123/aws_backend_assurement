@@ -38,7 +38,7 @@ const JWT_SECRET = "your_jwt_secret_key";
 async function connectToMongoDB() {
   try {
     await client.connect();
-    console.log("Connected to MongoDB");
+    console.log("Connected to MongoDB finally");
     db = client.db(dbName);
   } catch (error) {
     console.error("Error connecting to MongoDB:", error);
