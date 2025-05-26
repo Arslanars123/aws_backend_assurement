@@ -1116,13 +1116,12 @@ app.get("/get-special-control", async (req, res) => {
 
 app.get("/get-parts", async (req, res) => {
   try {
-    const { companyId, projectId } = req.query;
-    const query = addFilters({}, companyId, projectId);
+    const { SubjectMatterId } = req.query;
+    const query = {};
+    if (SubjectMatterId && SubjectMatterId !== "null")
+      query.SubjectMatterId = SubjectMatterId;
 
-    const parts = await db
-      .collection("parts")
-      .find(query, { projection: { password: 0 } })
-      .toArray();
+    const parts = await db.collection("parts").find(query).toArray();
     res.status(200).json(parts);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch parts" });
@@ -5848,6 +5847,46 @@ app.post("/remove-user-from-project", async (req, res) => {
     });
   }
 });
+async function processAndInsertParts() {
+  try {
+    const inputCollection = db.collection("inputs");
+    const partsCollection = db.collection("parts");
+
+    const documents = await inputCollection.find({}).toArray();
+
+    const parts = [];
+
+    for (const doc of documents) {
+      const groupName = doc.GroupName;
+      const subjectMatterId = doc.SubjectMatterId;
+      let iconValues = doc["Building part ICON"];
+
+      if (!iconValues) continue;
+      if (typeof iconValues === "string") {
+        iconValues = iconValues.split(",").map(Number);
+      } else if (typeof iconValues === "number") {
+        iconValues = [iconValues];
+      }
+
+      for (const icon of iconValues) {
+        parts.push({
+          GroupName: groupName,
+          SubjectMatterId: subjectMatterId,
+          name: icon,
+        });
+      }
+    }
+
+    if (parts.length > 0) {
+      await partsCollection.insertMany(parts);
+      console.log(`${parts.length} records inserted into 'parts' collection.`);
+    } else {
+      console.log("No parts to insert.");
+    }
+  } catch (error) {
+    console.error("Error processing documents:", error);
+  }
+}
 
 // 7. Check authentication status
 app.get("/users/authenticated", authenticateToken, (req, res) => {
