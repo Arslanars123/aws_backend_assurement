@@ -296,7 +296,11 @@ app.get(
 );
 app.get("/get-superadmins", async (req, res) => {
   try {
-    const query = { role: "Superadmin" };
+    const query = {
+      role: {
+        $in: ["Superadmin", "SupportFlowSuperadmin", "GeneralFlowSuperadmin"],
+      },
+    };
 
     const users = await db.collection("users").find(query).toArray();
 
