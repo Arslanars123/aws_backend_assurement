@@ -1380,6 +1380,41 @@ async function sendPasswordResetEmail(email, resetUrl) {
   }
 }
 
+app.post("/users/reset-password", async (req, res) => {
+  const { token, password } = req.body;
+
+  try {
+    // Find user with the token and check if it's not expired
+    const user = await db.collection("users").findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid or expired token" });
+    }
+
+    // Update user's password and clear reset token fields
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      {
+        $set: { password },
+        $unset: {
+          resetPasswordToken: "",
+          resetPasswordExpires: "",
+        },
+      }
+    );
+
+    res
+      .status(200)
+      .json({ success: true, message: "Password reset successfully" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
 app.post("/api/updateCheck", async (req, res) => {
   try {
     const { userId, checkId, checked } = req.body;
