@@ -9,6 +9,8 @@ const multer = require("multer");
 const xlsx = require("xlsx");
 const path = require("path");
 require("dotenv").config();
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 
 // Initialize app and middleware
 const app = express();
@@ -1301,6 +1303,83 @@ app.post("/users/login", async (req, res) => {
     res.status(500).json({ error: error });
   }
 });
+
+// Forgot Password API Endpoint
+app.post("/users/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Check if user exists with this email
+    const user = await db.collection("users").findOne({ username: email });
+
+    // Don't reveal if user exists or not for security reasons
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message:
+          "If your email is registered, you will receive password reset instructions shortly.",
+      });
+    }
+    // Generate a random reset token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    // Set token expiry (10 minutes from now)
+    const resetTokenExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Update user with reset token information
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          resetPasswordToken: resetToken,
+          resetPasswordExpires: resetTokenExpiry,
+        },
+      }
+    );
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    await sendPasswordResetEmail(user.email, resetUrl);
+
+    res.status(200).json({
+      success: true,
+      message:
+        "If your email is registered, you will receive password reset instructions shortly.",
+    });
+  } catch (error) {
+    console.error("Password reset error:", error);
+    res.status(500).json({ error: "Failed to process password reset request" });
+  }
+});
+
+async function sendPasswordResetEmail(email, resetUrl) {
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, // use SSL
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    logger: true,
+    debug: true,
+  });
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: "Password Reset Request",
+    text: `You requested a password reset. Click the link to reset your password: ${resetUrl}`,
+    html: `<p>You requested a password reset. Click the link to reset your password:</p><a href="${resetUrl}">${resetUrl}</a>`,
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error("Error sending email:", error);
+    throw new Error("Failed to send email");
+  }
+}
+
 app.post("/api/updateCheck", async (req, res) => {
   try {
     const { userId, checkId, checked } = req.body;
