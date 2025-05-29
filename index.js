@@ -101,7 +101,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 // Route to handle user creation with file upload
-app.post("/store-user", upload.single("picture"), async (req, res) => {
+app.post("/store-user", upload.fields([
+  { name: "picture", maxCount: 1 },
+  { name: "contactPicture", maxCount: 1 },
+]), async (req, res) => {
   try {
     const {
       username,
@@ -118,19 +121,19 @@ app.post("/store-user", upload.single("picture"), async (req, res) => {
       isProjectManager,
       type,
       mainId,
+      cvr,
+      contactPerson,
+      contactPhone,
     } = req.body;
 
-    // Hash the password
-    //const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Get the file information
-    const picture = req.file ? req.file.filename : null;
+    const picture = req.files?.picture?.[0]?.filename || null;
+    const contactPicture = req.files?.contactPicture?.[0]?.filename || null;
 
     let parsedUserProfession;
-    if (req?.body?.userProfession)
-      parsedUserProfession = JSON.parse(req?.body?.userProfession);
+    if (req?.body?.userProfession) {
+      parsedUserProfession = JSON.parse(req.body.userProfession);
+    }
 
-    // Insert the data into the database
     const result = await db.collection("users").insertOne({
       username,
       password,
@@ -141,8 +144,12 @@ app.post("/store-user", upload.single("picture"), async (req, res) => {
       postalCode,
       city,
       startDate,
-      picture, // Store the filename of the uploaded image
-      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
+      picture,
+      contactPicture,
+      contactPerson,
+      contactPhone,
+      cvr,
+      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
       companyId,
       isProjectManager,
       type,
@@ -2098,7 +2105,7 @@ app.get(
   async (req, res) => {
     try {
       const user = await db
-        .collection("professions")
+        .collection("inputs")
         .findOne(
           { _id: new ObjectId(req.params.id) },
           { projection: { password: 0 } }
@@ -3824,12 +3831,26 @@ app.post(
 app.post("/store-description", async (req, res) => {
   try {
     // Receive the new fields: desc1 and desc2
-    const { desc1, desc2, desc3 } = req.body;
+    const {
+      desc1,
+      desc2,
+      desc3,
+      foundationDocumentDescription,
+      productionPreparation,
+      weatherIssues,
+      descriptionOfControlledWork,
+      aliqRelationship,
+    } = req.body;
 
     const result = await db.collection("descriptions").insertOne({
       desc1,
       desc2,
       desc3,
+      foundationDocumentDescription,
+      productionPreparation,
+      weatherIssues,
+      descriptionOfControlledWork,
+      aliqRelationship,
     });
 
     res.status(201).json(result);
