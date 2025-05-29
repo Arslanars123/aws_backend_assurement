@@ -21,12 +21,6 @@ app.use(express.json()); // to parse JSON body
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// // Serve React for all other routes
-// app.get("*", (req, res) => {
-//   res.sendFile(path.join(__dirname, "public", "index.html"));
-// });
-
-// MongoDB configuration
 const uri = process.env.MONGODB_BASE_URI;
 //const uri = "mongodb://localhost:27017/";
 const client = new MongoClient(uri);
@@ -6061,6 +6055,10 @@ async function processAndInsertParts() {
 // 7. Check authentication status
 app.get("/users/authenticated", authenticateToken, (req, res) => {
   res.status(200).json({ authenticated: true, user: req.user });
+});
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // Start the server
