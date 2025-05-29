@@ -3813,12 +3813,26 @@ app.post(
 app.post("/store-description", async (req, res) => {
   try {
     // Receive the new fields: desc1 and desc2
-    const { desc1, desc2, desc3 } = req.body;
+    const {
+      desc1,
+      desc2,
+      desc3,
+      foundationDocumentDescription,
+      productionPreparation,
+      weatherIssues,
+      descriptionOfControlledWork,
+      aliqRelationship,
+    } = req.body;
 
     const result = await db.collection("descriptions").insertOne({
       desc1,
       desc2,
       desc3,
+      foundationDocumentDescription,
+      productionPreparation,
+      weatherIssues,
+      descriptionOfControlledWork,
+      aliqRelationship,
     });
 
     res.status(201).json(result);
