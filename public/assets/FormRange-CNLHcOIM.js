@@ -1,1 +1,0 @@
-import{r as a,d as n,j as p,e as c}from"./index-CFC_skDo.js";import{a as x}from"./FormLabel-S5bDb0w7.js";const d=a.forwardRef(({bsPrefix:r,className:o,id:s,...t},e)=>{const{controlId:m}=a.useContext(x);return r=n(r,"form-range"),p.jsx("input",{...t,type:"range",ref:e,className:c(o,r),id:s||m})});d.displayName="FormRange";export{d as F};

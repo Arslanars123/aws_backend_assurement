@@ -101,68 +101,72 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 // Route to handle user creation with file upload
-app.post("/store-user", upload.fields([
-  { name: "picture", maxCount: 1 },
-  { name: "contactPicture", maxCount: 1 },
-]), async (req, res) => {
-  try {
-    const {
-      username,
-      password,
-      role,
-      phone,
-      name,
-      address,
-      postalCode,
-      city,
-      startDate,
-      projectsId,
-      companyId,
-      isProjectManager,
-      type,
-      mainId,
-      cvr,
-      contactPerson,
-      contactPhone,
-    } = req.body;
+app.post(
+  "/store-user",
+  upload.fields([
+    { name: "picture", maxCount: 1 },
+    { name: "contactPicture", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    try {
+      const {
+        username,
+        password,
+        role,
+        phone,
+        name,
+        address,
+        postalCode,
+        city,
+        startDate,
+        projectsId,
+        companyId,
+        isProjectManager,
+        type,
+        mainId,
+        cvr,
+        contactPerson,
+        contactPhone,
+      } = req.body;
 
-    const picture = req.files?.picture?.[0]?.filename || null;
-    const contactPicture = req.files?.contactPicture?.[0]?.filename || null;
+      const picture = req.files?.picture?.[0]?.filename || null;
+      const contactPicture = req.files?.contactPicture?.[0]?.filename || null;
 
-    let parsedUserProfession;
-    if (req?.body?.userProfession) {
-      parsedUserProfession = JSON.parse(req.body.userProfession);
+      let parsedUserProfession;
+      if (req?.body?.userProfession) {
+        parsedUserProfession = JSON.parse(req.body.userProfession);
+      }
+
+      const result = await db.collection("users").insertOne({
+        username,
+        password,
+        role,
+        phone,
+        name,
+        address,
+        postalCode,
+        city,
+        startDate,
+        picture,
+        contactPicture,
+        contactPerson,
+        contactPhone,
+        cvr,
+        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
+        companyId,
+        isProjectManager,
+        type,
+        mainId,
+        userProfession: parsedUserProfession,
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Failed to create user" });
     }
-
-    const result = await db.collection("users").insertOne({
-      username,
-      password,
-      role,
-      phone,
-      name,
-      address,
-      postalCode,
-      city,
-      startDate,
-      picture,
-      contactPicture,
-      contactPerson,
-      contactPhone,
-      cvr,
-      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
-      companyId,
-      isProjectManager,
-      type,
-      mainId,
-      userProfession: parsedUserProfession,
-    });
-
-    res.status(201).json(result);
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Failed to create user" });
   }
-});
+);
 
 app.post("/updateUser", async (req, res) => {
   try {
@@ -350,14 +354,29 @@ app.get("/get-cons", async (req, res) => {
     }
 
     if (projectId && projectId !== "null") {
-      // Convert comma-separated projectId to an array and apply the $in operator
       query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
     }
 
     const users = await db.collection("users").find(query).toArray();
 
-    res.status(200).json(users);
+    const populatedUsers = await Promise.all(
+      users.map(async (user) => {
+        if (user.mainId) {
+          const mainUser = await db
+            .collection("users")
+            .findOne({ _id: new ObjectId(user.mainId) });
+          return {
+            ...user,
+            mainUser: mainUser || null, // Attach the main user data
+          };
+        }
+        return user;
+      })
+    );
+
+    res.status(200).json(populatedUsers);
   } catch (error) {
+    console.error("Error fetching users:", error);
     res.status(500).json({ error: "Failed to fetch Construction Managers" });
   }
 });

@@ -1,0 +1,1 @@
+import{r as t,m as i,w as E}from"./index-BfjhYpb5.js";function m({children:r,in:e,onExited:c,mountOnEnter:l,unmountOnExit:o}){const n=t.useRef(null),s=t.useRef(e),u=i(c);t.useEffect(()=>{e?s.current=!0:u(n.current)},[e,u]);const a=E(n,r.ref),f=t.cloneElement(r,{ref:a});return e?f:o||!s.current&&l?null:f}export{m as N};
