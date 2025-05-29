@@ -2098,7 +2098,7 @@ app.get(
   async (req, res) => {
     try {
       const user = await db
-        .collection("professions")
+        .collection("inputs")
         .findOne(
           { _id: new ObjectId(req.params.id) },
           { projection: { password: 0 } }
