@@ -3430,40 +3430,51 @@ app.post(
 
 app.post(
   "/store-company",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
+  upload.fields([{ name: "picture", maxCount: 1 }]),
   async (req, res) => {
     try {
-      const { name, casenr, phone, address, contactPerson } = req.body;
-      console.log(req.files); // Log files to inspect
-
-      // Initialize variables for files
-      let picture = null;
-      let pictures = [];
-
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
-
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
-
-      // Insert the data into the database
-      const result = await db.collection("companies").insertOne({
+      // Destructure all your expected fields from req.body
+      const {
         name,
-        casenr,
+
         phone,
         address,
-        contactPerson,
+
+        email,
+        city,
+        cvr,
+        postalCode,
+        companyPhone,
+      } = req.body;
+
+      console.log("Files:", req.files); // Log files to inspect
+
+      // Handle single picture upload (logo)
+      let picture = null;
+      if (req.files["picture"] && req.files["picture"].length > 0) {
+        picture = req.files["picture"][0].filename;
+      }
+
+      // Prepare company document
+      const companyData = {
+        name,
+
+        phone,
+        address,
+
+        email,
+        city,
+        cvr,
+        postalCode,
+        companyPhone,
         picture,
-        pictures,
+
         status: "activate",
-      });
+        createdAt: new Date(),
+      };
+
+      // Insert into DB
+      const result = await db.collection("companies").insertOne(companyData);
 
       res.status(201).json(result);
     } catch (error) {
