@@ -2132,6 +2132,24 @@ app.get(
     }
   }
 );
+
+app.get("/get-profession-detail-in-company-projects/:id", async (req, res) => {
+  try {
+    const user = await db
+      .collection("professions")
+      .findOne(
+        { _id: new ObjectId(req.params.id) },
+        { projection: { password: 0 } }
+      );
+    if (!user) {
+      return res.status(404).json({ error: "profession not found" });
+    }
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch draw" });
+  }
+});
+
 app.post(
   "/delete-profession/:id",
   //authenticateToken,
@@ -4313,6 +4331,7 @@ app.post(
         drawing,
         projectsId,
         companyId,
+        comment,
       } = req.body;
 
       let pictures = [];
@@ -4347,6 +4366,7 @@ app.post(
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
         annotatedImage,
+        comment,
       });
 
       res.status(201).json(result);
@@ -4582,6 +4602,7 @@ app.post(
         projectUsers,
         drawing,
         projectManager,
+        comment,
       } = req.body;
       let pictures = [];
 
@@ -4616,6 +4637,7 @@ app.post(
         drawing: parsedDrawing,
         pictures,
         annotatedImage,
+        comment,
       });
 
       res.status(201).json(result);
@@ -5062,7 +5084,7 @@ app.post(
       const {
         item,
         projectManager,
-        recipients,
+        projectUsers,
         drawing,
         projectsId,
         companyId,
@@ -5089,7 +5111,7 @@ app.post(
         ? JSON.parse(projectManager)
         : null;
 
-      const parsedRecipients = recipients ? JSON.parse(recipients) : null;
+      const parsedRecipients = projectUsers ? JSON.parse(projectUsers) : null;
 
       // Insert the data into the database
       const result = await db.collection("requests").insertOne({
