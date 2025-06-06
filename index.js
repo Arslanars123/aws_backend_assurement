@@ -3274,6 +3274,8 @@ app.post(
   upload.fields([
     { name: "pictures", maxCount: 10 },
     { name: "annotatedImage", maxCount: 10 },
+    { name: "originalPdf", maxCount: 1 },
+    { name: "annotatedPdf", maxCount: 1 },
   ]),
   async (req, res) => {
     try {
@@ -3310,6 +3312,15 @@ app.post(
         annotatedImage = req.files["annotatedImage"][0].filename;
       }
 
+      if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
+        originalPdfFilename = req.files["originalPdf"][0].filename;
+      }
+
+      // Handle annotated PDF
+      if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
+        annotatedPdfFilename = req.files["annotatedPdf"][0].filename;
+      }
+
       // Insert the data into the database
       const result = await db.collection("deviations").insertOne({
         companyId,
@@ -3320,6 +3331,8 @@ app.post(
         buildingParts: parsedBuildingParts,
         drawing: parsedDrawing,
         pictures,
+        originalPdf: originalPdfFilename,
+        annotatedPdf: annotatedPdfFilename,
       });
 
       res.status(201).json(result);
