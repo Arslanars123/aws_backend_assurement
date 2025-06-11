@@ -1,0 +1,1 @@
+import{r as e}from"./index-CItDa9oU.js";function s(){const[,t]=e.useReducer(n=>n+1,0);return t}const c=e.createContext(null),l=(t,n=null)=>t!=null?String(t):n||null,a=e.createContext(null);a.displayName="NavContext";const o=e.createContext(null);o.displayName="NavbarContext";export{a as N,c as S,o as c,l as m,s as u};
