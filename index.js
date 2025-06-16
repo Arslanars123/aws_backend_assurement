@@ -4104,15 +4104,18 @@ app.post(
       const mainFiles = req.files["mainDrawings"] || [];
       const childFiles = req.files["childDrawings"] || [];
 
-      const mainDrawings = mainFiles.map((file) => file.filename);
-      const childDrawings = childFiles.map((file) => file.filename);
+      const mainDrawings = mainFiles.map((file) => ({
+        stored: file.filename,
+        original: file.originalname,
+      }));
 
-      // Map child drawings to their corresponding main drawing (if provided)
       const map = Array.isArray(childToMainMap)
         ? childToMainMap
         : [childToMainMap];
-      const childMapped = childDrawings.map((file, idx) => ({
-        file,
+
+      const childDrawings = childFiles.map((file, idx) => ({
+        stored: file.filename,
+        original: file.originalname,
         parentMainIndex: map[idx] !== undefined ? parseInt(map[idx]) : null,
       }));
 
@@ -4122,7 +4125,7 @@ app.post(
         companyId,
         projectsId,
         mainDrawings,
-        childDrawings: childMapped,
+        childDrawings,
         createdAt: new Date(),
       });
 
