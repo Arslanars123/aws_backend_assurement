@@ -1830,26 +1830,39 @@ app.post(
   }
 );
 
-app.get(
-  "/get-plan-detail/:id",
-  //authenticateToken,
-  async (req, res) => {
-    try {
-      const user = await db
-        .collection("plans")
-        .findOne(
-          { _id: new ObjectId(req.params.id) },
-          { projection: { password: 0 } }
-        );
-      if (!user) {
-        return res.status(404).json({ error: "plan not found" });
-      }
-      res.status(200).json(user);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch plan" });
+app.get("/get-plan-detail/:id", async (req, res) => {
+  try {
+    const plan = await db
+      .collection("plans")
+      .findOne({ _id: new ObjectId(req.params.id) });
+
+    if (!plan) {
+      return res.status(404).json({ error: "Plan not found" });
     }
+
+    // Fetch draw details if drawIds exist
+    let populatedDraws = [];
+    if (Array.isArray(plan.drawIds) && plan.drawIds.length > 0) {
+      // Convert string IDs to ObjectId
+      const drawObjectIds = plan.drawIds.map((id) => new ObjectId(id));
+
+      populatedDraws = await db
+        .collection("draws")
+        .find({ _id: { $in: drawObjectIds } })
+        .toArray();
+    }
+
+    // Return plan with populated draws
+    res.status(200).json({
+      ...plan,
+      drawIds: populatedDraws,
+    });
+  } catch (error) {
+    console.error("Failed to fetch plan:", error);
+    res.status(500).json({ error: "Failed to fetch plan" });
   }
-);
+});
+
 app.post(
   "/delete-plan/:id",
   //authenticateToken,
