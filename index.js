@@ -4081,63 +4081,48 @@ app.post(
 app.post(
   "/store-draw",
   upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
+    { name: "mainDrawings", maxCount: 20 }, // Main drawings
+    { name: "childDrawings", maxCount: 50 }, // Child drawings
   ]),
   async (req, res) => {
     try {
-      // Receive the new fields
-      const {
-        name,
-        type,
-        description,
-        plan,
-        checkbox,
-        date,
-        updatedDate,
-        projectsId,
-        companyId,
-        planId,
-      } = req.body;
-      console.log(req.files); // Log files to inspect
+      const { name, description, companyId, projectsId, childToMainMap } =
+        req.body;
+      const mainFiles = req.files["mainDrawings"] || [];
+      const childFiles = req.files["childDrawings"] || [];
 
-      // Initialize variables for files
-      let picture = null;
-      let pictures = [];
+      const mainDrawings = mainFiles.map((file) => file.filename);
+      const childDrawings = childFiles.map((file) => file.filename);
 
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
+      // Map child drawings to their corresponding main drawing (if provided)
+      const map = Array.isArray(childToMainMap)
+        ? childToMainMap
+        : [childToMainMap];
+      const childMapped = childDrawings.map((file, idx) => ({
+        file,
+        parentMainIndex: map[idx] !== undefined ? parseInt(map[idx]) : null,
+      }));
 
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
-
-      // Insert the data into the database
       const result = await db.collection("draws").insertOne({
         name,
-        type,
         description,
-        plan,
-        checkbox,
-        date,
-        updatedDate,
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
-        planId,
+        projectsId,
+        mainDrawings,
+        childDrawings: childMapped,
+        createdAt: new Date(),
       });
 
-      res.status(201).json(result);
+      res
+        .status(201)
+        .json({ message: "Upload successful", insertedId: result.insertedId });
     } catch (error) {
       console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create task" });
+      res.status(500).json({ error: "Failed to store drawings" });
     }
   }
 );
+
 app.post(
   "/update-draw/:id",
   upload.fields([
