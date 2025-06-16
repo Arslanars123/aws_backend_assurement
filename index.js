@@ -4617,21 +4617,31 @@ app.post(
         drawing,
         projectManager,
         comment,
+        pictureDescriptions,
       } = req.body;
       let pictures = [];
+      let pictureDescs = [];
 
       let annotatedImage = null;
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
-
       const parsedProjectUsers = projectUsers ? JSON.parse(projectUsers) : null;
-
       const parsedProjectManager = projectManager
         ? JSON.parse(projectManager)
         : null;
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
         pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+
+        // Handle picture descriptions
+        if (pictureDescriptions) {
+          // If single description, convert to array
+          if (!Array.isArray(pictureDescriptions)) {
+            pictureDescs = [pictureDescriptions];
+          } else {
+            pictureDescs = pictureDescriptions;
+          }
+        }
       }
 
       if (
@@ -4641,6 +4651,12 @@ app.post(
         annotatedImage = req.files["annotatedImage"][0].filename;
       }
 
+      // Create an array of picture objects with their descriptions
+      const pictureObjects = pictures.map((filename, index) => ({
+        filename,
+        description: pictureDescs[index] || "",
+      }));
+
       // Insert the data into the database
       const result = await db.collection("notes").insertOne({
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
@@ -4649,7 +4665,7 @@ app.post(
         users: parsedProjectUsers,
         projectManager: parsedProjectManager,
         drawing: parsedDrawing,
-        pictures,
+        pictureObjects, // Store as objects with filename and description
         annotatedImage,
         comment,
       });
