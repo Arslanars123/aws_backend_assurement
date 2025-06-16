@@ -4724,18 +4724,26 @@ app.post(
 
 app.post("/store-plan", async (req, res) => {
   try {
-    const { name, description, projectsId, companyId } = req.body; // Use 'name' and 'description' instead of 'username'
+    const { name, description, projectsId, companyId, drawIds } = req.body;
+
+    if (!name || !companyId || !projectsId || !Array.isArray(drawIds)) {
+      return res
+        .status(400)
+        .json({ error: "Missing required fields or invalid drawIds format" });
+    }
 
     const result = await db.collection("plans").insertOne({
       name,
       description,
-      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
       companyId,
+      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
+      drawIds,
+      createdAt: new Date(),
     });
 
     res.status(201).json(result);
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error creating plan:", error);
     res.status(500).json({ error: "Failed to create plan" });
   }
 });
