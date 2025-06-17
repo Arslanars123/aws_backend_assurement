@@ -4605,7 +4605,7 @@ app.post(
   "/store-note",
   upload.fields([
     { name: "pictures", maxCount: 10 },
-    { name: "annotatedImage", maxCount: 10 },
+    { name: "annotatedPdfs", maxCount: 10 }, // Add this new field
   ]),
   async (req, res) => {
     try {
@@ -4621,8 +4621,7 @@ app.post(
       } = req.body;
       let pictures = [];
       let pictureDescs = [];
-
-      let annotatedImage = null;
+      let annotatedPdfs = [];
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
       const parsedProjectUsers = projectUsers ? JSON.parse(projectUsers) : null;
@@ -4631,11 +4630,9 @@ app.post(
         : null;
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => file.filename);
 
-        // Handle picture descriptions
         if (pictureDescriptions) {
-          // If single description, convert to array
           if (!Array.isArray(pictureDescriptions)) {
             pictureDescs = [pictureDescriptions];
           } else {
@@ -4644,14 +4641,13 @@ app.post(
         }
       }
 
-      if (
-        req.files["annotatedImage"] &&
-        req.files["annotatedImage"].length > 0
-      ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          originalName: file.originalname,
+          filename: file.filename,
+        }));
       }
 
-      // Create an array of picture objects with their descriptions
       const pictureObjects = pictures.map((filename, index) => ({
         filename,
         description: pictureDescs[index] || "",
@@ -4659,21 +4655,22 @@ app.post(
 
       // Insert the data into the database
       const result = await db.collection("notes").insertOne({
-        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
+        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         companyId,
         item,
         users: parsedProjectUsers,
         projectManager: parsedProjectManager,
         drawing: parsedDrawing,
-        pictureObjects, // Store as objects with filename and description
+        pictureObjects,
         annotatedImage,
+        annotatedPdfs, // Add this new field to store PDF data
         comment,
       });
 
       res.status(201).json(result);
     } catch (error) {
       console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create task" });
+      res.status(500).json({ error: "Failed to create note" });
     }
   }
 );
