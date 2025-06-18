@@ -4662,8 +4662,7 @@ app.post(
         projectManager: parsedProjectManager,
         drawing: parsedDrawing,
         pictureObjects,
-        annotatedImage,
-        annotatedPdfs, // Add this new field to store PDF data
+        annotatedPdfs,
         comment,
       });
 
