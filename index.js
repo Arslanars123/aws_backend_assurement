@@ -2436,13 +2436,19 @@ app.post(
   "/submit-task",
   upload.fields([
     { name: "pictures", maxCount: 10 },
-    { name: "annotatedImage", maxCount: 10 },
+    { name: "annotatedPdfs", maxCount: 10 },
   ]),
-
   async (req, res) => {
     try {
-      const { comment, buildingParts, drawing, projectId, taskId, user } =
-        req.body;
+      const {
+        comment,
+        buildingParts,
+        drawing,
+        projectId,
+        taskId,
+        user,
+        pictureDescriptions,
+      } = req.body;
 
       const parsedBuildingParts = buildingParts
         ? JSON.parse(buildingParts)
@@ -2457,19 +2463,31 @@ app.post(
 
       // Initialize variables
       let pictures = [];
+      let pictureObjects = [];
 
-      // Handle multiple pictures
+      // Handle multiple pictures with descriptions
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
         pictures = req.files["pictures"].map((file) => file.filename);
+
+        // Create picture objects with descriptions
+        const descriptions = Array.isArray(pictureDescriptions)
+          ? pictureDescriptions
+          : [pictureDescriptions];
+
+        pictureObjects = req.files["pictures"].map((file, index) => ({
+          filename: file.filename,
+          description: descriptions[index] || "",
+          originalName: file.originalname,
+        }));
       }
 
-      let annotatedImage = null;
-
-      if (
-        req.files["annotatedImage"] &&
-        req.files["annotatedImage"].length > 0
-      ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+      // Handle annotated PDFs
+      let annotatedPdfs = [];
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          filename: file.filename,
+          originalName: file.originalname,
+        }));
       }
 
       // Update the specific task in the project
@@ -2484,9 +2502,11 @@ app.post(
             "tasks.$.buildingParts": parsedBuildingParts,
             "tasks.$.drawing": parsedDrawing,
             "tasks.$.pictures": pictures,
+            "tasks.$.pictureObjects": pictureObjects,
             "tasks.$.isSubmitted": true,
-            "tasks.$.annotatedImage": annotatedImage,
+            "tasks.$.annotatedPdfs": annotatedPdfs,
             "tasks.$.user": parsedUser,
+            "tasks.$.updatedAt": new Date(),
           },
         },
         { returnDocument: "after" }
@@ -2501,8 +2521,8 @@ app.post(
         check: result.value,
       });
     } catch (error) {
-      console.error("Error updating check:", error);
-      res.status(500).json({ error: "Failed to update check" });
+      console.error("Error updating task:", error);
+      res.status(500).json({ error: "Failed to update task" });
     }
   }
 );
