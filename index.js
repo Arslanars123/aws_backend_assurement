@@ -4332,7 +4332,6 @@ app.post(
 app.post(
   "/store-mention",
   upload.fields([
-    { name: "annotatedImage", maxCount: 10 },
     { name: "pictures", maxCount: 10 },
     { name: "annotatedPdfs", maxCount: 10 },
   ]),
@@ -4366,15 +4365,6 @@ app.post(
         }
       }
 
-      let annotatedImage = null;
-
-      if (
-        req.files["annotatedImage"] &&
-        req.files["annotatedImage"].length > 0
-      ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
-      }
-
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
           originalName: file.originalname,
@@ -4404,7 +4394,6 @@ app.post(
         annotatedPdfs,
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
-        annotatedImage,
         comment,
       });
 
