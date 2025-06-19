@@ -5158,7 +5158,7 @@ app.post(
 app.post(
   "/store-request",
   upload.fields([
-    { name: "annotatedImage", maxCount: 10 },
+    { name: "annotatedPdfs", maxCount: 10 },
     { name: "pictures", maxCount: 10 },
   ]),
   async (req, res) => {
@@ -5171,22 +5171,36 @@ app.post(
         drawing,
         projectsId,
         companyId,
+        pictureDescriptions,
       } = req.body;
 
       let pictures = [];
+      let pictureObjects = [];
 
-      // Handle multiple pictures upload
+      // Handle multiple pictures upload with descriptions
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => file.filename); // For backward compatibility
+
+        // Create picture objects with descriptions
+        const descriptions = Array.isArray(pictureDescriptions)
+          ? pictureDescriptions
+          : [pictureDescriptions];
+
+        pictureObjects = req.files["pictures"].map((file, index) => ({
+          filename: file.filename,
+          description: descriptions[index] || "",
+          originalName: file.originalname,
+        }));
       }
 
-      let annotatedImage = null;
+      let annotatedPdfs = [];
 
-      if (
-        req.files["annotatedImage"] &&
-        req.files["annotatedImage"].length > 0
-      ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+      // Handle annotated PDFs
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          filename: file.filename,
+          originalName: file.originalname,
+        }));
       }
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
@@ -5202,19 +5216,22 @@ app.post(
         recipients: parsedRecipients,
         drawing: parsedDrawing,
         projectManager: parsedProjectManager,
-        pictures,
+        pictures, // Keep for backward compatibility
+        pictureObjects, // New field with descriptions
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
-        annotatedImage,
+        annotatedPdfs, // Replace annotatedImage with annotatedPdfs array
+        createdAt: new Date(),
       });
 
       res.status(201).json(result);
     } catch (error) {
       console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create task" });
+      res.status(500).json({ error: "Failed to create request" });
     }
   }
 );
+
 app.post(
   "/update-request/:id",
   upload.fields([
