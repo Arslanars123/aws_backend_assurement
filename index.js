@@ -4469,7 +4469,11 @@ app.post(
 
 app.post(
   "/store-new",
-  upload.fields([{ name: "annotatedImage", maxCount: 10 }]),
+  upload.fields([
+    { name: "pictures", maxCount: 10 },
+    { name: "annotatedImage", maxCount: 10 },
+    { name: "annotatedPdfs", maxCount: 10 },
+  ]),
   async (req, res) => {
     try {
       const {
@@ -4481,9 +4485,13 @@ app.post(
         projectsId,
         companyId,
         drawing,
+        pictureDescriptions,
       } = req.body;
 
       let annotatedImage = null;
+      let pictures = [];
+      let pictureDescs = [];
+      let annotatedPdfs = [];
 
       if (
         req.files["annotatedImage"] &&
@@ -4491,6 +4499,30 @@ app.post(
       ) {
         annotatedImage = req.files["annotatedImage"][0].filename;
       }
+
+      if (req.files["pictures"] && req.files["pictures"].length > 0) {
+        pictures = req.files["pictures"].map((file) => file.filename);
+
+        if (pictureDescriptions) {
+          if (!Array.isArray(pictureDescriptions)) {
+            pictureDescs = [pictureDescriptions];
+          } else {
+            pictureDescs = pictureDescriptions;
+          }
+        }
+      }
+
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          originalName: file.originalname,
+          filename: file.filename,
+        }));
+      }
+
+      const pictureObjects = pictures.map((filename, index) => ({
+        filename,
+        description: pictureDescs[index] || "",
+      }));
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
       const parsedProjectManager = projectManager
@@ -4510,12 +4542,14 @@ app.post(
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         annotatedImage,
         drawing: parsedDrawing,
+        pictureObjects,
+        annotatedPdfs,
       });
 
       res.status(201).json(result);
     } catch (error) {
       console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create task" });
+      res.status(500).json({ error: "Failed to create agreement" });
     }
   }
 );
