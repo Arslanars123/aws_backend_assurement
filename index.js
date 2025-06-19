@@ -4334,6 +4334,7 @@ app.post(
   upload.fields([
     { name: "annotatedImage", maxCount: 10 },
     { name: "pictures", maxCount: 10 },
+    { name: "annotatedPdfs", maxCount: 10 },
   ]),
   async (req, res) => {
     try {
@@ -4346,12 +4347,23 @@ app.post(
         projectsId,
         companyId,
         comment,
+        pictureDescriptions,
       } = req.body;
 
       let pictures = [];
+      let pictureDescs = [];
+      let annotatedPdfs = [];
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
         pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+
+        if (pictureDescriptions) {
+          if (!Array.isArray(pictureDescriptions)) {
+            pictureDescs = [pictureDescriptions];
+          } else {
+            pictureDescs = pictureDescriptions;
+          }
+        }
       }
 
       let annotatedImage = null;
@@ -4362,6 +4374,18 @@ app.post(
       ) {
         annotatedImage = req.files["annotatedImage"][0].filename;
       }
+
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          originalName: file.originalname,
+          filename: file.filename,
+        }));
+      }
+
+      const pictureObjects = pictures.map((filename, index) => ({
+        filename,
+        description: pictureDescs[index] || "",
+      }));
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
       const parsedProjectManager = projectManager
@@ -4376,7 +4400,8 @@ app.post(
         recipients: parsedRecipients,
         drawing: parsedDrawing,
         projectManager: parsedProjectManager,
-        pictures,
+        pictureObjects,
+        annotatedPdfs,
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
         companyId,
         annotatedImage,
@@ -4386,10 +4411,11 @@ app.post(
       res.status(201).json(result);
     } catch (error) {
       console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create task" });
+      res.status(500).json({ error: "Failed to create mention" });
     }
   }
 );
+
 app.post(
   "/update-mention/:id",
   upload.fields([
