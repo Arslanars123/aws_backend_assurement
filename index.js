@@ -2527,6 +2527,38 @@ app.post(
   }
 );
 
+app.get("/get-project-task", async (req, res) => {
+  try {
+    const { projectId, taskId } = req.query;
+
+    if (!projectId || !taskId) {
+      return res
+        .status(400)
+        .json({ error: "Project ID and Task ID are required" });
+    }
+
+    const project = await db
+      .collection("projects")
+      .findOne(
+        { _id: new ObjectId(projectId) },
+        { projection: { tasks: { $elemMatch: { _id: new ObjectId(taskId) } } } }
+      );
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    if (!project.tasks || project.tasks.length === 0) {
+      return res.status(404).json({ error: "Task not found in this project" });
+    }
+
+    res.status(200).json(project.tasks[0]);
+  } catch (error) {
+    console.error("Error fetching task:", error);
+    res.status(500).json({ error: "Failed to fetch task" });
+  }
+});
+
 app.post("/submit-checklist", async (req, res) => {
   try {
     const { projectId, checkId } = req.body;
@@ -2641,7 +2673,7 @@ app.post("/submit-static-document-checklist", async (req, res) => {
 
 app.post(
   "/submit-static-report",
-  upload.fields([{ name: "annotatedImage", maxCount: 10 }]),
+  upload.fields([{ name: "annotatedPdfs", maxCount: 10 }]),
   async (req, res) => {
     try {
       const { projectId, staticReportId, comment, date } = req.body;
@@ -2653,12 +2685,13 @@ app.post(
       const professionKey = profession.SubjectMatterId;
       const updatePath = `professionAssociatedData.${professionKey}.staticReportRegistration`;
 
-      let annotatedImage = null;
-      if (
-        req.files["annotatedImage"] &&
-        req.files["annotatedImage"].length > 0
-      ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+      // Handle multiple annotated PDFs
+      let annotatedPdfs = [];
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          filename: file.filename,
+          originalName: file.originalname,
+        }));
       }
 
       const result = await db.collection("projects").findOneAndUpdate(
@@ -2675,23 +2708,26 @@ app.post(
             [`${updatePath}.$.selectedDate`]: date,
             [`${updatePath}.$.drawing`]: drawing,
             [`${updatePath}.$.isSubmitted`]: true,
-            [`${updatePath}.$.annotatedImage`]: annotatedImage,
+            [`${updatePath}.$.annotatedPdfs`]: annotatedPdfs,
+            [`${updatePath}.$.updatedAt`]: new Date(),
           },
         },
         { returnDocument: "after" }
       );
 
       if (!result) {
-        return res.status(404).json({ error: "Project or task not found" });
+        return res
+          .status(404)
+          .json({ error: "Project or static report not found" });
       }
 
       res.status(200).json({
-        message: "check list  updated successfully",
+        message: "Static report updated successfully",
         check: result.value,
       });
     } catch (error) {
-      console.error("Error updating check:", error);
-      res.status(500).json({ error: "Failed to update check" });
+      console.error("Error updating static report:", error);
+      res.status(500).json({ error: "Failed to update static report" });
     }
   }
 );
