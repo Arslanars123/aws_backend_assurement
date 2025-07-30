@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Employee List</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 40px; 
+      color: #333; 
+    }
+    .section-header {
+      background-color: #0B1F4D; 
+      color: white; 
+      padding: 10px 15px;
+      font-weight: bold; 
+      font-size: 16px; 
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%; 
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #999; 
+      padding: 10px; 
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background-color: #d9d9d9;
+    }
+    .profile-image {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 5px;
+    }
+    .empty-cell {
+      color: #999;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="section-header">8. EMPLOYEE ASSOCIATED WITH THE PROJECT FROM THE ORGANIZATION</div>
+
+  <table>
+    <tr>
+      <th style="width: 10%;">ID NO.</th>
+      <th style="width: 20%;">ROLE</th>
+      <th style="width: 25%;">NAME</th>
+      <th style="width: 25%;">ASSIGNED EMAIL:</th>
+      <th style="width: 10%;">MOBILE NO.</th>
+      <th style="width: 10%;">PHOTO/ID</th>
+    </tr>
+    
+    {{#if workers}}
+      {{#each workers}}
+        <tr>
+          <td>{{add @index 1}}</td>
+          <td>{{this.role}}</td>
+          <td>{{this.name}}</td>
+          <td>{{this.username}}</td>
+          <td>{{#if this.phone}}{{this.phone}}{{else}}<span class="empty-cell">Empty</span>{{/if}}</td>
+          <td>
+            {{#if this.picture}}
+              <img src="data:image/jpeg;base64,{{this.pictureBase64}}" alt="Profile" class="profile-image">
+            {{else}}
+              <span class="empty-cell">No Photo</span>
+            {{/if}}
+          </td>
+        </tr>
+      {{/each}}
+    {{else}}
+      <!-- Fallback rows when no workers data -->
+      <tr><td>07.01</td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td></tr>
+      <tr><td>07.02</td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td></tr>
+      <tr><td>07.03</td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td></tr>
+      <tr><td>07.04</td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td><td><span class="empty-cell">Empty</span></td></tr>
+    {{/if}}
+  </table>
+
+</body>
+</html> 

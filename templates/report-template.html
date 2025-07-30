@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Quality Assurance Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      color: #001b54;
+    }
+    .logo-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .logo {
+      width: 120px;
+    }
+    .report-system {
+      text-align: right;
+    }
+    .report-system h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .report-system small {
+      font-size: 12px;
+      color: #444;
+    }
+    .info-box {
+      border: 2px solid #001b54;
+      padding: 20px;
+      margin-top: 40px;
+      width: 60%;
+    }
+    .info-box p {
+      margin: 5px 0;
+      font-size: 14px;
+    }
+    .main-title {
+      margin-top: 30px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+    .subsection {
+      margin-top: 20px;
+      font-size: 15px;
+    }
+    .project-id-box {
+      border: 2px solid #001b54;
+      margin-top: 40px;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .project-id-box div {
+      width: 50%;
+      border-left: 2px solid #001b54;
+      padding-left: 10px;
+    }
+    .project-id-box div:first-child {
+      border-left: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo-section">
+    <div class="logo">
+      <img src="data:image/png;base64,{{assurmentLogo}}" alt="Assurement Logo" width="120">
+    </div>
+    <div class="report-system">
+      <h2>Report - system</h2>
+      <small>Part of Quality Assurance Denmark</small>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <p><strong>Performing company:</strong> {{company.name}}</p>
+    <p>Post no. / City: {{company.postalCode}} / {{company.city}}</p>
+    <p>Address: {{company.address}}</p>
+    <p>CVR: {{company.cvr}}</p>
+    <p>Telephone: {{company.phone}}</p>
+    <p>Mail: {{company.email}}</p>
+  </div>
+
+  <div class="main-title">QUALITY ASSURANCE REPORT</div>
+
+  <div class="subsection">
+    <p><strong>FOR PROFESSIONAL GROUP:</strong> {{profession.GroupName}}</p>
+    <p><strong>FOR CONSTRUCTION TYPE:</strong></p>
+  </div>
+
+  <div class="project-id-box">
+    <div><strong>Project ID Case no.:</strong></div>
+    <div>{{project._id}}</div>
+  </div>
+
+</body>
+</html> 
