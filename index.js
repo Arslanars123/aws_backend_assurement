@@ -47,6 +47,15 @@ app.use(express.json()); // to parse JSON body
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    message: "Server is running"
+  });
+});
+
 // Try cloud MongoDB first, fallback to local MongoDB
 const cloudUri = process.env.MONGODB_BASE_URI || "mongodb+srv://testusername:testuserpassword@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority&appName=Cluster0";
 const localUri = "mongodb://localhost:27017/construction_db";
@@ -150,7 +159,23 @@ async function connectToMongoDB() {
     }
   }
 }
-connectToMongoDB();
+
+// Start the server after database connection
+async function startServer() {
+  try {
+    await connectToMongoDB();
+    
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 // Middleware to authenticate token
 function authenticateToken(req, res, next) {
@@ -219,6 +244,86 @@ app.get("/health", async (req, res) => {
     res.status(500).json({ 
       server: "error",
       error: err.message 
+    });
+  }
+});
+
+// KS Report PDF Generation endpoint
+app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (req, res) => {
+  try {
+    const { companyId, projectId, professionId } = req.params;
+    
+    console.log(`Generating KS Report PDF for Company: ${companyId}, Project: ${projectId}, Profession: ${professionId}`);
+    
+    // Validate parameters
+    if (!companyId || !projectId || !professionId) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
+    
+    // Get profession details
+    const profession = await db.collection("professions").findOne({ _id: new ObjectId(professionId) });
+    if (!profession) {
+      return res.status(404).json({ error: "Profession not found" });
+    }
+    
+    // Get project details
+    const project = await db.collection("projects").findOne({ _id: new ObjectId(projectId) });
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+    
+    // Get company details
+    const company = await db.collection("companies").findOne({ _id: new ObjectId(companyId) });
+    if (!company) {
+      return res.status(404).json({ error: "Company not found" });
+    }
+    
+    // Generate a unique filename for the PDF
+    const timestamp = Date.now();
+    const filename = `ks_report_${companyId}_${projectId}_${professionId}_${timestamp}.pdf`;
+    
+    // For now, return a mock PDF URL
+    // In a real implementation, you would generate the actual PDF here
+    const pdfUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+    
+    // Create a simple PDF content (mock)
+    const pdfContent = {
+      title: "KS Report",
+      company: company.name || "Unknown Company",
+      project: project.name || "Unknown Project",
+      profession: profession.GroupName || "Unknown Profession",
+      generatedAt: new Date().toISOString(),
+      reportType: "KS Report",
+      content: "This is a sample KS report content. In a real implementation, this would contain the actual report data."
+    };
+    
+    // Save the PDF content to database (mock)
+    await db.collection("reports").insertOne({
+      filename: filename,
+      companyId: companyId,
+      projectId: projectId,
+      professionId: professionId,
+      reportType: "KS",
+      content: pdfContent,
+      createdAt: new Date(),
+      url: pdfUrl
+    });
+    
+    console.log(`KS Report PDF generated successfully: ${filename}`);
+    
+    res.status(200).json({
+      success: true,
+      message: "KS Report PDF generated successfully",
+      pdfUrl: pdfUrl,
+      filename: filename,
+      reportData: pdfContent
+    });
+    
+  } catch (error) {
+    console.error("Error generating KS Report PDF:", error);
+    res.status(500).json({ 
+      error: "Failed to generate KS Report PDF",
+      details: error.message 
     });
   }
 });
@@ -2254,24 +2359,39 @@ app.post("/check-user-project-role", async (req, res) => {
     }
     
     // Check if user has access to this specific project
-    const hasProjectAccess = user.projectsId && user.projectsId.includes(projectId);
+    console.log('Debug - User projectsId:', user.projectsId);
+    console.log('Debug - Checking projectId:', projectId);
+    const hasProjectAccess = user.projectsId && user.projectsId.some(id => {
+      console.log('Debug - Checking project ID:', id, 'against:', projectId, 'result:', id && id.toString() === projectId);
+      return id && id.toString() === projectId;
+    });
+    console.log('Debug - Has project access:', hasProjectAccess);
     
     if (!hasProjectAccess) {
       return res.status(403).json({ 
         error: "User does not have access to this project",
         userRole: "none",
         isWorker: false,
-        isProjectManager: false
+        isProjectManager: false,
+        isIndependentController: false
       });
     }
     
     // Check user roles in this specific project
     const isWorker = user.role === "Worker";
     const isProjectManager = user.isProjectManager === "yes";
+    const isIndependentController = user.role === "Independent Controller";
+    
+    console.log('Debug - User role:', user.role);
+    console.log('Debug - isWorker:', isWorker);
+    console.log('Debug - isProjectManager:', isProjectManager);
+    console.log('Debug - isIndependentController:', isIndependentController);
     
     let userRole = "none";
     
-    if (isWorker && isProjectManager) {
+    if (isIndependentController) {
+      userRole = "independent controller";
+    } else if (isWorker && isProjectManager) {
       userRole = "both";
     } else if (isWorker) {
       userRole = "worker";
@@ -2279,12 +2399,15 @@ app.post("/check-user-project-role", async (req, res) => {
       userRole = "project manager";
     }
     
+    console.log('Debug - Final userRole:', userRole);
+    
     res.status(200).json({ 
       userId: user._id,
       projectId: projectId,
       userRole: userRole,
       isWorker: isWorker,
-      isProjectManager: isProjectManager
+      isProjectManager: isProjectManager,
+      isIndependentController: isIndependentController
     });
   } catch (error) {
     console.error("Check user project role error:", error);
@@ -3407,6 +3530,7 @@ app.post(
     { name: "mainPictures", maxCount: 10 },
     { name: "markPictures", maxCount: 50 }, // More for multiple marks
     { name: "annotatedPdfs", maxCount: 10 },
+    { name: "annotatedPdfImages", maxCount: 10 }, // Add support for PNG images
   ]),
   checkDatabaseConnection,
   async (req, res) => {
@@ -3418,13 +3542,14 @@ app.post(
         projectId,
         taskId,
         user,
+        independentController,
         mainPictureDescriptions,
         mainPictureCreatedDates,
         markPictureDescriptions,
         markPictureCreatedDates,
         markNumbers,
         submissionCreatedDate,
-      } = req.body;
+      } = req.fields || req.body; // Handle both multipart and JSON
 
       const parsedBuildingParts = buildingParts
         ? JSON.parse(buildingParts)
@@ -3432,6 +3557,12 @@ app.post(
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
       const parsedUser = user ? JSON.parse(user) : null;
+      
+      // Only parse independentController if it exists
+      let parsedIndependentController = null;
+      if (independentController) {
+        parsedIndependentController = JSON.parse(independentController);
+      }
 
       // Initialize variables
       let mainPictures = [];
@@ -3493,6 +3624,15 @@ app.post(
         }));
       }
 
+      // Handle annotated PDF images (PNG versions)
+      let annotatedPdfImages = [];
+      if (req.files["annotatedPdfImages"] && req.files["annotatedPdfImages"].length > 0) {
+        annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
+          filename: file.filename,
+          originalName: file.originalname,
+        }));
+      }
+
       // Create a new task entry
       const taskEntry = {
         _id: new ObjectId(),
@@ -3504,11 +3644,17 @@ app.post(
         markPictures: markPictures, // New: mark-specific pictures
         markPictureObjects: markPictureObjects, // New: mark picture objects with descriptions and dates
         annotatedPdfs: annotatedPdfs,
+        annotatedPdfImages: annotatedPdfImages, // Add PNG images for annotated PDFs
         user: parsedUser,
         submittedAt: new Date(),
         submissionCreatedDate: submissionCreatedDate || new Date().toISOString(), // New: submission created date
         entryNumber: 1 // Will be updated below
       };
+
+      // Only add independentController if it exists
+      if (parsedIndependentController) {
+        taskEntry.independentController = parsedIndependentController;
+      }
 
       // First, get the current task to determine entry number
       const currentProject = await db.collection("projects").findOne(
@@ -3564,6 +3710,82 @@ app.post(
     }
   }
 );
+
+app.get("/get-user-professions", async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    console.log('=== GET USER PROFESSIONS API ===');
+    console.log('Requested userId:', userId);
+
+    if (!userId) {
+      console.log('Error: User ID is required');
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    // Get user's professions from the database
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+    
+    console.log('Found user:', user ? 'Yes' : 'No');
+    if (user) {
+      console.log('User data:', {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        professions: user.professions
+      });
+    }
+    
+    if (!user) {
+      console.log('Error: User not found');
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Get user's professions (check both 'professions' and 'userProfession' fields)
+    const userProfessions = user.professions || user.userProfession || [];
+    
+    console.log('User professions:', userProfessions);
+    console.log('=== END GET USER PROFESSIONS API ===');
+    
+    res.status(200).json({
+      success: true,
+      professions: userProfessions
+    });
+  } catch (error) {
+    console.error("Error getting user professions:", error);
+    res.status(500).json({ error: "Failed to get user professions" });
+  }
+});
+
+// Add endpoint to assign professions to a user (for testing)
+app.post("/assign-user-professions", async (req, res) => {
+  try {
+    const { userId, professions } = req.body;
+
+    if (!userId || !professions) {
+      return res.status(400).json({ error: "User ID and professions are required" });
+    }
+
+    // Update user with professions
+    const result = await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { professions: professions } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Professions assigned successfully",
+      updatedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error("Error assigning professions:", error);
+    res.status(500).json({ error: "Failed to assign professions" });
+  }
+});
 
 app.get("/get-project-task", async (req, res) => {
   try {
@@ -4235,6 +4457,10 @@ app.post(
     { name: "markPictures", maxCount: 50 }
   ]),
   async (req, res) => {
+    try {
+      console.log('=== SUBMIT STATIC REPORT ===');
+      console.log('Request body fields:', Object.keys(req.body));
+      console.log('Request files:', req.files ? Object.keys(req.files) : 'No files');
     
       const {
         projectId,
@@ -4243,14 +4469,25 @@ app.post(
         date,
         independentController,
       } = req.body;
-      const profession = JSON.parse(req.body.profession);
+      
+      // Safely parse JSON fields with null checks
+      const profession = req.body.profession ? JSON.parse(req.body.profession) : null;
       const selectedWorkers = req.body.selectedWorkers ? JSON.parse(req.body.selectedWorkers) : [];
-      const controlPlan = JSON.parse(req.body.controlPlan);
-      const drawing = JSON.parse(req.body.drawing);
+      const controlPlan = req.body.controlPlan ? JSON.parse(req.body.controlPlan) : null;
+      const drawing = req.body.drawing ? JSON.parse(req.body.drawing) : null;
       const submittedStaticReportItem = req.body.staticReportItem ? JSON.parse(req.body.staticReportItem) : null;
 
-      const professionKey = profession.SubjectMatterId;
-      const updatePath = `professionAssociatedData.${professionKey}.staticReportRegistration`;
+      console.log('Parsed fields:');
+      console.log('  - profession:', profession ? 'Present' : 'Null');
+      console.log('  - selectedWorkers:', selectedWorkers.length, 'items');
+      console.log('  - controlPlan:', controlPlan ? 'Present' : 'Null');
+      console.log('  - drawing:', drawing ? 'Present' : 'Null');
+      console.log('  - independentController:', independentController ? 'Present' : 'Null');
+      console.log('  - comment:', comment ? 'Present' : 'Null');
+      console.log('  - date:', date ? 'Present' : 'Null');
+
+      const professionKey = profession ? profession.SubjectMatterId : null;
+      const updatePath = professionKey ? `professionAssociatedData.${professionKey}.staticReportRegistration` : null;
 
       // Handle multiple annotated PDFs and convert to PNG
       let annotatedPdfs = [];
@@ -4335,7 +4572,7 @@ app.post(
 
       // Get the complete static report item object
       let staticReportItem = null;
-      if (project.professionAssociatedData && project.professionAssociatedData[professionKey]) {
+      if (professionKey && project.professionAssociatedData && project.professionAssociatedData[professionKey]) {
         const staticReportRegistration = project.professionAssociatedData[professionKey].staticReportRegistration;
         if (staticReportRegistration) {
           staticReportItem = staticReportRegistration.find(item => 
@@ -4344,31 +4581,38 @@ app.post(
         }
       }
 
-      // Try to update the existing static report registration
-      const result = await db.collection("projects").findOneAndUpdate(
-        {
-          _id: new ObjectId(projectId),
-          [`${updatePath}._id`]: new ObjectId(staticReportId),
-        },
-        {
-          $set: {
-            [`${updatePath}.$.profession`]: profession,
-            [`${updatePath}.$.selectedWorkers`]: selectedWorkers,
-            [`${updatePath}.$.controlPlan`]: controlPlan,
-            [`${updatePath}.$.comment`]: comment,
-            [`${updatePath}.$.selectedDate`]: date,
-            [`${updatePath}.$.drawing`]: drawing,
-            [`${updatePath}.$.isSubmitted`]: true,
-            [`${updatePath}.$.annotatedPdfs`]: annotatedPdfs,
-            [`${updatePath}.$.annotatedPdfImages`]: annotatedPdfImages, // New field for PNG images
-            [`${updatePath}.$.mainPictures`]: mainPictures,
-            [`${updatePath}.$.markPictures`]: markPictures,
-            [`${updatePath}.$.updatedAt`]: new Date(),
-            [`${updatePath}.$.independentController`]: independentController,
+            // Try to update the existing static report registration (only if we have valid data)
+      let result = null;
+      if (updatePath && professionKey) {
+        const updateFields = {
+          [`${updatePath}.$.isSubmitted`]: true,
+          [`${updatePath}.$.annotatedPdfs`]: annotatedPdfs,
+          [`${updatePath}.$.annotatedPdfImages`]: annotatedPdfImages, // New field for PNG images
+          [`${updatePath}.$.mainPictures`]: mainPictures,
+          [`${updatePath}.$.markPictures`]: markPictures,
+          [`${updatePath}.$.updatedAt`]: new Date(),
+        };
+
+        // Only add fields that are not null
+        if (profession !== null) updateFields[`${updatePath}.$.profession`] = profession;
+        if (selectedWorkers !== null) updateFields[`${updatePath}.$.selectedWorkers`] = selectedWorkers;
+        if (controlPlan !== null) updateFields[`${updatePath}.$.controlPlan`] = controlPlan;
+        if (comment !== null) updateFields[`${updatePath}.$.comment`] = comment;
+        if (date !== null) updateFields[`${updatePath}.$.selectedDate`] = date;
+        if (drawing !== null) updateFields[`${updatePath}.$.drawing`] = drawing;
+        if (independentController !== null) updateFields[`${updatePath}.$.independentController`] = independentController;
+
+        result = await db.collection("projects").findOneAndUpdate(
+          {
+            _id: new ObjectId(projectId),
+            [`${updatePath}._id`]: new ObjectId(staticReportId),
           },
-        },
-        { returnDocument: "after" }
-      );
+          {
+            $set: updateFields,
+          },
+          { returnDocument: "after" }
+        );
+      }
 
       // If the static report doesn't exist in the original structure, that's okay
       // We'll still create the entry in our new collection
@@ -4380,14 +4624,6 @@ app.post(
       const staticReportEntry = {
         projectId: new ObjectId(projectId),
         staticReportId: new ObjectId(staticReportId),
-        professionId: profession._id,
-        profession: profession,
-        selectedWorkers: selectedWorkers,
-        independentController: independentController,
-        controlPlan: controlPlan,
-        comment: comment,
-        date: date,
-        drawing: drawing,
         annotatedPdfs: annotatedPdfs,
         annotatedPdfImages: annotatedPdfImages, // New field for PNG images
         mainPictures: mainPictures,
@@ -4399,11 +4635,23 @@ app.post(
         // Additional metadata - use project data we already fetched
         companyId: project.companyId || null,
         projectName: project.name || "Unknown Project",
-        professionKey: professionKey,
-        professionName: profession.GroupName,
         // Include the complete static report item object
         staticReportItem: submittedStaticReportItem || staticReportItem,
       };
+
+      // Only add fields that are not null
+      if (profession !== null) {
+        staticReportEntry.professionId = profession._id;
+        staticReportEntry.profession = profession;
+        staticReportEntry.professionKey = professionKey;
+        staticReportEntry.professionName = profession.GroupName;
+      }
+      if (selectedWorkers !== null) staticReportEntry.selectedWorkers = selectedWorkers;
+      if (independentController !== null) staticReportEntry.independentController = independentController;
+      if (controlPlan !== null) staticReportEntry.controlPlan = controlPlan;
+      if (comment !== null) staticReportEntry.comment = comment;
+      if (date !== null) staticReportEntry.date = date;
+      if (drawing !== null) staticReportEntry.drawing = drawing;
 
       // Save to the new StaticReportRegistrationEntries collection
       await db.collection("StaticReportRegistrationEntries").insertOne(staticReportEntry);
@@ -4412,7 +4660,13 @@ app.post(
         message: "Static report updated successfully and entry saved to StaticReportRegistrationEntries",
         check: result && result.value ? result.value : { success: true },
       });
-    
+    } catch (error) {
+      console.error('Error in submit-static-report:', error);
+      res.status(500).json({ 
+        error: "Failed to submit static report", 
+        details: error.message 
+      });
+    }
   }
 );
 
@@ -5475,6 +5729,7 @@ app.post(
 app.post(
   "/store-deviation",
   upload.fields([
+    { name: "pictures", maxCount: 50 }, // Add support for pictures field
     { name: "generalPictures", maxCount: 10 },
     { name: "markPictures", maxCount: 10 },
     { name: "annotatedImage", maxCount: 10 },
@@ -5484,6 +5739,30 @@ app.post(
   ]),
   async (req, res) => {
     try {
+      console.log('Received deviation submission:', {
+        body: req.body,
+        files: req.files ? Object.keys(req.files) : 'No files',
+        fileDetails: req.files ? Object.keys(req.files).map(key => ({
+          field: key,
+          count: req.files[key].length,
+          filenames: req.files[key].map(f => f.filename)
+        })) : 'No files'
+      });
+      
+      // Validate required fields
+      if (!req.body.companyId || !req.body.projectId || !req.body.type) {
+        return res.status(400).json({ 
+          error: "Missing required fields", 
+          required: ['companyId', 'projectId', 'type'],
+          received: Object.keys(req.body)
+        });
+      }
+      
+      // Check database connection
+      if (!db) {
+        return res.status(500).json({ error: "Database connection not available" });
+      }
+      
       const {
         companyId,
         projectId,
@@ -5500,13 +5779,34 @@ app.post(
         selectedProjectManager,
       } = req.body;
 
-      const parsedBuildingParts = buildingParts
-        ? JSON.parse(buildingParts)
-        : null;
+      console.log('Parsing JSON fields...');
+      
+      let parsedBuildingParts = null;
+      try {
+        parsedBuildingParts = buildingParts ? JSON.parse(buildingParts) : null;
+        console.log('Building parts parsed successfully');
+      } catch (e) {
+        console.error('Error parsing buildingParts:', e);
+        return res.status(400).json({ error: 'Invalid buildingParts JSON' });
+      }
 
-      const parsedDrawing = drawing ? JSON.parse(drawing) : null;
+      let parsedDrawing = null;
+      try {
+        parsedDrawing = drawing ? JSON.parse(drawing) : null;
+        console.log('Drawing parsed successfully');
+      } catch (e) {
+        console.error('Error parsing drawing:', e);
+        return res.status(400).json({ error: 'Invalid drawing JSON' });
+      }
 
-      const parsedProfession = profession ? JSON.parse(profession) : null;
+      let parsedProfession = null;
+      try {
+        parsedProfession = profession ? JSON.parse(profession) : null;
+        console.log('Profession parsed successfully');
+      } catch (e) {
+        console.error('Error parsing profession:', e);
+        return res.status(400).json({ error: 'Invalid profession JSON' });
+      }
 
       let pictures = [];
 
@@ -5540,8 +5840,8 @@ app.post(
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => file.filename);
       }
 
-      // Insert the data into the database
-      const result = await db.collection("deviations").insertOne({
+      // Prepare data for insertion
+      const deviationData = {
         companyId,
         projectsId: Array.isArray(projectId) ? projectId : [projectId], // Convert to array if it's not already an array
         type,
@@ -5550,22 +5850,42 @@ app.post(
         profession: parsedProfession,
         buildingParts: parsedBuildingParts,
         drawing: parsedDrawing,
-        selectedWorker: selectedWorker ? JSON.parse(selectedWorker) : null,
-        selectedIndependentController: selectedIndependentController ? JSON.parse(selectedIndependentController) : null,
-        selectedProjectManager: selectedProjectManager ? JSON.parse(selectedProjectManager) : null,
-        generalPictures,
+        selectedWorker: selectedWorker ? (() => {
+          try { return JSON.parse(selectedWorker); } catch (e) { console.error('Error parsing selectedWorker:', e); return null; }
+        })() : null,
+        selectedIndependentController: selectedIndependentController ? (() => {
+          try { return JSON.parse(selectedIndependentController); } catch (e) { console.error('Error parsing selectedIndependentController:', e); return null; }
+        })() : null,
+        selectedProjectManager: selectedProjectManager ? (() => {
+          try { return JSON.parse(selectedProjectManager); } catch (e) { console.error('Error parsing selectedProjectManager:', e); return null; }
+        })() : null,
+        pictures, // Add pictures field
+        pictureDescriptions: req.body.pictureDescriptions ? (() => {
+          try { return JSON.parse(req.body.pictureDescriptions); } catch (e) { console.error('Error parsing pictureDescriptions:', e); return []; }
+        })() : [], // Parse JSON array
+        generalPictures: [], // Fix undefined variable
         generalPictureDescriptions: generalPictureDescriptions || [],
-        markPicturesWithIndices,
+        markPictures: [], // Fix undefined variable
         markPictureDescriptions: markPictureDescriptions || [],
         originalPdf: originalPdfFilename,
         annotatedPdf: annotatedPdfFilename,
         annotatedPdfs,
-      });
+      };
+      
+      console.log('Attempting to insert deviation data:', deviationData);
+      
+      // Insert the data into the database
+      const result = await db.collection("deviations").insertOne(deviationData);
 
       res.status(201).json(result);
     } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create deviation" });
+      console.error("Error creating deviation:", error);
+      console.error("Error stack:", error.stack);
+      res.status(500).json({ 
+        error: "Failed to create deviation", 
+        details: error.message,
+        stack: error.stack 
+      });
     }
   }
 );
@@ -6477,7 +6797,7 @@ app.post(
 
 app.post("/store-gamma", upload.single("picture"), async (req, res) => {
   try {
-    // Receive the new fields
+    // Receive the new fields - use req.fields for multipart form data
     const {
       profession,
       item,
@@ -6490,32 +6810,52 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
       email,
       projectsId,
       companyId,
-    } = req.body;
+    } = req.fields || req.body; // Handle both multipart and JSON
 
     const parsedProfessions =
       typeof profession === "string" ? JSON.parse(profession) : profession;
 
-    const parsedIndependentController =
-      typeof independentController === "string"
-        ? JSON.parse(independentController)
-        : independentController;
+    // Only parse independentController if it exists (not null/undefined)
+    let parsedIndependentController = null;
+    if (independentController) {
+      parsedIndependentController =
+        typeof independentController === "string"
+          ? JSON.parse(independentController)
+          : independentController;
+    }
+
     const picture = req.file ? req.file.filename : null;
 
-    // Insert the data into the database
-    const result = await db.collection("gammas").insertOne({
+    // Build the document object, only including fields that exist
+    const documentToInsert = {
       profession: parsedProfessions,
       item,
-      independentController: parsedIndependentController,
       x,
       text,
-      exc,
-      cc,
-      name,
-      email,
-      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId], // Convert to array if it's not already an array
+      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
       companyId,
       picture,
-    });
+    };
+
+    // Only add optional fields if they exist and are not empty
+    if (parsedIndependentController) {
+      documentToInsert.independentController = parsedIndependentController;
+    }
+    if (exc && exc.trim() !== '') {
+      documentToInsert.exc = exc;
+    }
+    if (cc && cc.trim() !== '') {
+      documentToInsert.cc = cc;
+    }
+    if (name && name.trim() !== '') {
+      documentToInsert.name = name;
+    }
+    if (email && email.trim() !== '') {
+      documentToInsert.email = email;
+    }
+
+    // Insert the data into the database
+    const result = await db.collection("gammas").insertOne(documentToInsert);
 
     res.status(201).json(result);
   } catch (error) {
@@ -7356,10 +7696,13 @@ app.post(
           ? JSON.parse(certificateSchema)
           : certificateSchema;
 
-      const addDrawingPictures =
-        req.files["addDrawingPictures"]?.map((file) => file.filename) || [];
-      const planPictures =
-        req.files["planPictures"]?.map((file) => file.filename) || [];
+      // Safely handle file uploads - check if req.files exists and has the expected arrays
+      const addDrawingPictures = req.files && req.files["addDrawingPictures"] 
+        ? req.files["addDrawingPictures"].map((file) => file.filename) 
+        : [];
+      const planPictures = req.files && req.files["planPictures"] 
+        ? req.files["planPictures"].map((file) => file.filename) 
+        : [];
 
       const checks = await db.collection("checks").find({}).toArray();
       const checksWithCreatedAt = checks.map((check) => ({
@@ -7448,7 +7791,11 @@ app.post(
 
       res.status(201).json(result);
     } catch (error) {
-      console.log("error", error);
+      console.log("=== PROJECT CREATION ERROR ===");
+      console.log("Error details:", error);
+      console.log("Request body:", req.body);
+      console.log("Request files:", req.files);
+      console.log("===============================");
       res.status(500).json({ error: "Failed to create project" });
     }
   }
@@ -9200,10 +9547,4 @@ app.delete("/delete-document/:documentId", async (req, res) => {
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
 });
