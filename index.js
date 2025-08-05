@@ -33,7 +33,7 @@ async function convertPdfToPng(pdfPath, outputDir) {
     }
     return null;
   } catch (error) {
-    console.error("Error converting PDF to PNG:", error);
+    console.error("Error converting PDF to arslan:", error);
     return null;
   }
 }
