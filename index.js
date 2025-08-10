@@ -836,7 +836,15 @@ app.get("/get-project-managers", async (req, res) => {
   try {
     const { companyId, projectId, userRole } = req.query;
 
-    const query = { isProjectManager: "yes" };
+    // Handle both string and array formats for isProjectManager
+    const query = {
+      $or: [
+        { isProjectManager: "yes" }, // String format
+        { "isProjectManager._id": "yes" }, // Array format with _id
+        { "isProjectManager.name": "Yes" } // Array format with name
+      ]
+    };
+    
     if (companyId && companyId !== "null") query.companyId = companyId;
 
     if (projectId && projectId !== "null")

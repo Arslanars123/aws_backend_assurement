@@ -67,7 +67,7 @@
           <td>{{../../project.startDate}}</td>
           <td>Main Drawing</td>
           <td>
-            <a href="http://localhost:3000/uploads/{{this.stored}}" target="_blank" class="document-link">{{this.original}}</a>
+            <a href="192.168.0.102:3000/uploads/{{this.stored}}" target="_blank" class="document-link">{{this.original}}</a>
           </td>
         </tr>
         {{/each}}
@@ -90,7 +90,7 @@
       <td>{{../project.startDate}}</td>
       <td>{{this.category}}</td>
       <td>
-        <a href="http://localhost:3000/download-document/{{this._id}}" target="_blank" class="document-link">{{this.originalName}}</a>
+        <a href="192.168.0.102:3000/download-document/{{this._id}}" target="_blank" class="document-link">{{this.originalName}}</a>
         {{#if this.description}}
           <div style="font-size: 12px; color: #666; margin-top: 5px;">{{this.description}}</div>
         {{/if}}
