@@ -2150,8 +2150,17 @@ app.post("/check-project-manager", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
     
-    // Check if user is project manager in any project
-    const isProjectManager = user.isProjectManager === "yes";
+    // Check if user is project manager in any project - handle both string and array formats
+    let isProjectManager = false;
+    if (user.isProjectManager === "yes" || user.isProjectManager === true) {
+      isProjectManager = true;
+    } else if (user.isProjectManager && Array.isArray(user.isProjectManager)) {
+      // Check if any item in the array has _id: "yes" or name: "Yes"
+      isProjectManager = user.isProjectManager.some(item => 
+        item && typeof item === 'object' && 
+        (item._id === "yes" || item.name === "Yes")
+      );
+    }
     
     // Get project details if project manager
     let projectInfo = [];
@@ -2387,10 +2396,23 @@ app.post("/check-user-project-role", async (req, res) => {
     
     // Check user roles in this specific project
     const isWorker = user.role === "Worker";
-    const isProjectManager = user.isProjectManager === "yes";
+    
+    // Check isProjectManager - handle both string and array formats
+    let isProjectManager = false;
+    if (user.isProjectManager === "yes" || user.isProjectManager === true) {
+      isProjectManager = true;
+    } else if (user.isProjectManager && Array.isArray(user.isProjectManager)) {
+      // Check if any item in the array has _id: "yes" or name: "Yes"
+      isProjectManager = user.isProjectManager.some(item => 
+        item && typeof item === 'object' && 
+        (item._id === "yes" || item.name === "Yes")
+      );
+    }
+    
     const isIndependentController = user.role === "Independent Controller";
     
     console.log('Debug - User role:', user.role);
+    console.log('Debug - User isProjectManager field:', user.isProjectManager);
     console.log('Debug - isWorker:', isWorker);
     console.log('Debug - isProjectManager:', isProjectManager);
     console.log('Debug - isIndependentController:', isIndependentController);
