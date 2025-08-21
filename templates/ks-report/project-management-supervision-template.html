@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Management Supervision Plan</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&display=swap');
+        
+        body {
+            font-family: 'Lato', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #001b54;
+            line-height: 1.6;
+            background-color: white;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background-color: #2c5aa0;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            font-size: 16px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 11px;
+        }
+        
+        th {
+            background-color: #4a6fa5;
+            color: white;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 11px;
+            border: 1px solid #2c5aa0;
+        }
+        
+        td {
+            padding: 8px 6px;
+            border: 1px solid #ddd;
+            font-size: 10px;
+            vertical-align: top;
+        }
+        
+        .pos-col {
+            width: 8%;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .what-col {
+            width: 35%;
+        }
+        
+        .where-col {
+            width: 20%;
+        }
+        
+        .when-col {
+            width: 22%;
+        }
+        
+        .how-much-col {
+            width: 8%;
+            text-align: center;
+        }
+        
+        .performed-col {
+            width: 12%;
+            text-align: center;
+        }
+        
+        .section-header {
+            background-color: #e6e6e6;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .section-header td {
+            padding: 8px 10px;
+            font-size: 11px;
+            border: 1px solid #ccc;
+        }
+        
+        .signature-section {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+        }
+        
+        .signature-header {
+            background-color: #f0f0f0;
+            padding: 10px 15px;
+            font-size: 12px;
+            font-weight: bold;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .signature-row {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .signature-label {
+            background-color: #f0f0f0;
+            padding: 10px 15px;
+            font-weight: bold;
+            font-size: 11px;
+            width: 120px;
+            border-right: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+        }
+        
+        .signature-field {
+            flex: 1;
+            padding: 10px 15px;
+            min-height: 30px;
+            background-color: white;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .status-completed {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .status-in-progress {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        
+        .status-not-started {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            09. PROJECT MANAGEMENT SUPERVISION PLAN
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th class="pos-col">Pos.</th>
+                    <th class="what-col">What</th>
+                    <th class="where-col">Where</th>
+                    <th class="when-col">When</th>
+                    <th class="how-much-col">How much</th>
+                    <th class="performed-col">Performed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#if documents.[Process - Project Review]}}
+                <!-- PROCESS - PROJECT REVIEW Section -->
+                <tr class="section-header">
+                    <td colspan="6">PROCESS - PROJECT REVIEW</td>
+                </tr>
+                {{#each documents.[Process - Project Review]}}
+                <tr>
+                    <td class="pos-col">{{add @index 1}}.01</td>
+                    <td class="what-col">{{what}}</td>
+                    <td class="where-col">{{where}}</td>
+                    <td class="when-col">{{when}}</td>
+                    <td class="how-much-col">{{scope}}</td>
+                    <td class="performed-col">
+                        {{#if executedDate}}
+                            <span class="status-completed">Completed</span><br>
+                            <small>{{formatDate executedDate}}</small>
+                        {{else}}
+                            <span class="status-not-started">Not Started</span>
+                        {{/if}}
+                    </td>
+                </tr>
+                {{/each}}
+                {{/if}}
+                
+                {{#if documents.Miscellaneous}}
+                <!-- MISCELLANEOUS Section -->
+                <tr class="section-header">
+                    <td colspan="6">9.1 MISCELLANEOUS</td>
+                </tr>
+                {{#each documents.Miscellaneous}}
+                <tr>
+                    <td class="pos-col">9.1{{add @index 1}}</td>
+                    <td class="what-col">{{what}}</td>
+                    <td class="where-col">{{where}}</td>
+                    <td class="when-col">{{when}}</td>
+                    <td class="how-much-col">{{scope}}</td>
+                    <td class="performed-col">
+                        {{#if executedDate}}
+                            <span class="status-completed">Completed</span><br>
+                            <small>{{formatDate executedDate}}</small>
+                        {{else}}
+                            <span class="status-not-started">Not Started</span>
+                        {{/if}}
+                    </td>
+                </tr>
+                {{/each}}
+                {{/if}}
+                
+                {{#if documents.[Controls for the contractor]}}
+                <!-- CONTROL FOR THE CONTRACTOR Section -->
+                <tr class="section-header">
+                    <td colspan="6">9.2 CONTROL FOR THE CONTRACTOR</td>
+                </tr>
+                {{#each documents.[Controls for the contractor]}}
+                <tr>
+                    <td class="pos-col">9.2{{add @index 1}}</td>
+                    <td class="what-col">{{what}}</td>
+                    <td class="where-col">{{where}}</td>
+                    <td class="when-col">{{when}}</td>
+                    <td class="how-much-col">{{scope}}</td>
+                    <td class="performed-col">
+                        {{#if executedDate}}
+                            <span class="status-completed">Completed</span><br>
+                            <small>{{formatDate executedDate}}</small>
+                        {{else}}
+                            <span class="status-not-started">Not Started</span>
+                        {{/if}}
+                    </td>
+                </tr>
+                {{/each}}
+                {{/if}}
+            </tbody>
+        </table>
+        
+        <div class="signature-section">
+            <div class="signature-header">The above is checked by:</div>
+            <div class="signature-row">
+                <div class="signature-label">NAME</div>
+                <div class="signature-field"></div>
+            </div>
+            <div class="signature-row">
+                <div class="signature-label">SIGNATURE</div>
+                <div class="signature-field"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

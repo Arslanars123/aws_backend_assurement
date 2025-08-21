@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Received Case Documents</title>
+  <style>
+    body {
+      font-family: 'Lato', Arial, sans-serif;
+      margin: 40px;
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .section-header {
+      background-color: #0B1F4D;
+      color: white;
+      padding: 10px 15px;
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 25px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+
+    th, td {
+      border: 1px solid #999;
+      padding: 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background-color: #d9d9d9;
+      text-align: left;
+    }
+
+    .document-link {
+      color: #0066cc;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .document-link:hover {
+      color: #003366;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="section-header">5. RECEIVED CASE DOCUMENTS BEFORE CONSTRUCTION COMMENCED</div>
+
+  <!-- Drawings Section -->
+  {{#if drawings}}
+  <h3 style="margin: 20px 0 10px 0; color: #0B1F4D; font-size: 16px;">DRAWINGS</h3>
+  <table>
+    <tr>
+      <th style="width: 20%;">DATE</th>
+      <th style="width: 40%;">DOCUMENT</th>
+      <th style="width: 40%;">FILENAME:</th>
+    </tr>
+    {{#each drawings}}
+      {{#if this.mainDrawings}}
+        {{#each this.mainDrawings}}
+        <tr>
+          <td>{{../../project.startDate}}</td>
+          <td>Main Drawing</td>
+          <td>
+            <a href="192.168.0.102:3000/uploads/{{this.stored}}" target="_blank" class="document-link">{{this.original}}</a>
+          </td>
+        </tr>
+        {{/each}}
+      {{/if}}
+    {{/each}}
+  </table>
+  {{/if}}
+
+  <!-- Documents Section -->
+  {{#if documents}}
+  <h3 style="margin: 30px 0 10px 0; color: #0B1F4D; font-size: 16px;">DOCUMENTS</h3>
+  <table>
+    <tr>
+      <th style="width: 20%;">DATE</th>
+      <th style="width: 40%;">DOCUMENT</th>
+      <th style="width: 40%;">FILENAME:</th>
+    </tr>
+    {{#each documents}}
+    <tr>
+      <td>{{../project.startDate}}</td>
+      <td>{{this.category}}</td>
+      <td>
+        <a href="192.168.0.102:3000/download-document/{{this._id}}" target="_blank" class="document-link">{{this.originalName}}</a>
+        {{#if this.description}}
+          <div style="font-size: 12px; color: #666; margin-top: 5px;">{{this.description}}</div>
+        {{/if}}
+      </td>
+    </tr>
+    {{/each}}
+  </table>
+  {{/if}}
+
+  {{#unless drawings}}
+  {{#unless documents}}
+  <h3 style="margin: 20px 0 10px 0; color: #0B1F4D; font-size: 16px;">DRAWINGS</h3>
+  <table>
+    <tr>
+      <th style="width: 20%;">DATE</th>
+      <th style="width: 40%;">DOCUMENT</th>
+      <th style="width: 40%;">FILENAME:</th>
+    </tr>
+    <tr>
+      <td>{{project.startDate}}</td>
+      <td>No drawings available</td>
+      <td>-</td>
+    </tr>
+  </table>
+  
+  <h3 style="margin: 30px 0 10px 0; color: #0B1F4D; font-size: 16px;">DOCUMENTS</h3>
+  <table>
+    <tr>
+      <th style="width: 20%;">DATE</th>
+      <th style="width: 40%;">DOCUMENT</th>
+      <th style="width: 40%;">FILENAME:</th>
+    </tr>
+    <tr>
+      <td>{{project.startDate}}</td>
+      <td>No documents available</td>
+      <td>-</td>
+    </tr>
+  </table>
+  {{/unless}}
+  {{/unless}}
+
+</body>
+</html> 

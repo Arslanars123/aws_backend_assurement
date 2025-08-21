@@ -248,85 +248,8 @@ app.get("/health", async (req, res) => {
   }
 });
 
-// KS Report PDF Generation endpoint
-app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (req, res) => {
-  try {
-    const { companyId, projectId, professionId } = req.params;
-    
-    console.log(`Generating KS Report PDF for Company: ${companyId}, Project: ${projectId}, Profession: ${professionId}`);
-    
-    // Validate parameters
-    if (!companyId || !projectId || !professionId) {
-      return res.status(400).json({ error: "Missing required parameters" });
-    }
-    
-    // Get profession details
-    const profession = await db.collection("professions").findOne({ _id: new ObjectId(professionId) });
-    if (!profession) {
-      return res.status(404).json({ error: "Profession not found" });
-    }
-    
-    // Get project details
-    const project = await db.collection("projects").findOne({ _id: new ObjectId(projectId) });
-    if (!project) {
-      return res.status(404).json({ error: "Project not found" });
-    }
-    
-    // Get company details
-    const company = await db.collection("companies").findOne({ _id: new ObjectId(companyId) });
-    if (!company) {
-      return res.status(404).json({ error: "Company not found" });
-    }
-    
-    // Generate a unique filename for the PDF
-    const timestamp = Date.now();
-    const filename = `ks_report_${companyId}_${projectId}_${professionId}_${timestamp}.pdf`;
-    
-    // For now, return a mock PDF URL
-    // In a real implementation, you would generate the actual PDF here
-    const pdfUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
-    
-    // Create a simple PDF content (mock)
-    const pdfContent = {
-      title: "KS Report",
-      company: company.name || "Unknown Company",
-      project: project.name || "Unknown Project",
-      profession: profession.GroupName || "Unknown Profession",
-      generatedAt: new Date().toISOString(),
-      reportType: "KS Report",
-      content: "This is a sample KS report content. In a real implementation, this would contain the actual report data."
-    };
-    
-    // Save the PDF content to database (mock)
-    await db.collection("reports").insertOne({
-      filename: filename,
-      companyId: companyId,
-      projectId: projectId,
-      professionId: professionId,
-      reportType: "KS",
-      content: pdfContent,
-      createdAt: new Date(),
-      url: pdfUrl
-    });
-    
-    console.log(`KS Report PDF generated successfully: ${filename}`);
-    
-    res.status(200).json({
-      success: true,
-      message: "KS Report PDF generated successfully",
-      pdfUrl: pdfUrl,
-      filename: filename,
-      reportData: pdfContent
-    });
-    
-  } catch (error) {
-    console.error("Error generating KS Report PDF:", error);
-    res.status(500).json({ 
-      error: "Failed to generate KS Report PDF",
-      details: error.message 
-    });
-  }
-});
+// KS Report PDF Generation endpoint - REMOVED DUPLICATE MOCK ENDPOINT
+// The real implementation is at line 9469
 // 1. Create a new user
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -583,6 +506,28 @@ app.get("/get-safety", async (req, res) => {
   }
 });
 
+app.get("/get-advisors", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+
+    const query = { role: "Advisor" };
+    if (companyId && companyId !== "null") {
+      query.companyId = companyId;
+    }
+
+    if (projectId && projectId !== "null") {
+      // Convert comma-separated projectId to an array and apply the $in operator
+      query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
+    }
+
+    const users = await db.collection("users").find(query).toArray();
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch Advisors" });
+  }
+});
+
 app.get("/get-cons", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
@@ -600,14 +545,22 @@ app.get("/get-cons", async (req, res) => {
 
     const populatedUsers = await Promise.all(
       users.map(async (user) => {
-        if (user.mainId) {
-          const mainUser = await db
-            .collection("users")
-            .findOne({ _id: new ObjectId(user.mainId) });
-          return {
-            ...user,
-            mainUser: mainUser || null, // Attach the main user data
-          };
+        if (user.mainId && user.mainId !== "null" && user.mainId !== "undefined" && user.mainId.length === 24) {
+          try {
+            const mainUser = await db
+              .collection("users")
+              .findOne({ _id: new ObjectId(user.mainId) });
+            return {
+              ...user,
+              mainUser: mainUser || null, // Attach the main user data
+            };
+          } catch (error) {
+            console.error(`Invalid mainId for user ${user._id}: ${user.mainId}`);
+            return {
+              ...user,
+              mainUser: null, // Set to null if mainId is invalid
+            };
+          }
         }
         return user;
       })
@@ -735,7 +688,12 @@ app.post("/get-filter-users", async (req, res) => {
     }
 
     if (professionsIds?.length) {
-      query["userProfession._id"] = { $in: professionsIds };
+      // Check both userProfession._id AND userProfession.professionID
+      // This handles cases where the profession ID is stored in different fields
+      query["$or"] = [
+        { "userProfession._id": { $in: professionsIds } },
+        { "userProfession.professionID": { $in: professionsIds } }
+      ];
     }
     if (roles?.length) {
       query.role = { $in: roles };
@@ -931,6 +889,239 @@ app.get("/get-tasks", async (req, res) => {
   }
 });
 
+// New API: Get tasks by SubjectMatterId organized by Type
+app.get("/get-tasks-by-subject-matter", async (req, res) => {
+  try {
+    const { subjectMatterId } = req.query;
+
+    if (!subjectMatterId) {
+      return res.status(400).json({ 
+        error: "subjectMatterId is required as query parameter" 
+      });
+    }
+
+    // Find all tasks with the specified SubjectMatterId
+    const tasks = await db.collection("tasks")
+      .find({ SubjectMatterId: subjectMatterId })
+      .sort({ ControlId: 1 }) // Sort by ControlId for proper order
+      .toArray();
+
+    if (!tasks || tasks.length === 0) {
+      return res.status(404).json({ 
+        error: `No tasks found for SubjectMatterId: ${subjectMatterId}`,
+        subjectMatterId: subjectMatterId
+      });
+    }
+
+    // Organize tasks by Type
+    const organizedTasks = {
+      receive: [],
+      process: [],
+      final: []
+    };
+
+    tasks.forEach(task => {
+      const taskData = {
+        _id: task._id,
+        Index: task.Index,
+        SubjectMatterId: task.SubjectMatterId,
+        ControlId: task.ControlId,
+        Type: task.Type,
+        Activity: task.Activity,
+        AcceptanceCriteria: task.AcceptanceCriteria,
+        Time: task.Time,
+        Method: task.Method,
+        DocumentationRequirements: task.DocumentationRequirements,
+        Scope: task.Scope,
+        Language: task.Language
+      };
+
+      // Categorize by Type (case-insensitive)
+      const taskType = task.Type?.toLowerCase();
+      if (taskType === 'receive') {
+        organizedTasks.receive.push(taskData);
+      } else if (taskType === 'process') {
+        organizedTasks.process.push(taskData);
+      } else if (taskType === 'final') {
+        organizedTasks.final.push(taskData);
+      }
+    });
+
+    // Add summary information
+    const response = {
+      success: true,
+      subjectMatterId: subjectMatterId,
+      totalTasks: tasks.length,
+      summary: {
+        receive: organizedTasks.receive.length,
+        process: organizedTasks.process.length,
+        final: organizedTasks.final.length
+      },
+      tasks: organizedTasks
+    };
+
+    res.status(200).json(response);
+
+  } catch (error) {
+    console.error("Error fetching tasks by SubjectMatterId:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch tasks by SubjectMatterId",
+      details: error.message 
+    });
+  }
+});
+
+// New API: Get Project Management Supervision Plan from supers collections
+app.post("/get-project-management-supervision", async (req, res) => {
+  try {
+    const { subjectMatterId, projectId, companyId } = req.body;
+
+    if (!subjectMatterId || !projectId || !companyId) {
+      return res.status(400).json({ 
+        error: "subjectMatterId, projectId, and companyId are required" 
+      });
+    }
+
+    console.log(`🔍 Fetching supers for SubjectMatterId: ${subjectMatterId}, ProjectId: ${projectId}, CompanyId: ${companyId}`);
+
+    // Find documents from supers collection with matching criteria
+    const supers = await db.collection("supers")
+      .find({
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+        "professionObject.SubjectMatterId": subjectMatterId
+      })
+      .toArray();
+
+    if (!supers || supers.length === 0) {
+      return res.status(404).json({ 
+        error: `No supers documents found for the specified criteria`,
+        subjectMatterId,
+        projectId,
+        companyId
+      });
+    }
+
+    console.log(`📊 Found ${supers.length} supers documents`);
+
+    // Function to calculate string similarity score
+    const calculateSimilarity = (str1, str2) => {
+      if (!str1 || !str2) return 0;
+      
+      const s1 = str1.toLowerCase().trim();
+      const s2 = str2.toLowerCase().trim();
+      
+      if (s1 === s2) return 1.0;
+      
+      // Simple similarity calculation
+      const longer = s1.length > s2.length ? s1 : s2;
+      const shorter = s1.length > s2.length ? s2 : s1;
+      
+      if (longer.length === 0) return 1.0;
+      
+      const editDistance = levenshteinDistance(longer, shorter);
+      return (longer.length - editDistance) / longer.length;
+    };
+
+    // Levenshtein distance function
+    const levenshteinDistance = (str1, str2) => {
+      const matrix = [];
+      for (let i = 0; i <= str2.length; i++) {
+        matrix[i] = [i];
+      }
+      for (let j = 0; j <= str1.length; j++) {
+        matrix[0][j] = j;
+      }
+      for (let i = 1; i <= str2.length; i++) {
+        for (let j = 1; j <= str1.length; j++) {
+          if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1,
+              matrix[i][j - 1] + 1,
+              matrix[i - 1][j] + 1
+            );
+          }
+        }
+      }
+      return matrix[str2.length][str1.length];
+    };
+
+    // Define template titles in order
+    const templateTitles = [
+      "Process - Project Review",
+      "Miscellaneous", 
+      "Controls for the contractor"
+    ];
+
+    // Organize documents by best matching title
+    const organizedDocs = {
+      "Process - Project Review": [],
+      "Miscellaneous": [],
+      "Controls for the contractor": []
+    };
+
+    supers.forEach(doc => {
+      if (!doc.title) return;
+      
+      let bestMatch = null;
+      let bestScore = 0;
+      
+      // Find best matching template title
+      templateTitles.forEach(templateTitle => {
+        const score = calculateSimilarity(doc.title, templateTitle);
+        if (score > bestScore && score > 0.6) { // Threshold of 0.6
+          bestScore = score;
+          bestMatch = templateTitle;
+        }
+      });
+      
+      if (bestMatch) {
+        organizedDocs[bestMatch].push({
+          _id: doc._id,
+          title: doc.title,
+          what: doc.what || "N/A",
+          where: doc.where || "N/A",
+          when: doc.when || "N/A",
+          scope: doc.scope || "N/A",
+          executedDate: doc.executedDate || "N/A",
+          picture: doc.picture,
+          pictures: doc.pictures || [],
+          users: doc.users || [],
+          professionObject: doc.professionObject,
+          createdAt: doc.createdAt
+        });
+      }
+    });
+
+    // Add summary information
+    const response = {
+      success: true,
+      subjectMatterId,
+      projectId,
+      companyId,
+      totalDocuments: supers.length,
+      summary: {
+        "Process - Project Review": organizedDocs["Process - Project Review"].length,
+        "Miscellaneous": organizedDocs["Miscellaneous"].length,
+        "Controls for the contractor": organizedDocs["Controls for the contractor"].length
+      },
+      documents: organizedDocs
+    };
+
+    console.log(`✅ Organized ${supers.length} documents into ${Object.keys(organizedDocs).length} categories`);
+    res.status(200).json(response);
+
+  } catch (error) {
+    console.error("Error fetching project management supervision:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch project management supervision",
+      details: error.message 
+    });
+  }
+});
+
 app.get("/get-matters", async (req, res) => {
   try {
     // distinct() with no second argument, or an empty object {}
@@ -986,6 +1177,125 @@ app.get("/get-controls", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch controls" });
   }
 });
+
+// New endpoint for "controls of static report" collection
+app.post("/get-controls-of-static-report", async (req, res) => {
+  try {
+    const { subjectMatterId, language } = req.body;
+
+    if (!subjectMatterId) {
+      return res.status(400).json({ error: "subjectMatterId is required" });
+    }
+
+    // 1) Get the inputs document (case-tolerant on the field name)
+    const inputDoc = await db.collection("inputs").findOne(
+      { SubjectMatterId: subjectMatterId },
+      { projection: { EuroCode: 1, euroCode: 1, eurocode: 1, Eurocode: 1 } }
+    );
+
+    if (!inputDoc) {
+      return res.status(404).json({
+        error: `No inputs document found for SubjectMatterId: ${subjectMatterId}`
+      });
+    }
+
+    // 2) Extract EuroCode array (any casing) and normalize to strings
+    let euroCodeRaw =
+      inputDoc.EuroCode ?? inputDoc.euroCode ?? inputDoc.eurocode ?? inputDoc.Eurocode ?? [];
+
+    if (!Array.isArray(euroCodeRaw)) euroCodeRaw = [euroCodeRaw];
+    const euroCodesStr = euroCodeRaw
+      .filter(v => v !== undefined && v !== null && `${v}`.trim() !== "")
+      .map(v => String(v).trim());
+
+    if (!euroCodesStr.length) {
+      return res.status(404).json({
+        error: `Inputs document has no EuroCode values for SubjectMatterId: ${subjectMatterId}`
+      });
+    }
+
+    // 3) Build language filter per your rule
+    const langFilter = (language === "DK")
+      ? { language: "DK" }            // Danish only
+      : { language: { $ne: "DK" } };  // Non-Danish (default when missing or anything else)
+
+    // 4) Query controls of static report by euroCode IN EuroCode[] AND language rule
+    const filter = {
+      euroCode: { $in: euroCodesStr },  // controls store "1" (string) in your screenshot
+      ...langFilter
+    };
+
+    // Only fetch the entries array (and minimal meta for context)
+    const docs = await db.collection("controls of static report")
+      .find(filter, { projection: { _id: 1, euroCode: 1, language: 1, entries: 1 } })
+      .toArray();
+
+    if (!docs.length) {
+      return res.status(404).json({
+        error: "No controls found for the given EuroCode(s) and language rule",
+        filter
+      });
+    }
+
+    // 5) Return ENTRIES ONLY (flattened) + meta if you need it
+    const entries = docs.flatMap(d => Array.isArray(d.entries) ? d.entries : []);
+
+    return res.status(200).json({
+      meta: {
+        subjectMatterId,
+        requestedLanguage: language ?? null,
+        appliedLanguageFilter: (language === "DK") ? "DK" : "non-DK",
+            euroCodes: euroCodesStr,
+        docsMatched: docs.length,
+        entriesCount: entries.length
+      },
+      entries
+    });
+  } catch (error) {
+    console.error("Error fetching controls of static report:", error);
+    return res.status(500).json({ error: "Failed to fetch controls of static report" });
+  }
+});
+
+// New endpoint to fetch profession from inputs collection by subjectMatterId
+app.post("/get-inputs-by-subject-matter-id", async (req, res) => {
+  try {
+    const { subjectMatterId } = req.body;
+
+    if (!subjectMatterId) {
+      return res.status(400).json({ error: "subjectMatterId is required" });
+    }
+
+    console.log('Fetching inputs document for SubjectMatterId:', subjectMatterId);
+
+    // Find the document in inputs collection by SubjectMatterId
+    const inputDoc = await db.collection("inputs").findOne(
+      { SubjectMatterId: subjectMatterId }
+    );
+
+    if (!inputDoc) {
+      return res.status(404).json({
+        error: `No inputs document found for SubjectMatterId: ${subjectMatterId}`
+      });
+    }
+
+    console.log('Found inputs document:', {
+      _id: inputDoc._id,
+      SubjectMatterId: inputDoc.SubjectMatterId,
+      GroupName: inputDoc.GroupName,
+      Language: inputDoc.Language,
+      EuroCode: inputDoc.EuroCode
+    });
+
+    // Return the complete profession object
+    return res.status(200).json(inputDoc);
+
+  } catch (error) {
+    console.error("Error fetching inputs by subjectMatterId:", error);
+    return res.status(500).json({ error: "Failed to fetch inputs document" });
+  }
+});
+
 app.get("/get-gammas", async (req, res) => {
   try {
     const { companyId, projectId, point } = req.query;
@@ -3741,6 +4051,173 @@ app.post(
   }
 );
 
+// Excel Upload Endpoint for Controls
+app.post(
+  "/upload-controls",
+  upload.single("excelFile"),
+  checkDatabaseConnection,
+  async (req, res) => {
+    try {
+      console.log('=== EXCEL UPLOAD API CALLED ===');
+      
+      const { subjectMatterId, euroCode, language } = req.body;
+      const excelFile = req.file;
+
+      console.log('Received data:', { subjectMatterId, euroCode, language });
+      console.log('Excel file:', excelFile ? excelFile.filename : 'No file');
+
+      // Validate input
+      if (!subjectMatterId || !language || !excelFile) {
+        return res.status(400).json({ 
+          error: "Subject Matter ID, language, and Excel file are required" 
+        });
+      }
+
+      // Validate euroCode format (optional but if provided, should be valid)
+      if (euroCode && !euroCode.trim()) {
+        return res.status(400).json({ 
+          error: "Euro Code cannot be empty if provided" 
+        });
+      }
+
+      if (!['DK', 'GB'].includes(language)) {
+        return res.status(400).json({ 
+          error: "Language must be either 'DK' (Danish) or 'GB' (English)" 
+        });
+      }
+
+      // Check if collection exists, if not create it
+      const collections = await db.listCollections({ name: "controls of static report" }).toArray();
+      let collection;
+      
+      if (collections.length === 0) {
+        console.log('Collection "controls of static report" does not exist, creating it...');
+        collection = await db.createCollection("controls of static report");
+        console.log('Collection created successfully');
+      } else {
+        console.log('Collection "controls of static report" exists, using it');
+        collection = db.collection("controls of static report");
+      }
+
+      // Parse Excel file
+      const XLSX = require('xlsx');
+      const workbook = XLSX.readFile(excelFile.path);
+      
+      // Get the appropriate sheet based on language
+      const sheetName = language === 'DK' ? 'DK' : 'GB';
+      const worksheet = workbook.Sheets[sheetName];
+      
+      if (!worksheet) {
+        return res.status(400).json({ 
+          error: `Sheet '${sheetName}' not found in Excel file. Please ensure the file has a sheet named '${sheetName}'` 
+        });
+      }
+
+      // Convert sheet to JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      console.log(`Found ${jsonData.length} rows in ${sheetName} sheet`);
+
+      if (jsonData.length === 0) {
+        return res.status(400).json({ 
+          error: "No data found in Excel file" 
+        });
+      }
+
+      // Process data based on language
+      let processedData = [];
+      
+      if (language === 'DK') {
+        // Danish data structure
+        processedData = jsonData.map((row, index) => ({
+          pos: row.pos || row.Pos || `Row ${index + 1}`,
+          kontrolAf: row['Kontrol af'] || row['kontrol af'] || '',
+          emne: row.Emne || row.emne || '',
+          konstruktionsdel: row.Konstruktionsdel || row.konstruktionsdel || '',
+          grundlag: row.Grundlag || row.grundlag || '',
+          kontrolMetode: row['kontrol metode'] || row['Kontrol metode'] || '',
+          omfang: parseFloat(row.omfang) || 0,
+          acceptkriterie: row.Acceptkriterie || row.acceptkriterie || '',
+          tid: row.Tid || row.tid || '',
+          rowIndex: index + 1
+        }));
+      } else {
+        // English data structure
+        processedData = jsonData.map((row, index) => ({
+          pos: row.Pos || row.pos || `Row ${index + 1}`,
+          checkingThe: row['Checking the'] || row['checking the'] || '',
+          subject: row.Subject || row.subject || '',
+          constructionPart: row['Construction part'] || row['construction part'] || '',
+          basis: row.Basis || row.basis || '',
+          controlMethod: row['Control method'] || row['control method'] || '',
+          circumference: parseFloat(row.circumference) || 0,
+          acceptanceCriteria: row['Acceptance criteria'] || row['acceptance criteria'] || '',
+          time: row.Time || row.time || '',
+          rowIndex: index + 1
+        }));
+      }
+
+      // Create the document to insert
+      const documentToInsert = {
+        subjectMatterId: subjectMatterId,
+        euroCode: euroCode || null, // Include euroCode, null if not provided
+        language: language,
+        entries: processedData,
+        uploadedAt: new Date(),
+        fileName: excelFile.filename,
+        totalEntries: processedData.length
+      };
+
+      console.log('Document to insert:', {
+        subjectMatterId: documentToInsert.subjectMatterId,
+        euroCode: documentToInsert.euroCode,
+        language: documentToInsert.language,
+        totalEntries: documentToInsert.totalEntries,
+        fileName: documentToInsert.fileName
+      });
+
+      // Insert into database
+      const result = await collection.insertOne(documentToInsert);
+      
+      console.log('Data inserted successfully with ID:', result.insertedId);
+
+      // Clean up uploaded file
+      const fs = require('fs');
+      if (fs.existsSync(excelFile.path)) {
+        fs.unlinkSync(excelFile.path);
+        console.log('Temporary file cleaned up');
+      }
+
+      res.status(200).json({
+        message: `Successfully uploaded ${processedData.length} entries for Subject Matter ID: ${subjectMatterId} (${language})`,
+        data: {
+          insertedId: result.insertedId,
+          subjectMatterId: subjectMatterId,
+          euroCode: euroCode || null,
+          language: language,
+          totalEntries: processedData.length,
+          fileName: excelFile.filename
+        }
+      });
+
+    } catch (error) {
+      console.error('Excel upload error:', error);
+      
+      // Clean up file on error
+      if (req.file && req.file.path) {
+        const fs = require('fs');
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+      }
+      
+      res.status(500).json({ 
+        error: "Failed to upload Excel data",
+        details: error.message 
+      });
+    }
+  }
+);
+
 app.get("/get-user-professions", async (req, res) => {
   try {
     const { userId } = req.query;
@@ -4632,16 +5109,21 @@ app.post(
         if (drawing !== null) updateFields[`${updatePath}.$.drawing`] = drawing;
         if (independentController !== null) updateFields[`${updatePath}.$.independentController`] = independentController;
 
-        result = await db.collection("projects").findOneAndUpdate(
-          {
-            _id: new ObjectId(projectId),
-            [`${updatePath}._id`]: new ObjectId(staticReportId),
-          },
-          {
-            $set: updateFields,
-          },
-          { returnDocument: "after" }
-        );
+        // Only try to update if we have a real ObjectId
+        if (staticReportId.match(/^[0-9a-fA-F]{24}$/)) {
+          result = await db.collection("projects").findOneAndUpdate(
+            {
+              _id: new ObjectId(projectId),
+              [`${updatePath}._id`]: new ObjectId(staticReportId),
+            },
+            {
+              $set: updateFields,
+            },
+            { returnDocument: "after" }
+          );
+        } else {
+          console.log("Skipping projects collection update - staticReportId is not a real ObjectId:", staticReportId);
+        }
       }
 
       // If the static report doesn't exist in the original structure, that's okay
@@ -4653,7 +5135,8 @@ app.post(
       // Create complete static report entry for the new collection
       const staticReportEntry = {
         projectId: new ObjectId(projectId),
-        staticReportId: new ObjectId(staticReportId),
+        // Handle both real ObjectIds and fake IDs like "entry_0"
+        staticReportId: staticReportId.match(/^[0-9a-fA-F]{24}$/) ? new ObjectId(staticReportId) : staticReportId,
         annotatedPdfs: annotatedPdfs,
         annotatedPdfImages: annotatedPdfImages, // New field for PNG images
         mainPictures: mainPictures,
@@ -4667,6 +5150,22 @@ app.post(
         projectName: project.name || "Unknown Project",
         // Include the complete static report item object
         staticReportItem: submittedStaticReportItem || staticReportItem,
+        
+        // NEW: Store the complete entry data from the static report
+        entryData: {
+          pos: req.body.entryPos || null,
+          checkingThe: req.body.entryCheckingThe || null,
+          subject: req.body.entrySubject || null,
+          constructionPart: req.body.entryConstructionPart || null,
+          basis: req.body.entryBasis || null,
+          controlMethod: req.body.entryControlMethod || null,
+          circumference: req.body.entryCircumference || null,
+          acceptanceCriteria: req.body.entryAcceptanceCriteria || null,
+          time: req.body.entryTime || null,
+          rowIndex: req.body.entryRowIndex || null,
+          language: req.body.entryLanguage || null,
+          subjectMatterId: req.body.entrySubjectMatterId || null
+        }
       };
 
       // Only add fields that are not null
@@ -4725,6 +5224,57 @@ app.get("/get-static-report-entries", async (req, res) => {
   } catch (error) {
     console.error("Error fetching static report entries:", error);
     res.status(500).json({ error: "Failed to fetch static report entries" });
+  }
+});
+
+// NEW: API endpoint to get static report entries by position and criteria
+app.post("/get-static-report-entries-by-position", async (req, res) => {
+  try {
+    const { 
+      entryDataPos, 
+      projectId, 
+      companyId, 
+      professionKey 
+    } = req.body;
+
+    console.log('=== GETTING ENTRIES BY POSITION ===');
+    console.log('Query criteria:', { entryDataPos, projectId, companyId, professionKey });
+
+    if (!entryDataPos || !projectId || !companyId || !professionKey) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: entryDataPos, projectId, companyId, professionKey" 
+      });
+    }
+
+    // Build the query exactly as you specified
+    const query = {
+      "entryData.pos": entryDataPos,
+      projectId: new ObjectId(projectId),
+      companyId: companyId, // Keep as string if stored as string
+      professionKey: professionKey
+    };
+
+    console.log('MongoDB query:', JSON.stringify(query, null, 2));
+
+    // Query the StaticReportRegistrationEntries collection
+    const entries = await db.collection("StaticReportRegistrationEntries")
+      .find(query)
+      .toArray();
+
+    console.log(`Found ${entries.length} entries for position ${entryDataPos}`);
+
+    res.status(200).json({
+      success: true,
+      count: entries.length,
+      entries: entries
+    });
+
+  } catch (error) {
+    console.error("Error fetching static report entries by position:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch static report entries by position",
+      details: error.message 
+    });
   }
 });
 
@@ -6064,15 +6614,14 @@ app.post(
       // Destructure all your expected fields from req.body
       const {
         name,
-
-        phone,
         address,
-
-        email,
-        city,
-        cvr,
         postalCode,
+        city,
+        email,
         companyPhone,
+        contactPerson,
+        contactPhone,
+        cvr,
       } = req.body;
 
       console.log("Files:", req.files); // Log files to inspect
@@ -6086,17 +6635,15 @@ app.post(
       // Prepare company document
       const companyData = {
         name,
-
-        phone,
         address,
-
-        email,
-        city,
-        cvr,
         postalCode,
+        city,
+        email,
         companyPhone,
+        contactPerson,
+        contactPhone,
+        cvr,
         picture,
-
         status: "activate",
         createdAt: new Date(),
       };
@@ -7886,7 +8433,7 @@ app.post(
       const {
         name,
         address,
-        postCode,
+        postalCode,
         city,
         startDate,
         picture2,
@@ -7899,7 +8446,7 @@ app.post(
       // Dynamically add provided fields to updateData
       if (name) updateData.name = name; // Add 'name' field
       if (address) updateData.address = address; // Add 'address' field
-      if (postCode) updateData.postCode = postCode; // Add 'postCode' field
+      if (postalCode) updateData.postalCode = postalCode; // Add 'postalCode' field
       if (city) updateData.city = city; // Add 'city' field
       if (startDate) updateData.startDate = startDate; // Add 'startDate' field
       if (picture2) {
@@ -9103,35 +9650,80 @@ app.get("/api/test-report-data/:companyId/:projectId/:professionId", async (req,
   }
 });
 
-app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (req, res) => {
+app.get("/api/generate-pdf-report/:companyId/:projectId/:subjectMatterId", async (req, res) => {
   try {
-    const { companyId, projectId, professionId } = req.params;
+    const { companyId, projectId, subjectMatterId } = req.params;
 
     // Validate required parameters
-    if (!companyId || !projectId || !professionId) {
+    if (!companyId || !projectId || !subjectMatterId) {
       return res.status(400).json({
-        error: "companyId, projectId, and professionId are required"
+        error: "companyId, projectId, and subjectMatterId are required"
       });
     }
 
     // Fetch data from existing APIs
-    const [companyResponse, projectResponse, professionResponse] = await Promise.all([
+    const [companyResponse, projectResponse] = await Promise.all([
       fetch(`${req.protocol}://${req.get('host')}/get-company-detail/${companyId}`),
-      fetch(`${req.protocol}://${req.get('host')}/get-project-detail/${projectId}`),
-      fetch(`${req.protocol}://${req.get('host')}/get-profession-detail-in-company-projects/${professionId}`)
+      fetch(`${req.protocol}://${req.get('host')}/get-project-detail/${projectId}`)
     ]);
 
-    if (!companyResponse.ok || !projectResponse.ok || !professionResponse.ok) {
+    if (!companyResponse.ok || !projectResponse.ok) {
       return res.status(404).json({
-        error: "One or more entities not found"
+        error: "Company or project not found"
       });
     }
 
-    const [company, project, profession] = await Promise.all([
+    const [company, project] = await Promise.all([
       companyResponse.json(),
-      projectResponse.json(),
-      professionResponse.json()
+      projectResponse.json()
     ]);
+
+    // Fetch profession data from inputs collection using subjectMatterId
+    let profession = null;
+    try {
+      console.log('Fetching inputs document for SubjectMatterId:', subjectMatterId);
+      const professionResponse = await fetch(`${req.protocol}://${req.get('host')}/get-inputs-by-subject-matter-id`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subjectMatterId: subjectMatterId })
+      });
+      
+      if (professionResponse.ok) {
+        profession = await professionResponse.json();
+        console.log('📋 Profession data fetched using SubjectMatterId:', profession.SubjectMatterId);
+      } else {
+        console.log('❌ Failed to fetch profession data for SubjectMatterId:', subjectMatterId);
+        professionResponse = await fetch(`${req.protocol}://${req.get('host')}/get-profession-detail-in-company-projects/${professionId}`);
+        
+        if (professionResponse.ok) {
+          const professionFromProfessions = await professionResponse.json();
+          // Now fetch the inputs data using the SubjectMatterId from the profession
+          if (professionFromProfessions.SubjectMatterId) {
+            const inputsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-inputs-by-subject-matter-id`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ subjectMatterId: professionFromProfessions.SubjectMatterId })
+            });
+            if (inputsResponse.ok) {
+              profession = await inputsResponse.json();
+              console.log('📋 Profession data fetched from professions collection then inputs:', profession.SubjectMatterId);
+            }
+          }
+        }
+      }
+      
+      if (!profession) {
+        console.log('❌ Failed to fetch profession data');
+        return res.status(404).json({
+          error: "Profession not found"
+        });
+      }
+    } catch (error) {
+      console.log('❌ Error fetching profession data:', error);
+      return res.status(500).json({
+        error: "Error fetching profession data"
+      });
+    }
 
     // Initialize all variables at the beginning
     let mainContractor = {};
@@ -9147,6 +9739,9 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
     let projectManagers = [];
     let independentControllers = [];
     let workers = [];
+    let projectManagementSupervision = {};
+    let tasks = {};
+    let taskEntries = { receive: [], process: [], final: [] };
 
     try {
       // Fetch main contractors (can be multiple, use first one)
@@ -9251,20 +9846,204 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
         independentControllers = await independentControllersResponse.json();
       }
 
+
+
       // Fetch workers for the specific profession
+      console.log('🔍 Fetching workers for profession ID:', subjectMatterId);
       const workersResponse = await fetch(`${req.protocol}://${req.get('host')}/get-workers?companyId=${companyId}&projectId=${projectId}`);
       if (workersResponse.ok) {
         const allWorkers = await workersResponse.json();
+        console.log('📊 Total workers found:', allWorkers.length);
         
-        // Filter workers by the specific profession ID
-        workers = allWorkers.filter(worker => {
-          if (worker.userProfession && Array.isArray(worker.userProfession)) {
-            return worker.userProfession.some(profession => 
-              profession._id === professionId || profession.professionID === professionId
-            );
+        // Filter workers by the specific profession's SubjectMatterId
+        if (profession && profession.SubjectMatterId) {
+          workers = allWorkers.filter(worker => {
+            if (worker.userProfession && Array.isArray(worker.userProfession)) {
+              const hasProfession = worker.userProfession.some(workerProfession => 
+                workerProfession.SubjectMatterId === profession.SubjectMatterId
+              );
+              if (hasProfession) {
+                console.log('✅ Worker matched profession:', worker.name, 'SubjectMatterId:', profession.SubjectMatterId);
+              }
+              return hasProfession;
+            }
+            return false;
+          });
+        } else {
+          console.log('⚠️ No profession data available, using all workers');
+          workers = allWorkers;
+        }
+        
+        console.log('🎯 Workers filtered by profession:', workers.length);
+
+        // Fetch Project Management Supervision Plan data from supers collection
+        try {
+          console.log('🔍 Fetching Project Management Supervision Plan data...');
+          const supervisionResponse = await fetch(`${req.protocol}://${req.get('host')}/get-project-management-supervision`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subjectMatterId: profession.SubjectMatterId,
+              projectId: projectId,
+              companyId: companyId
+            })
+          });
+          
+          if (supervisionResponse.ok) {
+            const supervisionData = await supervisionResponse.json();
+            projectManagementSupervision = supervisionData;
+            console.log('✅ Project Management Supervision data fetched:', supervisionData.summary);
+          } else {
+            console.log('⚠️ Failed to fetch Project Management Supervision data');
+            projectManagementSupervision = {
+              success: false,
+              documents: {
+                "Process - Project Review": [],
+                "Miscellaneous": [],
+                "Controls for the contractor": []
+              }
+            };
           }
-          return false;
-        });
+        } catch (error) {
+          console.log('❌ Error fetching Project Management Supervision data:', error);
+          projectManagementSupervision = {
+            success: false,
+            documents: {
+              "Process - Project Review": [],
+              "Miscellaneous": [],
+              "Controls for the contractor": []
+            }
+          };
+        }
+
+        // Fetch tasks data from tasks collection
+        try {
+          console.log('🔍 Fetching tasks data for SubjectMatterId:', profession.SubjectMatterId);
+          const tasksResponse = await fetch(`${req.protocol}://${req.get('host')}/get-tasks-by-subject-matter?subjectMatterId=${profession.SubjectMatterId}`);
+          
+          if (tasksResponse.ok) {
+            const tasksData = await tasksResponse.json();
+            tasks = tasksData.tasks;
+            console.log('✅ Tasks data fetched:', {
+              receive: tasks.receive?.length || 0,
+              process: tasks.process?.length || 0,
+              final: tasks.final?.length || 0
+            });
+          } else {
+            console.log('⚠️ Failed to fetch tasks data');
+            tasks = {
+              receive: [],
+              process: [],
+              final: []
+            };
+          }
+        } catch (error) {
+          console.log('❌ Error fetching tasks data:', error);
+          tasks = {
+            receive: [],
+            process: [],
+            final: []
+          };
+        }
+
+        // Fetch task entries from project data
+        try {
+          console.log('🔍 Fetching task entries from project data...');
+          if (project && project.tasks && Array.isArray(project.tasks)) {
+            for (const task of project.tasks) {
+              if (task.taskEntries && Array.isArray(task.taskEntries) && task.taskEntries.length > 0) {
+                // Process each task entry and convert images to base64
+                const processedEntries = [];
+                for (const entry of task.taskEntries) {
+                  const processedEntry = { ...entry, task: task };
+                  
+                  // Process annotated PDFs
+                  if (entry.annotatedPdfs && Array.isArray(entry.annotatedPdfs)) {
+                    for (const pdf of entry.annotatedPdfs) {
+                      try {
+                        if (pdf.filename) {
+                          const imagePath = path.join(__dirname, 'uploads', pdf.filename);
+                          const imageBuffer = await fs.readFile(imagePath);
+                          pdf.base64Image = imageBuffer.toString('base64');
+                        }
+                      } catch (error) {
+                        console.log('Error reading annotated PDF image:', error);
+                        pdf.base64Image = null;
+                      }
+                    }
+                  }
+                  
+                  // Process pictures
+                  if (entry.pictures && Array.isArray(entry.pictures)) {
+                    for (const picture of entry.pictures) {
+                      try {
+                        if (picture.filename) {
+                          const imagePath = path.join(__dirname, 'uploads', picture.filename);
+                          const imageBuffer = await fs.readFile(imagePath);
+                          picture.base64Image = imageBuffer.toString('base64');
+                        }
+                      } catch (error) {
+                        console.log('Error reading picture:', error);
+                        picture.base64Image = null;
+                      }
+                    }
+                  }
+                  
+                  // Process marked pictures
+                  if (entry.markPictures && Array.isArray(entry.markPictures)) {
+                    for (const markPicture of entry.markPictures) {
+                      try {
+                        if (markPicture.filename) {
+                          const imagePath = path.join(__dirname, 'uploads', markPicture.filename);
+                          const imageBuffer = await fs.readFile(imagePath);
+                          markPicture.base64Image = imageBuffer.toString('base64');
+                        }
+                      } catch (error) {
+                        console.log('Error reading marked picture:', error);
+                        markPicture.base64Image = null;
+                      }
+                    }
+                  }
+
+                  // Debug logging for entry structure
+                  console.log('🔍 Processing task entry:', {
+                    entryId: entry._id,
+                    hasPictures: !!entry.pictures,
+                    picturesCount: entry.pictures?.length || 0,
+                    hasMarkPictures: !!entry.markPictures,
+                    markPicturesCount: entry.markPictures?.length || 0,
+                    hasAnnotatedPdfs: !!entry.annotatedPdfs,
+                    annotatedPdfsCount: entry.annotatedPdfs?.length || 0,
+                    picturesFields: entry.pictures ? Object.keys(entry.pictures[0] || {}) : [],
+                    markPicturesFields: entry.markPictures ? Object.keys(entry.markPictures[0] || {}) : []
+                  });
+                  
+                  processedEntries.push(processedEntry);
+                }
+                
+                // Categorize by task type
+                const taskType = task.Type?.toLowerCase();
+                if (taskType === 'receive') {
+                  taskEntries.receive.push(...processedEntries);
+                } else if (taskType === 'process') {
+                  taskEntries.process.push(...processedEntries);
+                } else if (taskType === 'final') {
+                  taskEntries.final.push(...processedEntries);
+                }
+              }
+            }
+            
+            console.log('✅ Task entries processed:', {
+              receive: taskEntries.receive.length,
+              process: taskEntries.process.length,
+              final: taskEntries.final.length
+            });
+          } else {
+            console.log('⚠️ No tasks or task entries found in project data');
+          }
+        } catch (error) {
+          console.log('❌ Error processing task entries:', error);
+        }
         
         // Process worker images to base64
         for (let worker of workers) {
@@ -9279,6 +10058,8 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
             }
           }
         }
+      } else {
+        console.log('❌ Failed to fetch workers:', workersResponse.status);
       }
     } catch (error) {
       console.log('Error fetching additional data:', error);
@@ -9286,18 +10067,23 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
     }
 
     // Read and compile all HTML templates
-    const reportTemplatePath = path.join(__dirname, 'templates', 'report-template.html');
-    const tocTemplatePath = path.join(__dirname, 'templates', 'toc-template.html');
-    const projectDetailsTemplatePath = path.join(__dirname, 'templates', 'project-details-template.html');
-    const advisorsInspectorsTemplatePath = path.join(__dirname, 'templates', 'advisors-inspectors-template.html');
-    const documentsInfoTemplatePath = path.join(__dirname, 'templates', 'documents-info-template.html');
-    const documentsDrawingsTemplatePath = path.join(__dirname, 'templates', 'documents-drawings-template.html');
-    const checklistTemplatePath = path.join(__dirname, 'templates', 'checklist-template.html');
-    const companyOrganizationTemplatePath = path.join(__dirname, 'templates', 'company-organization-template.html');
-    const employeeListTemplatePath = path.join(__dirname, 'templates', 'employee-list-template.html');
-    const preparingProductionTemplatePath = path.join(__dirname, 'templates', 'preparing-production-template.html');
+    const reportTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'report-template.html');
+    const tocTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'toc-template.html');
+    const projectDetailsTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'project-details-template.html');
+    const advisorsInspectorsTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'advisors-inspectors-template.html');
+    const documentsInfoTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'documents-info-template.html');
+    const documentsDrawingsTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'documents-drawings-template.html');
+    const checklistTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'checklist-template.html');
+    const companyOrganizationTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'company-organization-template.html');
+    const employeeListTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'employee-list-template.html');
+    const preparingProductionTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'preparing-production-template.html');
+    const projectManagementSupervisionTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'project-management-supervision-template.html');
+    const controlWorkDescriptionTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'control-work-description-template.html');
+    const standardControlPlanTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'standard-control-plan-template.html');
+    const tenderControlPlanTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'tender-control-plan-template.html');
+    const taskEntriesTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'task-entries-template.html');
     
-    const [reportTemplateContent, tocTemplateContent, projectDetailsTemplateContent, advisorsInspectorsTemplateContent, documentsInfoTemplateContent, documentsDrawingsTemplateContent, checklistTemplateContent, companyOrganizationTemplateContent, employeeListTemplateContent, preparingProductionTemplateContent] = await Promise.all([
+    const [reportTemplateContent, tocTemplateContent, projectDetailsTemplateContent, advisorsInspectorsTemplateContent, documentsInfoTemplateContent, documentsDrawingsTemplateContent, checklistTemplateContent, companyOrganizationTemplateContent, employeeListTemplateContent, preparingProductionTemplateContent, projectManagementSupervisionTemplateContent, controlWorkDescriptionTemplateContent, standardControlPlanTemplateContent, tenderControlPlanTemplateContent, taskEntriesTemplateContent] = await Promise.all([
       fs.readFile(reportTemplatePath, 'utf8'),
       fs.readFile(tocTemplatePath, 'utf8'),
       fs.readFile(projectDetailsTemplatePath, 'utf8'),
@@ -9307,7 +10093,12 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
       fs.readFile(checklistTemplatePath, 'utf8'),
       fs.readFile(companyOrganizationTemplatePath, 'utf8'),
       fs.readFile(employeeListTemplatePath, 'utf8'),
-      fs.readFile(preparingProductionTemplatePath, 'utf8')
+      fs.readFile(preparingProductionTemplatePath, 'utf8'),
+      fs.readFile(projectManagementSupervisionTemplatePath, 'utf8'),
+      fs.readFile(controlWorkDescriptionTemplatePath, 'utf8'),
+      fs.readFile(standardControlPlanTemplatePath, 'utf8'),
+      fs.readFile(tenderControlPlanTemplatePath, 'utf8'),
+      fs.readFile(taskEntriesTemplatePath, 'utf8')
     ]);
     
     // Register date formatting helper
@@ -9340,6 +10131,11 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
     const companyOrganizationTemplate = Handlebars.compile(companyOrganizationTemplateContent);
     const employeeListTemplate = Handlebars.compile(employeeListTemplateContent);
     const preparingProductionTemplate = Handlebars.compile(preparingProductionTemplateContent);
+    const projectManagementSupervisionTemplate = Handlebars.compile(projectManagementSupervisionTemplateContent);
+    const controlWorkDescriptionTemplate = Handlebars.compile(controlWorkDescriptionTemplateContent);
+    const standardControlPlanTemplate = Handlebars.compile(standardControlPlanTemplateContent);
+    const tenderControlPlanTemplate = Handlebars.compile(tenderControlPlanTemplateContent);
+    const taskEntriesTemplate = Handlebars.compile(taskEntriesTemplateContent);
     
     // Debug: Check if template content is loaded
     console.log('Preparing Production Template Content Length:', preparingProductionTemplateContent.length);
@@ -9368,6 +10164,7 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
       projectManagers,
       independentControllers,
       workers,
+      taskEntries,
       currentDate: new Date().toLocaleDateString()
     };
 
@@ -9382,6 +10179,31 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
     const companyOrganizationHtml = companyOrganizationTemplate(templateData);
     const employeeListHtml = employeeListTemplate(templateData);
     const preparingProductionHtml = preparingProductionTemplate(templateData);
+    
+    // Debug: Log the data being sent to the supervision template
+    console.log('🔍 Data for supervision template:', {
+      projectManagementSupervision: projectManagementSupervision,
+      documents: projectManagementSupervision.documents
+    });
+    
+    const projectManagementSupervisionHtml = projectManagementSupervisionTemplate({
+      ...templateData,
+      documents: projectManagementSupervision.documents
+    });
+    
+    const controlWorkDescriptionHtml = controlWorkDescriptionTemplate(templateData);
+    
+    const standardControlPlanHtml = standardControlPlanTemplate({
+      ...templateData,
+      tasks
+    });
+    
+    const tenderControlPlanHtml = tenderControlPlanTemplate(templateData);
+    
+    const taskEntriesHtml = taskEntriesTemplate({
+      ...templateData,
+      taskEntries
+    });
     
     // Debug: Check if HTML is generated
     console.log('Preparing Production HTML Length:', preparingProductionHtml.length);
@@ -9414,6 +10236,11 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:professionId", async (r
         <div class="page">${companyOrganizationHtml}</div>
         <div class="page">${employeeListHtml}</div>
         <div class="page">${preparingProductionHtml}</div>
+        <div class="page">${projectManagementSupervisionHtml}</div>
+        <div class="page">${controlWorkDescriptionHtml}</div>
+        <div class="page">${standardControlPlanHtml}</div>
+        <div class="page">${tenderControlPlanHtml}</div>
+        <div class="page">${taskEntriesHtml}</div>
       </body>
       </html>
     `;
