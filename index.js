@@ -1,4 +1,4 @@
-// Import required modules
+// Import required ars
 const express = require("express");
 const { MongoClient, ObjectId } = require("mongodb");
 const bodyParser = require("body-parser");
@@ -12,8 +12,10 @@ require("dotenv").config();
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
+
 // PDF to PNG conversion function
 async function convertPdfToPng(pdfPath, outputDir) {
+  console.log("test");
   try {
     const { fromPath } = require("pdf2pic");
     const options = {
