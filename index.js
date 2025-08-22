@@ -3615,6 +3615,132 @@ app.post(
   }
 );
 
+// Remove profession from company (disassociate, not delete globally)
+app.post(
+  "/remove-profession-from-company",
+  //authenticateToken,
+  //authorizeRoles(["admin"]),
+  async (req, res) => {
+    try {
+      const { professionId, companyId } = req.body;
+      
+      // Validate required fields
+      if (!professionId || !companyId) {
+        return res.status(400).json({
+          error: "Both professionId and companyId are required"
+        });
+      }
+
+      console.log(`Removing profession ${professionId} from company ${companyId}`);
+
+      // Update the profession document to remove the companyId association
+      const result = await db
+        .collection("professions")
+        .updateOne(
+          { 
+            _id: new ObjectId(professionId),
+            companyId: companyId // Only update if it's currently associated with this company
+          },
+          { 
+            $unset: { companyId: "" } // Remove the companyId field
+          }
+        );
+
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ 
+          error: "Profession not found or not associated with this company" 
+        });
+      }
+
+      if (result.modifiedCount === 0) {
+        return res.status(400).json({ 
+          error: "Profession was not associated with this company" 
+        });
+      }
+
+      console.log(`Successfully removed profession ${professionId} from company ${companyId}`);
+      
+      res.status(200).json({
+        message: "Profession removed from company successfully",
+        result: {
+          professionId,
+          companyId,
+          modifiedCount: result.modifiedCount
+        }
+      });
+    } catch (error) {
+      console.error("Error removing profession from company:", error);
+      res.status(500).json({ 
+        error: "Failed to remove profession from company",
+        details: error.message 
+      });
+    }
+  }
+);
+
+// Alternative endpoint for removing profession from company
+app.post(
+  "/unlink-profession",
+  //authenticateToken,
+  //authorizeRoles(["admin"]),
+  async (req, res) => {
+    try {
+      const { professionId, companyId } = req.body;
+      
+      // Validate required fields
+      if (!professionId || !companyId) {
+        return res.status(400).json({
+          error: "Both professionId and companyId are required"
+        });
+      }
+
+      console.log(`Unlinking profession ${professionId} from company ${companyId}`);
+
+      // Update the profession document to remove the companyId association
+      const result = await db
+        .collection("professions")
+        .updateOne(
+          { 
+            _id: new ObjectId(professionId),
+            companyId: companyId // Only update if it's currently associated with this company
+          },
+          { 
+            $unset: { companyId: "" } // Remove the companyId field
+          }
+        );
+
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ 
+          error: "Profession not found or not associated with this company" 
+        });
+      }
+
+      if (result.modifiedCount === 0) {
+        return res.status(400).json({ 
+          error: "Profession was not associated with this company" 
+        });
+      }
+
+      console.log(`Successfully unlinked profession ${professionId} from company ${companyId}`);
+      
+      res.status(200).json({
+        message: "Profession unlinked from company successfully",
+        result: {
+          professionId,
+          companyId,
+          modifiedCount: result.modifiedCount
+        }
+      });
+    } catch (error) {
+      console.error("Error unlinking profession from company:", error);
+      res.status(500).json({ 
+        error: "Failed to unlink profession from company",
+        details: error.message 
+      });
+    }
+  }
+);
+
 app.get(
   "/get-group-detail/:id",
   //authenticateToken,
