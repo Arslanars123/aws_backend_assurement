@@ -15,7 +15,7 @@ const nodemailer = require("nodemailer");
 
 // PDF to PNG conversion function
 async function convertPdfToPng(pdfPath, outputDir) {
-  console.log("test");
+  console.log("nano");
   try {
     const { fromPath } = require("pdf2pic");
     const options = {
