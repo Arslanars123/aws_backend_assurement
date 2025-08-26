@@ -1183,36 +1183,74 @@ app.get("/get-controls", async (req, res) => {
 // New endpoint for "controls of static report" collection
 app.post("/get-controls-of-static-report", async (req, res) => {
   try {
-    const { subjectMatterId, language } = req.body;
+    const { subjectMatterId, language, projectId } = req.body;
 
     if (!subjectMatterId) {
       return res.status(400).json({ error: "subjectMatterId is required" });
     }
 
-    // 1) Get the inputs document (case-tolerant on the field name)
-    const inputDoc = await db.collection("inputs").findOne(
-      { SubjectMatterId: subjectMatterId },
-      { projection: { EuroCode: 1, euroCode: 1, eurocode: 1, Eurocode: 1 } }
-    );
+    let euroCodesStr = [];
+    let euroCodeSource = 'inputs'; // Track where EuroCodes came from
 
-    if (!inputDoc) {
-      return res.status(404).json({
-        error: `No inputs document found for SubjectMatterId: ${subjectMatterId}`
+    // 1) First try to get EuroCodes from projectprofessioeurocode collection (user's selection)
+    if (projectId) {
+      try {
+        console.log('🔍 Looking for project EuroCodes:', { projectId, subjectMatterId });
+        
+        const projectEuroCodesDoc = await db.collection("projectprofessioeurocode").findOne({
+          subjectMatterId: subjectMatterId,
+          projectId: projectId
+        });
+
+        console.log('📋 Found project EuroCodes doc:', projectEuroCodesDoc);
+
+        if (projectEuroCodesDoc && projectEuroCodesDoc.eurocodes && Array.isArray(projectEuroCodesDoc.eurocodes)) {
+          euroCodesStr = projectEuroCodesDoc.eurocodes
+            .filter(v => v !== undefined && v !== null && `${v}`.trim() !== "")
+            .map(v => String(v).trim());
+          euroCodeSource = 'projectprofessioeurocode';
+          console.log('✅ Using project EuroCodes:', euroCodesStr);
+        } else {
+          console.log('❌ No valid project EuroCodes found, will return empty results');
+        }
+      } catch (error) {
+        console.log('❌ Error fetching from projectprofessioeurocode, will return empty results:', error.message);
+      }
+    } else {
+      console.log('⚠️ No projectId provided, returning empty results');
+      return res.status(200).json({
+        meta: {
+          subjectMatterId,
+          requestedLanguage: language ?? null,
+          appliedLanguageFilter: (language === "DK") ? "DK" : "non-DK",
+          euroCodes: [],
+          euroCodeSource: 'none', // No projectId provided
+          projectId: null,
+          docsMatched: 0,
+          entriesCount: 0,
+          message: 'No projectId provided - EuroCodes are only available for specific projects'
+        },
+        entries: []
       });
     }
 
-    // 2) Extract EuroCode array (any casing) and normalize to strings
-    let euroCodeRaw =
-      inputDoc.EuroCode ?? inputDoc.euroCode ?? inputDoc.eurocode ?? inputDoc.Eurocode ?? [];
-
-    if (!Array.isArray(euroCodeRaw)) euroCodeRaw = [euroCodeRaw];
-    const euroCodesStr = euroCodeRaw
-      .filter(v => v !== undefined && v !== null && `${v}`.trim() !== "")
-      .map(v => String(v).trim());
-
-    if (!euroCodesStr.length) {
-      return res.status(404).json({
-        error: `Inputs document has no EuroCode values for SubjectMatterId: ${subjectMatterId}`
+    // 2) If no project-specific EuroCodes found, return empty results (NO FALLBACK)
+    if (euroCodesStr.length === 0) {
+      console.log('❌ No project-specific EuroCodes found, returning empty results (no fallback)');
+      
+      return res.status(200).json({
+        meta: {
+          subjectMatterId,
+          requestedLanguage: language ?? null,
+          appliedLanguageFilter: (language === "DK") ? "DK" : "non-DK",
+          euroCodes: [],
+          euroCodeSource: 'none', // No EuroCodes found
+          projectId: projectId || null,
+          docsMatched: 0,
+          entriesCount: 0,
+          message: 'No project-specific EuroCodes configured for this project and subject matter'
+        },
+        entries: []
       });
     }
 
@@ -1247,7 +1285,9 @@ app.post("/get-controls-of-static-report", async (req, res) => {
         subjectMatterId,
         requestedLanguage: language ?? null,
         appliedLanguageFilter: (language === "DK") ? "DK" : "non-DK",
-            euroCodes: euroCodesStr,
+        euroCodes: euroCodesStr,
+        euroCodeSource: euroCodeSource, // Show where EuroCodes came from
+        projectId: projectId || null,
         docsMatched: docs.length,
         entriesCount: entries.length
       },
@@ -1256,6 +1296,90 @@ app.post("/get-controls-of-static-report", async (req, res) => {
   } catch (error) {
     console.error("Error fetching controls of static report:", error);
     return res.status(500).json({ error: "Failed to fetch controls of static report" });
+  }
+});
+
+// Debug endpoint to check projectprofessioeurocode collection
+app.get("/debug-project-eurocodes", async (req, res) => {
+  try {
+    const { companyId, projectId, subjectMatterId } = req.query;
+    
+    console.log('🔍 Debug query params:', { companyId, projectId, subjectMatterId });
+    
+    let query = {};
+    if (companyId) query.companyId = companyId;
+    if (projectId) query.projectId = projectId;
+    if (subjectMatterId) query.subjectMatterId = subjectMatterId;
+    
+    const docs = await db.collection("projectprofessioeurocode").find(query).toArray();
+    
+    console.log('📋 Found docs:', docs);
+    
+    res.status(200).json({
+      success: true,
+      query,
+      count: docs.length,
+      data: docs
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Fix missing subjectMatterId in projectprofessioeurocode collection
+app.post("/fix-missing-subject-matter-ids", async (req, res) => {
+  try {
+    console.log('🔧 Starting to fix missing subjectMatterId fields...');
+    
+    // Find all records without subjectMatterId
+    const docsWithoutSubjectMatterId = await db.collection("projectprofessioeurocode")
+      .find({ subjectMatterId: { $exists: false } })
+      .toArray();
+    
+    console.log('📋 Found docs without subjectMatterId:', docsWithoutSubjectMatterId.length);
+    
+    let fixedCount = 0;
+    
+    for (const doc of docsWithoutSubjectMatterId) {
+      try {
+        // Get the profession to find its SubjectMatterId
+        const profession = await db.collection("professions").findOne({
+          _id: doc.professionId
+        });
+        
+        if (profession && profession.SubjectMatterId) {
+          // Update the record with the missing subjectMatterId
+          await db.collection("projectprofessioeurocode").updateOne(
+            { _id: doc._id },
+            { 
+              $set: { 
+                subjectMatterId: profession.SubjectMatterId,
+                updatedAt: new Date()
+              } 
+            }
+          );
+          
+          console.log(`✅ Fixed record ${doc._id} with subjectMatterId: ${profession.SubjectMatterId}`);
+          fixedCount++;
+        } else {
+          console.log(`❌ Could not find SubjectMatterId for profession ${doc.professionId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error fixing record ${doc._id}:`, error.message);
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: `Fixed ${fixedCount} records with missing subjectMatterId`,
+      totalFound: docsWithoutSubjectMatterId.length,
+      fixedCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in fix-missing-subject-matter-ids:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -2806,20 +2930,20 @@ app.post("/users/forgot-password", async (req, res) => {
 });
 
 async function sendPasswordResetEmail(email, resetUrl) {
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true, // use SSL
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    logger: true,
-    debug: true,
-  });
+      const transporter = nodemailer.createTransport({
+      host: "email-smtp.eu-north-1.amazonaws.com",
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      logger: true,
+      debug: true,
+    });
 
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: "info@assurement.dk",
     to: email,
     subject: "Password Reset Request",
     text: `You requested a password reset. Click the link to reset your password: ${resetUrl}`,
@@ -10527,6 +10651,197 @@ app.delete("/delete-document/:documentId", async (req, res) => {
   } catch (error) {
     console.error("Error deleting document:", error);
     res.status(500).json({ error: "Failed to delete document" });
+  }
+});
+
+// Simple test email endpoint
+app.post("/test-email", async (req, res) => {
+  try {
+    const { to, subject, message } = req.body;
+    
+    if (!to || !subject || !message) {
+      return res.status(400).json({ 
+        error: "Missing required fields: to, subject, message" 
+      });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: "email-smtp.eu-north-1.amazonaws.com",
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      logger: true,
+      debug: true,
+    });
+
+    const mailOptions = {
+      from: "info@assurement.dk",
+      to: to,
+      subject: subject,
+      text: message,
+      html: `<p>${message}</p>`,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    
+    res.status(200).json({ 
+      success: true, 
+      message: "Email sent successfully!",
+      messageId: info.messageId,
+      response: info.response
+    });
+
+  } catch (error) {
+    console.error("Test email error:", error);
+    res.status(500).json({ 
+      error: "Failed to send test email", 
+      details: error.message 
+    });
+  }
+});
+
+// Save selected EuroCodes for a project profession
+app.post("/save-project-profession-eurocodes", async (req, res) => {
+  try {
+    const { companyId, projectId, professionId, subjectMatterId, eurocodes } = req.body;
+    
+    if (!companyId || !projectId || !professionId || !subjectMatterId || !eurocodes) {
+      return res.status(400).json({ 
+        error: "Missing required fields: companyId, projectId, professionId, subjectMatterId, eurocodes" 
+      });
+    }
+
+    if (!Array.isArray(eurocodes) || eurocodes.length === 0) {
+      return res.status(400).json({ 
+        error: "Eurocodes must be a non-empty array" 
+      });
+    }
+
+    // Check if entry already exists
+    const existingEntry = await db.collection("projectprofessioeurocode").findOne({
+      companyId,
+      projectId,
+      professionId
+    });
+
+    const eurocodeData = {
+      companyId,
+      projectId,
+      professionId,
+      subjectMatterId,
+      eurocodes,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    let result;
+    if (existingEntry) {
+      // Update existing entry
+      result = await db.collection("projectprofessioeurocode").updateOne(
+        { companyId, projectId, professionId },
+        { $set: { ...eurocodeData, updatedAt: new Date() } }
+      );
+    } else {
+      // Create new entry
+      result = await db.collection("projectprofessioeurocode").insertOne(eurocodeData);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: existingEntry ? "Eurocodes updated successfully" : "Eurocodes saved successfully",
+      data: eurocodeData,
+      result
+    });
+
+  } catch (error) {
+    console.error("Error saving project profession eurocodes:", error);
+    res.status(500).json({ error: "Failed to save eurocodes" });
+  }
+});
+
+// Get saved EuroCodes for a project
+app.get("/get-project-eurocodes", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+    
+    if (!companyId || !projectId) {
+      return res.status(400).json({ 
+        error: "Missing required fields: companyId and projectId" 
+      });
+    }
+
+    const eurocodes = await db.collection("projectprofessioeurocode")
+      .find({ companyId, projectId })
+      .toArray();
+
+    res.status(200).json({
+      success: true,
+      data: eurocodes,
+      count: eurocodes.length
+    });
+
+  } catch (error) {
+    console.error("Error fetching project eurocodes:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch project eurocodes",
+      details: error.message 
+    });
+  }
+});
+
+// Get EuroCodes by SubjectMatterId
+app.get("/get-eurocodes/:subjectMatterId", async (req, res) => {
+  try {
+    const { subjectMatterId } = req.params;
+    
+    if (!subjectMatterId) {
+      return res.status(400).json({ 
+        error: "SubjectMatterId is required" 
+      });
+    }
+
+    // First try to find in inputs collection (global professions)
+    let profession = await db.collection("inputs").findOne({
+      SubjectMatterId: subjectMatterId
+    });
+
+    // If not found in inputs, try company-specific professions
+    if (!profession) {
+      profession = await db.collection("professions").findOne({
+        SubjectMatterId: subjectMatterId
+      });
+    }
+
+    if (!profession) {
+      return res.status(404).json({ 
+        error: "Profession not found for the given SubjectMatterId",
+        subjectMatterId: subjectMatterId
+      });
+    }
+
+    // Extract Eurocodes exactly as stored - NO FORMATTING
+    const eurocodes = profession.EuroCode || profession.Eurocode || profession.euroCode || profession.eurocode || [];
+    
+    // Return EuroCodes exactly as they are stored in the database (no transformation)
+    const rawEurocodes = eurocodes.map(code => String(code).trim());
+
+    res.status(200).json({
+      success: true,
+      subjectMatterId: subjectMatterId,
+      groupName: profession.GroupName || null,
+      eurocodes: rawEurocodes,
+      count: rawEurocodes.length
+    });
+
+  } catch (error) {
+    console.error("Error fetching eurocodes:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch eurocodes",
+      details: error.message 
+    });
   }
 });
 

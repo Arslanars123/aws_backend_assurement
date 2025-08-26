@@ -1,17 +1,18 @@
 Attempting to connect to cloud MongoDB (attempt 1/3)...
 Connected to cloud MongoDB successfully!
 Server is running on port 3000
-Removing profession 6890145ffc507de8357b8177 from company 68900ef5fc507de8357b8175
-Successfully removed profession 6890145ffc507de8357b8177 from company 68900ef5fc507de8357b8175
-Removing profession 6890145ffc507de8357b8177 from company 68900ef5fc507de8357b8175
-Unlinking profession 6890145ffc507de8357b8177 from company 68900ef5fc507de8357b8175
-Removing profession 689032c815c271b4cd0a0c11 from company 68900ef5fc507de8357b8175
-Successfully removed profession 689032c815c271b4cd0a0c11 from company 68900ef5fc507de8357b8175
-Removing profession 689032c815c271b4cd0a0c11 from company 68900ef5fc507de8357b8175
-Unlinking profession 689032c815c271b4cd0a0c11 from company 68900ef5fc507de8357b8175
-Removing profession 689294c41ca874c69553edd8 from company 68900ef5fc507de8357b8175
-Successfully removed profession 689294c41ca874c69553edd8 from company 68900ef5fc507de8357b8175
-Removing profession 689295031ca874c69553edd9 from company 68900ef5fc507de8357b8175
-Successfully removed profession 689295031ca874c69553edd9 from company 68900ef5fc507de8357b8175
-Removing profession 6899d16b156f63ae93f9bdb5 from company 68900ef5fc507de8357b8175
-Successfully removed profession 6899d16b156f63ae93f9bdb5 from company 68900ef5fc507de8357b8175
+Removing profession test123 from company test456
+Error removing profession from company: BSONError: input must be a 24 character hex string, 12 byte Uint8Array, or an integer
+    at new ObjectId (/Users/apple/Downloads/Project/consback-main 3/node_modules/bson/lib/bson.cjs:2517:23)
+    at /Users/apple/Downloads/Project/consback-main 3/index.js:3641:18
+    at Layer.handle [as handle_request] (/Users/apple/Downloads/Project/consback-main 3/node_modules/express/lib/router/layer.js:95:5)
+    at next (/Users/apple/Downloads/Project/consback-main 3/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/Users/apple/Downloads/Project/consback-main 3/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/Users/apple/Downloads/Project/consback-main 3/node_modules/express/lib/router/layer.js:95:5)
+    at /Users/apple/Downloads/Project/consback-main 3/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/Users/apple/Downloads/Project/consback-main 3/node_modules/express/lib/router/index.js:346:12)
+    at next (/Users/apple/Downloads/Project/consback-main 3/node_modules/express/lib/router/index.js:280:10)
+    at serveStatic (/Users/apple/Downloads/Project/consback-main 3/node_modules/serve-static/index.js:75:16)
+Removing profession 68222dd751391fedc9fa5bec from company 6818f8963183bce6ec70c141
+Successfully removed profession 68222dd751391fedc9fa5bec from company 6818f8963183bce6ec70c141
+Removing profession 68222dd751391fedc9fa5bec from company 6818f8963183bce6ec70c141
