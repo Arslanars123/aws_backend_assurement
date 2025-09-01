@@ -47,7 +47,7 @@ app.use(cors());
 app.use("/uploads", express.static("uploads"));
 app.use(express.json()); // to parse JSON body
 
-app.use(express.static(path.join(__dirname, "public")));
+// Note: Static file serving moved to the end after API routes
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -59,7 +59,7 @@ app.get("/health", (req, res) => {
 });
 
 // Try cloud MongoDB first, fallback to local MongoDB
-const cloudUri = process.env.MONGODB_BASE_URI || "mongodb+srv://testusername:testuserpassword@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority&appName=Cluster0";
+const cloudUri = process.env.MONGODB_BASE_URI || "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
 const localUri = "mongodb://localhost:27017/construction_db";
 let uri = cloudUri;
 let client = new MongoClient(uri, {
@@ -264,7 +264,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
-// Route to handle user creation with file upload
+// Route to handle user creation with file upload and email verification
 app.post(
   "/store-user",
   upload.fields([
@@ -293,6 +293,15 @@ app.post(
         contactPhone,
       } = req.body;
 
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(username)) {
+        return res.status(400).json({ 
+          error: "Invalid email format. Please provide a valid email address.",
+          field: "username"
+        });
+      }
+
       const picture = req.files?.picture?.[0]?.filename || null;
       const contactPicture = req.files?.contactPicture?.[0]?.filename || null;
 
@@ -301,7 +310,11 @@ app.post(
         parsedUserProfession = JSON.parse(req.body.userProfession);
       }
 
-      const result = await db.collection("users").insertOne({
+      // Generate verification code
+      const verificationCode = generateVerificationCode();
+      
+      // Create user document with verification status
+      const userData = {
         username,
         password,
         role,
@@ -322,12 +335,46 @@ app.post(
         type,
         mainId,
         userProfession: parsedUserProfession,
-      });
+        verificationCode,
+        isVerified: false,
+        verificationSentAt: new Date(),
+        createdAt: new Date()
+      };
 
-      res.status(201).json(result);
+      // Insert user into database
+      const result = await db.collection("users").insertOne(userData);
+
+      // Send verification email
+      try {
+        await sendVerificationEmail(username, name || username, verificationCode);
+        
+        res.status(201).json({
+          success: true,
+          message: "User created successfully! Verification email sent.",
+          userId: result.insertedId,
+          verificationSent: true,
+          email: username
+        });
+      } catch (emailError) {
+        console.error("❌ Email verification failed:", emailError);
+        
+        // User was created but email failed - return success with warning
+        res.status(201).json({
+          success: true,
+          message: "User created successfully! However, verification email could not be sent.",
+          userId: result.insertedId,
+          verificationSent: false,
+          email: username,
+          warning: "Please contact support to resend verification email."
+        });
+      }
+
     } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create user" });
+      console.error("❌ Error creating user:", error);
+      res.status(500).json({ 
+        error: "Failed to create user",
+        details: error.message 
+      });
     }
   }
 );
@@ -2452,7 +2499,7 @@ app.post(
   }
 );
 
-// 6. Simple user login
+// 6. Simple user login with email verification check
 app.post("/users/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -2465,6 +2512,15 @@ app.post("/users/login", async (req, res) => {
     // Check if user account is active
     if (user.status === "inactive" || user.status === "deactivated") {
       return res.status(403).json({ error: "Your account is deactivated" });
+    }
+    
+    // Check if email is verified (for new users)
+    if (user.isVerified === false) {
+      return res.status(403).json({ 
+        error: "Please verify your email address before logging in. Check your inbox for the verification code.",
+        requiresVerification: true,
+        email: user.username
+      });
     }
     
     // Check if company is deactivated (for admin users)
@@ -2505,7 +2561,8 @@ app.post("/users/login", async (req, res) => {
       role: user.role,
       companyId: user.companyId,
       projectsId: user.projectsId || [],
-      status: user.status
+      status: user.status,
+      isVerified: user.isVerified
     };
     
     res.status(200).json({ 
@@ -10654,6 +10711,80 @@ app.delete("/delete-document/:documentId", async (req, res) => {
   }
 });
 
+// Generate verification code
+function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Send verification email
+async function sendVerificationEmail(email, username, verificationCode) {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: "email-smtp.eu-north-1.amazonaws.com",
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      logger: true,
+      debug: true,
+    });
+
+    const mailOptions = {
+      from: "info@assurement.dk",
+      to: email,
+      subject: "🔐 Welcome to Assurement - Email Verification",
+      text: `Hello ${username},
+
+Welcome to Assurement! Your account has been created successfully.
+
+Your verification code is: ${verificationCode}
+
+Please use this code to verify your account.
+
+Best regards,
+The Assurement Team`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h2 style="color: #2c3e50;">🔐 Welcome to Assurement!</h2>
+            <p style="color: #7f8c8d;">Your account has been created successfully</p>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <h3 style="color: #27ae60; margin: 0;">Verification Code</h3>
+            <div style="font-size: 32px; font-weight: bold; color: #2c3e50; letter-spacing: 5px; margin: 15px 0; padding: 15px; background-color: white; border: 2px dashed #3498db; border-radius: 8px;">
+              ${verificationCode}
+            </div>
+            <p style="color: #7f8c8d; margin: 0;">Please use this code to verify your account</p>
+          </div>
+          
+          <div style="margin: 30px 0;">
+            <p style="color: #2c3e50; line-height: 1.6;">
+              Hello <strong>${username}</strong>,<br><br>
+              Welcome to Assurement! Your account has been created successfully and is now pending verification.
+            </p>
+          </div>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+          <p style="text-align: center; color: #7f8c8d; font-size: 12px;">
+            Sent from Assurement Backend Server<br>
+            If you didn't create this account, please contact support.
+          </p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Verification email sent successfully to:", email, "Message ID:", info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("❌ Failed to send verification email to:", email, "Error:", error.message);
+    throw error;
+  }
+}
+
 // Simple test email endpoint
 app.post("/test-email", async (req, res) => {
   try {
@@ -10698,6 +10829,158 @@ app.post("/test-email", async (req, res) => {
     console.error("Test email error:", error);
     res.status(500).json({ 
       error: "Failed to send test email", 
+      details: error.message 
+    });
+  }
+});
+
+// Dedicated test email endpoint - always sends to devarsulan@gmail.com
+app.get("/test-email-devarsulan", async (req, res) => {
+  try {
+    console.log("🚀 Starting dedicated test email to devarsulan@gmail.com...");
+    
+    const transporter = nodemailer.createTransport({
+      host: "email-smtp.eu-north-1.amazonaws.com",
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      logger: true,
+      debug: true,
+    });
+
+    const mailOptions = {
+      from: "info@assurement.dk",
+      to: "devarsulan@gmail.com",
+      subject: "🧪 AWS SES Test Email - Automated Test",
+      text: `This is an automated test email sent via AWS SES API at ${new Date().toISOString()}. 
+      
+Server: ${process.env.NODE_ENV || 'development'}
+Timestamp: ${new Date().toLocaleString()}
+Test ID: ${Date.now()}
+
+If you receive this email, the AWS SES integration is working perfectly! 🎉`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <h2 style="color: #2c3e50; text-align: center;">🧪 AWS SES Test Email</h2>
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Status:</strong> <span style="color: #27ae60;">✅ Working Perfectly!</span></p>
+            <p><strong>Server:</strong> ${process.env.NODE_ENV || 'development'}</p>
+            <p><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
+            <p><strong>Test ID:</strong> ${Date.now()}</p>
+          </div>
+          <p>This is an automated test email sent via AWS SES API.</p>
+          <p>If you receive this email, the AWS SES integration is working perfectly! 🎉</p>
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+          <p style="text-align: center; color: #7f8c8d; font-size: 12px;">
+            Sent from Assurement Backend Server
+          </p>
+        </div>
+      `,
+    };
+
+    console.log("📧 Sending email with options:", {
+      to: mailOptions.to,
+      subject: mailOptions.subject,
+      timestamp: new Date().toISOString()
+    });
+
+    const info = await transporter.sendMail(mailOptions);
+    
+    console.log("✅ Email sent successfully! Message ID:", info.messageId);
+    
+    res.status(200).json({ 
+      success: true, 
+      message: "Test email sent successfully to devarsulan@gmail.com!",
+      messageId: info.messageId,
+      response: info.response,
+      timestamp: new Date().toISOString(),
+      testId: Date.now(),
+      recipient: "devarsulan@gmail.com"
+    });
+
+  } catch (error) {
+    console.error("❌ Test email error:", error);
+    res.status(500).json({ 
+      error: "Failed to send test email to devarsulan@gmail.com", 
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Test user creation with email verification
+app.post("/test-create-user", async (req, res) => {
+  try {
+    const { email, name, role } = req.body;
+    
+    if (!email || !name || !role) {
+      return res.status(400).json({ 
+        error: "Email, name, and role are required" 
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        error: "Invalid email format. Please provide a valid email address.",
+        field: "email"
+      });
+    }
+
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+    
+    // Create test user document
+    const userData = {
+      username: email,
+      password: "test123", // Default password for testing
+      role: role,
+      name: name,
+      companyId: "test-company-id",
+      verificationCode,
+      isVerified: false,
+      verificationSentAt: new Date(),
+      createdAt: new Date()
+    };
+
+    // Insert user into database
+    const result = await db.collection("users").insertOne(userData);
+
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, name, verificationCode);
+      
+      res.status(201).json({
+        success: true,
+        message: "Test user created successfully! Verification email sent.",
+        userId: result.insertedId,
+        verificationSent: true,
+        email: email,
+        verificationCode: verificationCode, // Only for testing - remove in production
+        note: "This is a test endpoint. In production, verification codes are not returned in the response."
+      });
+    } catch (emailError) {
+      console.error("❌ Email verification failed:", emailError);
+      
+      res.status(201).json({
+        success: true,
+        message: "Test user created successfully! However, verification email could not be sent.",
+        userId: result.insertedId,
+        verificationSent: false,
+        email: email,
+        verificationCode: verificationCode, // Only for testing
+        warning: "Please contact support to resend verification email."
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ Error creating test user:", error);
+    res.status(500).json({ 
+      error: "Failed to create test user",
       details: error.message 
     });
   }
@@ -10844,6 +11127,138 @@ app.get("/get-eurocodes/:subjectMatterId", async (req, res) => {
     });
   }
 });
+
+// Email verification endpoint
+app.post("/verify-email", async (req, res) => {
+  try {
+    const { email, verificationCode } = req.body;
+    
+    if (!email || !verificationCode) {
+      return res.status(400).json({ 
+        error: "Email and verification code are required" 
+      });
+    }
+
+    // Find user by email and verification code
+    const user = await db.collection("users").findOne({
+      username: email,
+      verificationCode: verificationCode
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        error: "Invalid verification code or email not found" 
+      });
+    }
+
+    // Check if code is expired (24 hours)
+    const codeAge = Date.now() - new Date(user.verificationSentAt).getTime();
+    const codeExpiry = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    
+    if (codeAge > codeExpiry) {
+      return res.status(400).json({ 
+        error: "Verification code has expired. Please request a new one." 
+      });
+    }
+
+    // Update user as verified
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      { 
+        $set: { 
+          isVerified: true,
+          verifiedAt: new Date()
+        },
+        $unset: { verificationCode: "" }
+      }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Email verified successfully! You can now log in to your account.",
+      userId: user._id,
+      email: user.username
+    });
+
+  } catch (error) {
+    console.error("❌ Email verification error:", error);
+    res.status(500).json({ 
+      error: "Failed to verify email",
+      details: error.message 
+    });
+  }
+});
+
+// Resend verification email endpoint
+app.post("/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: "Email is required" 
+      });
+    }
+
+    // Find user by email
+    const user = await db.collection("users").findOne({
+      username: email
+    });
+
+    if (!user) {
+      return res.status(404).json({ 
+        error: "User not found with this email address" 
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ 
+        error: "User is already verified" 
+      });
+    }
+
+    // Generate new verification code
+    const newVerificationCode = generateVerificationCode();
+    
+    // Update user with new verification code
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      { 
+        $set: { 
+          verificationCode: newVerificationCode,
+          verificationSentAt: new Date()
+        }
+      }
+    );
+
+    // Send new verification email
+    try {
+      await sendVerificationEmail(email, user.name || user.username, newVerificationCode);
+      
+      res.status(200).json({
+        success: true,
+        message: "New verification email sent successfully!",
+        email: email
+      });
+    } catch (emailError) {
+      console.error("❌ Failed to send new verification email:", emailError);
+      res.status(500).json({ 
+        error: "Failed to send verification email",
+        details: emailError.message 
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ Resend verification error:", error);
+    res.status(500).json({ 
+      error: "Failed to resend verification",
+      details: error.message 
+    });
+  }
+});
+
+// Static file serving - moved here after all API routes
+app.use(express.static(path.join(__dirname, "public")));
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
