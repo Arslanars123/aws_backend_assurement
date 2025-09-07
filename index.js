@@ -4934,7 +4934,7 @@ app.post(
 );
 
 // 6. Simple user login with email verification check
-app.post("/users/login", async (req, res) => {
+app.post("/api/users/login", async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = await db.collection("users").findOne({ username, password });
