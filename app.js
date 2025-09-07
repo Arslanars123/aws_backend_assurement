@@ -17,4 +17,5 @@ app.use("/uploads/previews", express.static("uploads/previews"));
 app.use("/templates", express.static("static-report-templates"));
 app.use(express.static(path.join(__dirname, "public")));
 
+console.log("app.js loaded");
 module.exports = app;
