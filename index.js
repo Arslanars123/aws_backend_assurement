@@ -53,6 +53,9 @@ app.use("/uploads/previews", express.static("uploads/previews"));
 app.use("/templates", express.static("static-report-templates"));
 app.use(express.json()); // to parse JSON body
 
+// Serve frontend build assets from public
+app.use(express.static(path.join(__dirname, "public")));
+
 // Note: Static file serving moved to the end after API routes
 
 // Health check endpoint
