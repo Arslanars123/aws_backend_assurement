@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static Control Report - Cover Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 40px;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .green-r {
+            width: 20px;
+            height: 20px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .company-logo {
+            width: 60px;
+            height: 60px;
+            border: 3px solid #1e3a8a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f8fafc;
+        }
+
+        .company-logo .letter-a {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+
+        .company-info h1 {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 5px;
+        }
+
+        .company-info p {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .company-logo-placeholder {
+            width: 80px;
+            height: 60px;
+            border: 2px dashed #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 12px;
+            text-align: center;
+            writing-mode: vertical-rl;
+        }
+
+        .report-details {
+            border-left: 4px solid #1e3a8a;
+            padding-left: 20px;
+            margin-bottom: 50px;
+        }
+
+        .executing-party {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 20px;
+        }
+
+        .report-title {
+            font-size: 36px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 10px;
+        }
+
+        .report-subtitle {
+            font-size: 16px;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+
+        .document-info {
+            border: 2px solid #1e3a8a;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .document-id {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+
+        .document-fields {
+            display: flex;
+            gap: 20px;
+        }
+
+        .document-field {
+            width: 100px;
+            height: 30px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background-color: #f8fafc;
+        }
+
+        .standards-section {
+            margin-top: 60px;
+        }
+
+        .standards-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 30px;
+        }
+
+        .standards-list {
+            list-style: none;
+        }
+
+        .standards-list li {
+            margin-bottom: 12px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .standards-list li::before {
+            content: "•";
+            color: #1e3a8a;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .standards-list li strong {
+            color: #1e3a8a;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div class="logo-section">
+                <div class="green-r">r</div>
+                <div class="company-logo">
+                    <span class="letter-a">A</span>
+                </div>
+                <div class="company-info">
+                    <h1>Assurement Report - system</h1>
+                    <p>Part of Quality Assurance Denmark</p>
+                </div>
+            </div>
+            <div class="company-logo-placeholder">
+                Company logo
+            </div>
+        </div>
+
+        <div class="report-details">
+            <div class="executing-party">
+                Executing party: _________________________
+            </div>
+            
+            <h2 class="report-title">Static Control Report:</h2>
+            <p class="report-subtitle">For those executed within the construction section:</p>
+            
+            <div class="document-info">
+                <div class="document-id">Document ID: B3.</div>
+                <div class="document-fields">
+                    <div class="document-field"></div>
+                    <div class="document-field"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="standards-section">
+            <h3 class="standards-title">Applicable EU standards 2024</h3>
+            <ul class="standards-list">
+                <li><strong>Eurocode 0:</strong> Design basis for structures</li>
+                <li><strong>Eurocode 1:</strong> Load on load-bearing structures</li>
+                <li><strong>Eurocode 2:</strong> Concrete structures</li>
+                <li><strong>Eurocode 3:</strong> Steel structures</li>
+                <li><strong>Eurocode 4:</strong> Composite Structures</li>
+                <li><strong>Eurocode 5:</strong> Timber structures</li>
+                <li><strong>Eurocode 6:</strong> Masonry structures</li>
+                <li><strong>Eurocode 7:</strong> Geotechnical Engineering</li>
+                <li><strong>Eurocode 8:</strong> Structures in seismic areas</li>
+                <li><strong>Eurocode 9:</strong> Aluminium structures</li>
+                <li><strong>EN 1520:</strong> Lightweight concrete with porous aggregates</li>
+                <li><strong>EN 12602:</strong> Aerated concrete</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

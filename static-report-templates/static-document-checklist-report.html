@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static Document Checklist Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .section-header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 15px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .subsection {
+            margin-bottom: 25px;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .subsection-identifier {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 2px solid #1e3a8a;
+        }
+
+        .table th {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 14px;
+            border-bottom: 1px solid #d1d5db;
+            border-right: 1px solid #d1d5db;
+        }
+
+        .table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            border-right: 1px solid #e5e7eb;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table td:last-child,
+        .table th:last-child {
+            border-right: none;
+        }
+
+        .table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        .status-submitted {
+            color: #d97706;
+            font-weight: bold;
+        }
+
+        .status-approved {
+            color: #059669;
+            font-weight: bold;
+        }
+
+        .status-pending {
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .date-field {
+            color: #1f2937;
+            font-weight: 500;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #dc2626;
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="section-header">7. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHECK</div>
+
+        <!-- Section 7.1: Verification of the basis for execution from design -->
+        <div class="subsection">
+            <div class="subsection-title">
+                <span>7.1 Verification of the basis for execution from design</span>
+                <span class="subsection-identifier">B1</span>
+            </div>
+            
+            <table class="table" id="section-b1-table">
+                <thead>
+                    <tr>
+                        <th>Pos.</th>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Note</th>
+                        <th>Control/ID</th>
+                    </tr>
+                </thead>
+                <tbody id="section-b1-tbody">
+                    <tr>
+                        <td colspan="6" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Section 7.2: Verification of the basis for execution of the work -->
+        <div class="subsection">
+            <div class="subsection-title">
+                <span>7.2 Verification of the basis for execution of the work</span>
+                <span class="subsection-identifier">B2</span>
+            </div>
+            
+            <table class="table" id="section-b2-table">
+                <thead>
+                    <tr>
+                        <th>Pos.</th>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Note</th>
+                        <th>Control/ID</th>
+                    </tr>
+                </thead>
+                <tbody id="section-b2-tbody">
+                    <tr>
+                        <td colspan="6" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Section 7.3: Checking documentation of materials and products -->
+        <div class="subsection">
+            <div class="subsection-title">
+                <span>7.3 Checking documentation of materials and products</span>
+                <span class="subsection-identifier">B3</span>
+            </div>
+            
+            <table class="table" id="section-b3-table">
+                <thead>
+                    <tr>
+                        <th>Pos.</th>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Note</th>
+                        <th>Control/ID</th>
+                    </tr>
+                </thead>
+                <tbody id="section-b3-tbody">
+                    <tr>
+                        <td colspan="6" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // Function to format date
+        function formatDate(dateString) {
+            if (!dateString) return '[Select Date]';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        // Function to determine status
+        function getStatus(item) {
+            if (item.submittedDate && item.approvedDate) {
+                return 'Approved';
+            } else if (item.submittedDate && !item.approvedDate) {
+                return 'Submitted';
+            } else {
+                return 'Pending';
+            }
+        }
+
+        // Function to get status class
+        function getStatusClass(status) {
+            switch (status) {
+                case 'Approved':
+                    return 'status-approved';
+                case 'Submitted':
+                    return 'status-submitted';
+                default:
+                    return 'status-pending';
+            }
+        }
+
+        // Function to get independent controller name
+        function getIndependentControllerName(item) {
+            if (item.independentController && item.independentController.name) {
+                return item.independentController.name;
+            }
+            return 'Independent control of self-monitoring.';
+        }
+
+        // Function to get the date to display
+        function getDisplayDate(item) {
+            if (item.approvedDate) {
+                return formatDate(item.approvedDate);
+            } else if (item.submittedDate) {
+                return formatDate(item.submittedDate);
+            } else {
+                return '[Select Date]';
+            }
+        }
+
+        // Function to populate table section
+        function populateTableSection(sectionId, items) {
+            const tbody = document.getElementById(`section-${sectionId}-tbody`);
+            
+            if (!items || items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="no-data">No data available</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            
+            items.forEach(item => {
+                const status = getStatus(item);
+                const statusClass = getStatusClass(status);
+                const displayDate = getDisplayDate(item);
+                const controllerName = getIndependentControllerName(item);
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.ItemId || 'N/A'}</td>
+                    <td class="date-field">${displayDate}</td>
+                    <td>${item.Basis || 'N/A'}</td>
+                    <td class="${statusClass}">${status}</td>
+                    <td>${item.comment || 'No comments'}</td>
+                    <td>${controllerName}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Function to fetch and populate data
+        async function populateTableData() {
+            try {
+                // Get parameters from URL
+                const companyId = getUrlParameter('companyId') || '68adb95ea8c5323f1b948c6c';
+                const projectId = getUrlParameter('projectId') || '68adb9b3a8c5323f1b948c6e';
+                const professionSubjectMatterId = getUrlParameter('professionSubjectMatterId') || 'KP13';
+
+                console.log('Fetching data with params:', { companyId, projectId, professionSubjectMatterId });
+
+                // Fetch static document checklist data
+                const response = await fetch(`http://localhost:3000/get-static-document-checklist-with-status?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const data = await response.json();
+
+                console.log('API Response:', data);
+
+                if (data.success && data.data && data.data.checklistItems) {
+                    const checklistItems = data.data.checklistItems;
+                    
+                    // Group items by DS_GroupId (B1, B2, B3)
+                    const b1Items = checklistItems.filter(item => item.DS_GroupId === 'B1');
+                    const b2Items = checklistItems.filter(item => item.DS_GroupId === 'B2');
+                    const b3Items = checklistItems.filter(item => item.DS_GroupId === 'B3');
+
+                    console.log('Grouped items:', { b1: b1Items.length, b2: b2Items.length, b3: b3Items.length });
+
+                    // Populate each section
+                    populateTableSection('b1', b1Items);
+                    populateTableSection('b2', b2Items);
+                    populateTableSection('b3', b3Items);
+
+                } else {
+                    console.error('No data received from API');
+                    // Show error in all sections
+                    ['b1', 'b2', 'b3'].forEach(sectionId => {
+                        const tbody = document.getElementById(`section-${sectionId}-tbody`);
+                        tbody.innerHTML = '<tr><td colspan="6" class="error">No data available</td></tr>';
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                // Show error in all sections
+                ['b1', 'b2', 'b3'].forEach(sectionId => {
+                    const tbody = document.getElementById(`section-${sectionId}-tbody`);
+                    tbody.innerHTML = '<tr><td colspan="6" class="error">Error loading data: ' + error.message + '</td></tr>';
+                });
+            }
+        }
+
+        // Function to update data from external API calls
+        window.updateStaticDocumentChecklistData = function(companyId, projectId, professionSubjectMatterId) {
+            // Update URL parameters and reload data
+            const url = new URL(window.location);
+            url.searchParams.set('companyId', companyId);
+            url.searchParams.set('projectId', projectId);
+            url.searchParams.set('professionSubjectMatterId', professionSubjectMatterId);
+            window.history.replaceState({}, '', url);
+            populateTableData();
+        };
+
+        // Initialize the page when it loads
+        document.addEventListener('DOMContentLoaded', function() {
+            populateTableData();
+        });
+    </script>
+</body>
+</html>

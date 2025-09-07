@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Static Report Registration Entries</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .section-header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 15px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .subsection {
+            margin-bottom: 25px;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .subsection-identifier {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 2px solid #1e3a8a;
+        }
+
+        .table th {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 14px;
+            border-bottom: 1px solid #d1d5db;
+            border-right: 1px solid #d1d5db;
+        }
+
+        .table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            border-right: 1px solid #e5e7eb;
+            font-size: 14px;
+            color: #374151;
+            vertical-align: top;
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table td:last-child,
+        .table th:last-child {
+            border-right: none;
+        }
+
+        .table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        .date-field {
+            color: #1f2937;
+            font-weight: 500;
+        }
+
+        .registration-id {
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+
+        .control-type {
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .ds-group {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .media-section {
+            margin-top: 10px;
+        }
+
+        .media-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            background-color: #f8fafc;
+            border-radius: 4px;
+            border-left: 3px solid #1e3a8a;
+        }
+
+        .media-filename {
+            font-weight: bold;
+            color: #1e3a8a;
+            font-size: 12px;
+        }
+
+        .media-description {
+            color: #6b7280;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+
+        .media-link {
+            color: #1e3a8a;
+            text-decoration: none;
+            font-size: 11px;
+        }
+
+        .media-link:hover {
+            text-decoration: underline;
+        }
+
+        .media-preview {
+            margin-top: 5px;
+        }
+
+        .media-preview img {
+            max-width: 60px;
+            max-height: 50px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .media-preview img:hover {
+            transform: scale(1.1);
+            border-color: #1e3a8a;
+        }
+
+        .media-preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 5px;
+        }
+
+        .media-preview-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .media-preview-item .image-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .media-preview-item .filename-text {
+            font-size: 9px;
+            color: #374151;
+            margin-top: 2px;
+            max-width: 60px;
+            word-wrap: break-word;
+            line-height: 1.2;
+        }
+
+        .media-preview-item .description-text {
+            font-size: 8px;
+            color: #6b7280;
+            margin-top: 1px;
+            max-width: 60px;
+            word-wrap: break-word;
+            line-height: 1.1;
+            font-style: italic;
+        }
+
+        .user-info {
+            background-color: #f0f9ff;
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 3px solid #0ea5e9;
+        }
+
+        .user-name {
+            font-weight: bold;
+            color: #0c4a6e;
+        }
+
+        .user-role {
+            color: #0369a1;
+            font-size: 12px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #dc2626;
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="section-header">8. STATIC REPORT REGISTRATION ENTRIES</div>
+
+        <!-- Section 8.1: B4 Entries -->
+        <div class="subsection">
+            <div class="subsection-title">
+                <span>8.1 B4 Registration Entries</span>
+                <span class="subsection-identifier">B4</span>
+            </div>
+            
+            <table class="table" id="section-b4-table">
+                <thead>
+                    <tr>
+                        <th>Registration Date</th>
+                        <th>Registration ID</th>
+                        <th>Control Type</th>
+                        <th>Subject</th>
+                        <th>User</th>
+                        <th>Media Files</th>
+                    </tr>
+                </thead>
+                <tbody id="section-b4-tbody">
+                    <tr>
+                        <td colspan="6" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Section 8.2: B5 Entries -->
+        <div class="subsection">
+            <div class="subsection-title">
+                <span>8.2 B5 Registration Entries</span>
+                <span class="subsection-identifier">B5</span>
+            </div>
+            
+            <table class="table" id="section-b5-table">
+                <thead>
+                    <tr>
+                        <th>Registration Date</th>
+                        <th>Registration ID</th>
+                        <th>Control Type</th>
+                        <th>Subject</th>
+                        <th>User</th>
+                        <th>Media Files</th>
+                    </tr>
+                </thead>
+                <tbody id="section-b5-tbody">
+                    <tr>
+                        <td colspan="6" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Section 8.3: B6 Entries -->
+        <div class="subsection">
+            <div class="subsection-title">
+                <span>8.3 B6 Registration Entries</span>
+                <span class="subsection-identifier">B6</span>
+            </div>
+            
+            <table class="table" id="section-b6-table">
+                <thead>
+                    <tr>
+                        <th>Registration Date</th>
+                        <th>Registration ID</th>
+                        <th>Control Type</th>
+                        <th>Subject</th>
+                        <th>User</th>
+                        <th>Media Files</th>
+                    </tr>
+                </thead>
+                <tbody id="section-b6-tbody">
+                    <tr>
+                        <td colspan="6" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // Function to format date
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        // Function to create media files HTML
+        function createMediaFilesHTML(entry) {
+            let mediaHTML = '';
+            
+            // Annotated PDF Images
+            if (entry.annotatedPdfImages && entry.annotatedPdfImages.length > 0) {
+                mediaHTML += '<div class="media-section"><strong>Annotated PDF Images:</strong>';
+                mediaHTML += '<div class="media-preview-container">';
+                entry.annotatedPdfImages.forEach(img => {
+                    mediaHTML += `
+                        <div class="media-preview-item">
+                            <div class="image-container">
+                                <img src="http://localhost:3000/uploads/${img.filename}" 
+                                     alt="${img.originalName}" 
+                                     onclick="window.open('http://localhost:3000/uploads/${img.filename}', '_blank')">
+                            </div>
+                            <div class="filename-text">${img.originalName}</div>
+                            <div class="description-text">${img.description || 'No description'}</div>
+                        </div>
+                    `;
+                });
+                mediaHTML += '</div></div>';
+            }
+
+            // Main Pictures
+            if (entry.mainPictures && entry.mainPictures.length > 0) {
+                mediaHTML += '<div class="media-section"><strong>Main Pictures:</strong>';
+                mediaHTML += '<div class="media-preview-container">';
+                entry.mainPictures.forEach(pic => {
+                    mediaHTML += `
+                        <div class="media-preview-item">
+                            <div class="image-container">
+                                <img src="http://localhost:3000/uploads/${pic.filename}" 
+                                     alt="${pic.originalName}" 
+                                     onclick="window.open('http://localhost:3000/uploads/${pic.filename}', '_blank')">
+                            </div>
+                            <div class="filename-text">${pic.originalName}</div>
+                            <div class="description-text">${pic.description || 'No description'}</div>
+                        </div>
+                    `;
+                });
+                mediaHTML += '</div></div>';
+            }
+
+            // Mark Pictures
+            if (entry.markPictures && entry.markPictures.length > 0) {
+                mediaHTML += '<div class="media-section"><strong>Mark Pictures:</strong>';
+                mediaHTML += '<div class="media-preview-container">';
+                entry.markPictures.forEach(mark => {
+                    mediaHTML += `
+                        <div class="media-preview-item">
+                            <div class="image-container">
+                                <img src="http://localhost:3000/uploads/${mark.filename}" 
+                                     alt="${mark.originalName} (Mark #${mark.markNumber})" 
+                                     onclick="window.open('http://localhost:3000/uploads/${mark.filename}', '_blank')">
+                            </div>
+                            <div class="filename-text">${mark.originalName} (Mark #${mark.markNumber})</div>
+                            <div class="description-text">${mark.description || 'No description'}</div>
+                        </div>
+                    `;
+                });
+                mediaHTML += '</div></div>';
+            }
+
+            return mediaHTML || 'No media files';
+        }
+
+        // Function to create user HTML
+        function createUserHTML(entry) {
+            if (entry.user) {
+                return `
+                    <div class="user-info">
+                        <div class="user-name">${entry.user.name}</div>
+                        <div class="user-role">${entry.user.role} (${entry.user.type})</div>
+                    </div>
+                `;
+            }
+            return 'No user assigned';
+        }
+
+        // Function to populate table section
+        function populateTableSection(sectionId, entries) {
+            const tbody = document.getElementById(`section-${sectionId}-tbody`);
+            
+            if (!entries || entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="no-data">No data available</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            
+            entries.forEach(entry => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="date-field">${formatDate(entry.registrationDate)}</td>
+                    <td class="registration-id">${entry.registrationId}</td>
+                    <td class="control-type">${entry.controlType}</td>
+                    <td>${entry.subject}</td>
+                    <td>${createUserHTML(entry)}</td>
+                    <td>${createMediaFilesHTML(entry)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Function to fetch and populate data
+        async function populateTableData() {
+            try {
+                // Get parameters from URL
+                const companyId = getUrlParameter('companyId') || '68adb95ea8c5323f1b948c6c';
+                const projectId = getUrlParameter('projectId') || '68adb9b3a8c5323f1b948c6e';
+                const subjectMatterId = getUrlParameter('subjectMatterId') || 'KP13';
+
+                console.log('Fetching data with params:', { companyId, projectId, subjectMatterId });
+
+                // Fetch static report registration entries data
+                const response = await fetch(`http://localhost:3000/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${subjectMatterId}`);
+                const data = await response.json();
+
+                console.log('API Response:', data);
+
+                if (data.success && data.data && data.data.entries) {
+                    const entries = data.data.entries;
+                    
+                    // Group entries by DS Group (B4, B5, B6)
+                    const b4Entries = entries.filter(entry => entry.dsGroup === 'B4');
+                    const b5Entries = entries.filter(entry => entry.dsGroup === 'B5');
+                    const b6Entries = entries.filter(entry => entry.dsGroup === 'B6');
+
+                    console.log('Grouped entries:', { b4: b4Entries.length, b5: b5Entries.length, b6: b6Entries.length });
+
+                    // Populate each section
+                    populateTableSection('b4', b4Entries);
+                    populateTableSection('b5', b5Entries);
+                    populateTableSection('b6', b6Entries);
+
+                } else {
+                    console.error('No data received from API');
+                    // Show error in all sections
+                    ['b4', 'b5', 'b6'].forEach(sectionId => {
+                        const tbody = document.getElementById(`section-${sectionId}-tbody`);
+                        tbody.innerHTML = '<tr><td colspan="6" class="error">No data available</td></tr>';
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                // Show error in all sections
+                ['b4', 'b5', 'b6'].forEach(sectionId => {
+                    const tbody = document.getElementById(`section-${sectionId}-tbody`);
+                    tbody.innerHTML = '<tr><td colspan="6" class="error">Error loading data: ' + error.message + '</td></tr>';
+                });
+            }
+        }
+
+        // Function to update data from external API calls
+        window.updateStaticReportRegistrationData = function(companyId, projectId, subjectMatterId) {
+            // Update URL parameters and reload data
+            const url = new URL(window.location);
+            url.searchParams.set('companyId', companyId);
+            url.searchParams.set('projectId', projectId);
+            url.searchParams.set('subjectMatterId', subjectMatterId);
+            window.history.replaceState({}, '', url);
+            populateTableData();
+        };
+
+        // Initialize the page when it loads
+        document.addEventListener('DOMContentLoaded', function() {
+            populateTableData();
+        });
+    </script>
+</body>
+</html>

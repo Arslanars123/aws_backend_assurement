@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Points Selected in the Control Plan</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .section-header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 15px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .subsection {
+            margin-bottom: 25px;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .subsection-content {
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .subsection-content p {
+            margin-bottom: 12px;
+        }
+
+        .drawing-container {
+            border: 2px solid #1e3a8a;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            background-color: #f9fafb;
+        }
+
+        .drawing-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .drawing-placeholder {
+            width: 100%;
+            height: 400px;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: white;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .drawing-placeholder img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .drawing-placeholder .placeholder-text {
+            color: #9ca3af;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .drawing-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 10px;
+        }
+
+        .drawing-name {
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .upload-date {
+            color: #9ca3af;
+        }
+
+        .no-drawings {
+            text-align: center;
+            color: #9ca3af;
+            font-style: italic;
+            padding: 40px;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .explanation-text {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.6;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f3f4f6;
+            border-radius: 4px;
+        }
+
+        .explanation-text p {
+            margin-bottom: 8px;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="section-header">6. CONTROL POINTS SELECTED IN THE CONTROL PLAN</div>
+
+        <div class="subsection">
+            <div class="subsection-title">Overview:</div>
+            <div class="subsection-content">
+                <p>This section displays the main drawings associated with the project, indicating the selected inspection points and control areas.</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">DRAWINGS INDICATING SELECTED INSPECTION POINTS:</div>
+            <div class="subsection-content">
+                <p>The drawings below show the control points and inspection areas that have been identified for this project.</p>
+            </div>
+        </div>
+
+        <div id="drawings-container">
+            <!-- Drawings will be populated here by JavaScript -->
+            <div class="no-drawings" id="no-drawings-message">
+                Loading drawings...
+            </div>
+        </div>
+
+        <div class="explanation-text">
+            <p>Above there are points indicated where the executor has carried out checks in accordance with the control plan.</p>
+            <p>The colours indicate the type of inspection that has been carried out and which relate to the points under Item 7</p>
+            <p>The colors below indicate which category they relate to.</p>
+        </div>
+    </div>
+
+    <script>
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // Function to fetch and display project drawings
+        async function loadProjectDrawings() {
+            try {
+                // Get parameters from URL
+                const companyId = getUrlParameter('companyId') || '68adb95ea8c5323f1b948c6c';
+                const projectId = getUrlParameter('projectId') || '68adb9b3a8c5323f1b948c6e';
+
+                console.log('Loading drawings for:', { companyId, projectId });
+
+                // Fetch drawings from the existing API
+                const response = await fetch(`http://localhost:3000/get-draws?companyId=${companyId}&projectId=${projectId}`);
+                const drawings = await response.json();
+
+                console.log('Fetched drawings:', drawings);
+
+                const container = document.getElementById('drawings-container');
+                const noDrawingsMessage = document.getElementById('no-drawings-message');
+
+                if (!drawings || drawings.length === 0) {
+                    noDrawingsMessage.textContent = 'No drawings found for this project.';
+                    noDrawingsMessage.style.display = 'block';
+                    return;
+                }
+
+                // Hide the no drawings message
+                noDrawingsMessage.style.display = 'none';
+
+                // Process each drawing
+                drawings.forEach((drawing, drawingIndex) => {
+                    if (drawing.mainDrawings && drawing.mainDrawings.length > 0) {
+                        drawing.mainDrawings.forEach((mainDrawing, mainIndex) => {
+                            const drawingDiv = document.createElement('div');
+                            drawingDiv.className = 'drawing-container';
+                            
+                            const drawingTitle = document.createElement('div');
+                            drawingTitle.className = 'drawing-title';
+                            drawingTitle.textContent = `DRAWING NAME: ${mainDrawing.original}`;
+                            
+                            const drawingPlaceholder = document.createElement('div');
+                            drawingPlaceholder.className = 'drawing-placeholder';
+                            
+                            // Check if it's a PDF file
+                            const isPdf = mainDrawing.original.toLowerCase().endsWith('.pdf') || mainDrawing.stored.toLowerCase().endsWith('.pdf');
+                            
+                            if (isPdf) {
+                                // For PDF files, create an embedded PDF viewer
+                                const pdfEmbed = document.createElement('embed');
+                                pdfEmbed.src = `http://localhost:3000/uploads/${mainDrawing.stored}`;
+                                pdfEmbed.type = 'application/pdf';
+                                pdfEmbed.style.width = '100%';
+                                pdfEmbed.style.height = '400px';
+                                pdfEmbed.style.border = 'none';
+                                
+                                // Fallback if embed doesn't work
+                                pdfEmbed.onerror = function() {
+                                    this.style.display = 'none';
+                                    const placeholderText = document.createElement('div');
+                                    placeholderText.className = 'placeholder-text';
+                                    placeholderText.innerHTML = `
+                                        <div>PDF Drawing: ${mainDrawing.original}</div>
+                                        <div style="margin-top: 10px; font-size: 12px;">File: ${mainDrawing.stored}</div>
+                                        <div style="margin-top: 10px;">
+                                            <a href="http://localhost:3000/uploads/${mainDrawing.stored}" target="_blank" style="color: #1e3a8a; text-decoration: underline;">
+                                                Click to view PDF
+                                            </a>
+                                        </div>
+                                    `;
+                                    drawingPlaceholder.appendChild(placeholderText);
+                                };
+                                
+                                drawingPlaceholder.appendChild(pdfEmbed);
+                            } else {
+                                // For image files, create image element
+                                const img = document.createElement('img');
+                                img.src = `http://localhost:3000/uploads/${mainDrawing.stored}`;
+                                img.alt = mainDrawing.original;
+                                img.onerror = function() {
+                                    // If image fails to load, show placeholder text
+                                    this.style.display = 'none';
+                                    const placeholderText = document.createElement('div');
+                                    placeholderText.className = 'placeholder-text';
+                                    placeholderText.innerHTML = `
+                                        <div>Drawing: ${mainDrawing.original}</div>
+                                        <div style="margin-top: 10px; font-size: 12px;">File: ${mainDrawing.stored}</div>
+                                    `;
+                                    drawingPlaceholder.appendChild(placeholderText);
+                                };
+                                
+                                drawingPlaceholder.appendChild(img);
+                            }
+                            
+                            const drawingInfo = document.createElement('div');
+                            drawingInfo.className = 'drawing-info';
+                            drawingInfo.innerHTML = `
+                                <span class="drawing-name">${mainDrawing.original}</span>
+                                <span class="upload-date">Uploaded: ${new Date(mainDrawing.uploadedAt).toLocaleDateString()}</span>
+                            `;
+                            
+                            drawingDiv.appendChild(drawingTitle);
+                            drawingDiv.appendChild(drawingPlaceholder);
+                            drawingDiv.appendChild(drawingInfo);
+                            
+                            container.appendChild(drawingDiv);
+                        });
+                    }
+                });
+
+                // If no main drawings were found, show message
+                if (container.children.length === 1) { // Only the no-drawings-message
+                    noDrawingsMessage.textContent = 'No main drawings found for this project.';
+                    noDrawingsMessage.style.display = 'block';
+                }
+
+            } catch (error) {
+                console.error('Error loading drawings:', error);
+                const noDrawingsMessage = document.getElementById('no-drawings-message');
+                noDrawingsMessage.textContent = 'Error loading drawings. Please try again.';
+                noDrawingsMessage.style.display = 'block';
+            }
+        }
+
+        // Function to update data from external API calls
+        window.updateControlPointsData = function(companyId, projectId) {
+            // Update URL parameters and reload data
+            const url = new URL(window.location);
+            url.searchParams.set('companyId', companyId);
+            url.searchParams.set('projectId', projectId);
+            window.history.replaceState({}, '', url);
+            loadProjectDrawings();
+        };
+
+        // Initialize the page when it loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProjectDrawings();
+        });
+    </script>
+</body>
+</html>

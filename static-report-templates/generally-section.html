@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1. GENERALLY</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .section-header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 15px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .subsection {
+            margin-bottom: 25px;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .subsection-content {
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .subsection-content p {
+            margin-bottom: 12px;
+        }
+
+        .inspectors-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 2px solid #1e3a8a;
+        }
+
+        .inspectors-table th {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 14px;
+            border-bottom: 1px solid #d1d5db;
+            border-right: 1px solid #d1d5db;
+        }
+
+        .inspectors-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            border-right: 1px solid #e5e7eb;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .inspectors-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .inspectors-table td:last-child,
+        .inspectors-table th:last-child {
+            border-right: none;
+        }
+
+        .inspectors-table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        .controller-name {
+            font-weight: 500;
+            color: #1f2937;
+        }
+
+        .controller-type {
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            font-weight: 500;
+            color: #4b5563;
+            margin-bottom: 15px;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="section-header">1. GENERALLY</div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.1 Structure of the report</div>
+            <div class="subsection-content">
+                <p>This inspection report is structured, cf. SBI Guideline 271 (3rd edition 2020), Table 15.</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.2 Description of the Control Work</div>
+            <div class="subsection-content">
+                <p>The general inspection has been carried out in accordance with DS/EN 1990 DK NA, Annex B5, DS 1140 and associated execution standards and is documented in accordance with SBI 271 and forms the basis for this inspection report.</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.3 Organisation of the control work</div>
+            <div class="subsection-content">
+                <p>The executing contractor carries out his contract for a Main or Turnkey Contractor and only submits the report for his construction section on this case.</p>
+                <p>The self-monitoring has been carried out by the individual performer or a designated person from the company on the work in question, name appears on page 2.</p>
+                <p>The independent inspection has been carried out in accordance with the requirements specified in DS/EN 1990 DK NA, Annex B5.</p>
+                <p>The associated inspectors will be stated below in section 1.4</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.4 Inspectors associated with</div>
+            <div class="subtitle">There are the following inspectors on the specific project:</div>
+            
+            <table class="inspectors-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="controller-name" id="controller-name">Loading...</td>
+                        <td class="controller-type">Independent Controller</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.5 Explanation of the use of assistant inspectors</div>
+            <div class="subsection-content">
+                <p>Where co-inspectors have been used, these are listed under section 1.4.</p>
+                <p>For practical reasons, an assistant inspector is most often used, as this is the optimal workflow in the executing company's process for independent control.</p>
+                <p>If an inspector makes use of co-inspectors, he or she follows up on the inspection carried out by co-inspectors and ensures that the inspection has been carried out sensibly by checking the documentation for the inspection and signs this as the responsible inspector.</p>
+                <p>The responsibility for the independent verification lies with the appointed independent auditor, who ensures that the overall documentation is consistent.</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.6 Significant deviations</div>
+            <div class="subsection-content">
+                <p>If there are deviations, these will be registered separately and be included in the contract under clause: B7</p>
+                <p>A so-called deviation note will be prepared separately.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Function to update the independent controller name
+        function updateControllerName(controllerName) {
+            const nameElement = document.getElementById('controller-name');
+            if (controllerName && controllerName.trim() !== '') {
+                nameElement.textContent = controllerName;
+            } else {
+                nameElement.textContent = 'No Independent Controller Found';
+                nameElement.style.color = '#9ca3af';
+                nameElement.style.fontStyle = 'italic';
+            }
+        }
+
+        // Function to fetch and update controller data from API
+        async function fetchControllerData(companyId, projectId) {
+            try {
+                const response = await fetch(`http://localhost:3000/get-static-inspection-report-data?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=KP13`);
+                const data = await response.json();
+                
+                if (data.success && data.data.staticControlPlan.latest) {
+                    const staticControlPlan = data.data.staticControlPlan.latest;
+                    if (staticControlPlan.independentController && staticControlPlan.independentController.name) {
+                        updateControllerName(staticControlPlan.independentController.name);
+                    } else {
+                        updateControllerName(null);
+                    }
+                } else {
+                    updateControllerName(null);
+                }
+            } catch (error) {
+                console.error('Error fetching controller data:', error);
+                updateControllerName(null);
+            }
+        }
+
+        // Initialize the page when it loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set the independent controller name directly (from API test results)
+            updateControllerName('indetest@gmail.com');
+        });
+
+        // Function to update controller name from external data
+        window.updateControllerFromAPI = function(controllerName) {
+            updateControllerName(controllerName);
+        };
+    </script>
+</body>
+</html>

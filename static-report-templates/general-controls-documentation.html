@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2. DOCUMENTATION OF GENERAL CONTROLS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .section-header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 15px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .subsection {
+            margin-bottom: 25px;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .subsection-content {
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .subsection-content p {
+            margin-bottom: 12px;
+        }
+
+        .control-types {
+            margin: 20px 0;
+        }
+
+        .control-type-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .checkbox {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #1e3a8a;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #1e3a8a;
+        }
+
+        .checkbox::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 2px solid #1e3a8a;
+        }
+
+        .table th {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            padding: 12px 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            border-bottom: 1px solid #d1d5db;
+            border-right: 1px solid #d1d5db;
+        }
+
+        .table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            border-right: 1px solid #e5e7eb;
+            font-size: 14px;
+            color: #374151;
+            text-align: center;
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table td:last-child,
+        .table th:last-child {
+            border-right: none;
+        }
+
+        .table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        .x-mark {
+            color: #1e3a8a;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .plus-mark {
+            color: #059669;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .plus-parentheses {
+            color: #d97706;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .table-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin: 25px 0 15px 0;
+            text-align: center;
+        }
+
+        .footnotes {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .footnote {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        .footnote-superscript {
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="section-header">2. DOCUMENTATION OF GENERAL CONTROLS</div>
+
+        <div class="subsection">
+            <div class="subsection-title">2.1 General</div>
+            <div class="subsection-content">
+                <p>General inspection is carried out according to DS 1140 and DS/EN 1992-DS/EN 1999, including national annexes and related execution standards.</p>
+                <p>The inspection follows a submitted inspection plan and control plan from the contractor's company, referenced on page 1 of the report.</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">2.2 Control Types/Levels</div>
+            <div class="subsection-content">
+                <p>Control types are defined based on who performs the execution check:</p>
+                
+                <div class="control-types">
+                    <div class="control-type-item">
+                        <div class="checkbox"></div>
+                        <span>Self-monitoring</span>
+                    </div>
+                    <div class="control-type-item">
+                        <div class="checkbox"></div>
+                        <span>Independent control</span>
+                    </div>
+                    <div class="control-type-item">
+                        <div class="checkbox"></div>
+                        <span>Third-Party Control</span>
+                    </div>
+                </div>
+
+                <p>Requirements are defined in DS1140 (Danish standard 2019a). Construction Designers define which Construction class and execution class require documentation.</p>
+            </div>
+        </div>
+
+        <div class="table-title">Construction classes (early designations CC1-CC2-CC3-CC4)</div>
+        
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Construction class</th>
+                    <th>Independent control</th>
+                    <th>Third-party controls</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>KK1</strong></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td><strong>KK2</strong></td>
+                    <td><span class="x-mark">X</span></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td><strong>KK3</strong></td>
+                    <td><span class="x-mark">X</span></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td><strong>KK4</strong></td>
+                    <td><span class="x-mark">X</span></td>
+                    <td><span class="x-mark">X</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="subsection-content">
+            <p>As a general rule, general control of the execution of the performers is carried out, see SBI 271 Section 6.6.1, Planning of general controls.</p>
+        </div>
+
+        <div class="table-title">Performance classes</div>
+        
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Execution class</th>
+                    <th>KK1</th>
+                    <th>KK2</th>
+                    <th>KK3</th>
+                    <th>KK4</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>EXC1</strong></td>
+                    <td><span class="plus-mark">+</span></td>
+                    <td><span class="plus-parentheses">(+)</span></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td><strong>EXC2</strong></td>
+                    <td><span class="plus-parentheses">(+)</span></td>
+                    <td><span class="plus-mark">+</span></td>
+                    <td><span class="plus-parentheses">(+)</span></td>
+                    <td><span class="plus-parentheses">(+)</span></td>
+                </tr>
+                <tr>
+                    <td><strong>EXC3</strong></td>
+                    <td></td>
+                    <td><span class="plus-parentheses">(+)</span></td>
+                    <td><span class="plus-mark">+</span></td>
+                    <td><span class="plus-mark">+</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="subsection-content">
+            <p>Performance classes indicate the importance of the design for the safety of a load-bearing structure:</p>
+            <p><strong>EXC1:</strong> The design has limited impact on the safety of a load-bearing structure</p>
+            <p><strong>EXC2:</strong> The execution is important for the safety of a load-bearing structure</p>
+            <p><strong>EXC3:</strong> The design is of great importance for the safety of a load-bearing structure</p>
+        </div>
+
+        <div class="footnotes">
+            <div class="footnote">
+                <span class="footnote-superscript">(+):</span> Possible choices. Additional restrictions may apply from the DS/EN 1992-DS/EN 1999 series, national annexes, or execution standards.
+            </div>
+            <div class="footnote">
+                <span class="footnote-superscript">1):</span> For structures not covered by Building Regulations, "construction classes" are replaced by "consequence classes": CC1 replaces KK1, CC2 replaces KK2, CC3 replaces KK3, and "CC3 covered by B4 KDK NA (4)" replaces KK4.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

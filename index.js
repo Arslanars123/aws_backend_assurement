@@ -8,9 +8,13 @@ const cors = require("cors");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const path = require("path");
+const fs = require("fs");
 require("dotenv").config();
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
+
+// Import static report API
+const staticReportAPI = require('./static-report-api');
 
 
 // PDF to PNG conversion function
@@ -43,8 +47,11 @@ async function convertPdfToPng(pdfPath, outputDir) {
 // Initialize app and middleware
 const app = express();
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // Add this for form data
 app.use(cors());
 app.use("/uploads", express.static("uploads"));
+app.use("/uploads/previews", express.static("uploads/previews"));
+app.use("/templates", express.static("static-report-templates"));
 app.use(express.json()); // to parse JSON body
 
 // Note: Static file serving moved to the end after API routes
@@ -56,6 +63,113 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     message: "Server is running"
   });
+});
+
+// Get Project Managers API
+app.get("/get-project-managers", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+    const query = addFilters({}, companyId, projectId);
+    
+    // Fetch project managers from users collection with isProjectManager 'yes'
+    const projectManagers = await db.collection("users")
+      .find({ ...query, isProjectManager: "yes" })
+      .toArray();
+    
+    res.status(200).json(projectManagers);
+  } catch (error) {
+    console.error("Error fetching project managers:", error);
+    res.status(500).json({ error: "Failed to fetch project managers" });
+  }
+});
+
+// Get Independent Controllers API
+app.get("/get-independent-controllers", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+    const query = addFilters({}, companyId, projectId);
+    
+    // Fetch independent controllers from users collection with role 'Independent Controller'
+    const independentControllers = await db.collection("users")
+      .find({ ...query, role: "Independent Controller" })
+      .toArray();
+    
+    res.status(200).json(independentControllers);
+  } catch (error) {
+    console.error("Error fetching independent controllers:", error);
+    res.status(500).json({ error: "Failed to fetch independent controllers" });
+  }
+});
+
+// Get Workers API
+app.get("/get-workers", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+    const query = addFilters({}, companyId, projectId);
+    
+    // Fetch workers from users collection with role 'Worker'
+    const workers = await db.collection("users")
+      .find({ ...query, role: "Worker" })
+      .toArray();
+    
+    res.status(200).json(workers);
+  } catch (error) {
+    console.error("Error fetching workers:", error);
+    res.status(500).json({ error: "Failed to fetch workers" });
+  }
+});
+
+// Get Child Drawings API
+app.get("/get-child-drawings", async (req, res) => {
+  try {
+    const { parentDrawingId, companyId, projectId } = req.query;
+    const query = addFilters({}, companyId, projectId);
+    
+    // Fetch child drawings where parentDrawingId matches the selected drawing
+    const childDrawings = await db.collection("draws")
+      .find({ ...query, parentDrawingId: parentDrawingId })
+      .toArray();
+    
+    res.status(200).json(childDrawings);
+  } catch (error) {
+    console.error("Error fetching child drawings:", error);
+    res.status(500).json({ error: "Failed to fetch child drawings" });
+  }
+});
+
+// Convert PDF to PNG for marking
+app.get("/convert-pdf-to-png", async (req, res) => {
+  try {
+    const { filename } = req.query;
+    
+    if (!filename) {
+      return res.status(400).json({ error: "Filename is required" });
+    }
+    
+    const pdfPath = path.join(__dirname, "uploads", filename);
+    const outputDir = path.join(__dirname, "uploads");
+    
+    // Check if PDF file exists
+    if (!require('fs').existsSync(pdfPath)) {
+      return res.status(404).json({ error: "PDF file not found" });
+    }
+    
+    // Convert PDF to PNG
+    const pngFilename = await convertPdfToPng(pdfPath, outputDir);
+    
+    if (pngFilename) {
+      res.status(200).json({ 
+        success: true, 
+        pngFilename: pngFilename,
+        pngUrl: `/uploads/${pngFilename}`
+      });
+    } else {
+      res.status(500).json({ error: "Failed to convert PDF to PNG" });
+    }
+  } catch (error) {
+    console.error("Error converting PDF to PNG:", error);
+    res.status(500).json({ error: "Failed to convert PDF to PNG" });
+  }
 });
 
 // Try cloud MongoDB first, fallback to local MongoDB
@@ -275,7 +389,6 @@ app.post(
     try {
       const {
         username,
-        password,
         role,
         phone,
         name,
@@ -310,13 +423,51 @@ app.post(
         parsedUserProfession = JSON.parse(req.body.userProfession);
       }
 
-      // Generate verification code
-      const verificationCode = generateVerificationCode();
+      // Check for duplicate email+role+company combination
+      const duplicateCheck = await db.collection("users").findOne({ 
+        username: username,
+        role: role,
+        companyId: companyId
+      });
+
+      if (duplicateCheck) {
+        return res.status(400).json({
+          error: `User with email '${username}' already has '${role}' role in this company`,
+          field: "username",
+          duplicate: true,
+          existingUser: {
+            email: duplicateCheck.username,
+            role: duplicateCheck.role,
+            companyId: duplicateCheck.companyId,
+            name: duplicateCheck.name
+          }
+        });
+      }
+
+      // Check if user with same email already exists and is verified
+      const existingUser = await db.collection("users").findOne({ username: username });
+      let isVerified = false;
+      let verificationCode = null;
+      let verificationSentAt = null;
+      let shouldSendEmail = true;
+
+      if (existingUser && existingUser.isVerified === true) {
+        // Email already verified, set new user as verified by default
+        isVerified = true;
+        shouldSendEmail = false;
+        console.log(`✅ User with email ${username} already verified. New user will be verified by default.`);
+      } else {
+        // Generate verification code for new or unverified user
+        verificationCode = generateVerificationCode();
+        verificationSentAt = new Date();
+        shouldSendEmail = true;
+      }
       
       // Create user document with verification status
+      // Password is set to null by default - user will set it after email verification
       const userData = {
         username,
-        password,
+        password: null, // Password will be set by user after email verification
         role,
         phone,
         name,
@@ -336,36 +487,48 @@ app.post(
         mainId,
         userProfession: parsedUserProfession,
         verificationCode,
-        isVerified: false,
-        verificationSentAt: new Date(),
+        isVerified,
+        verificationSentAt,
         createdAt: new Date()
       };
 
       // Insert user into database
       const result = await db.collection("users").insertOne(userData);
 
-      // Send verification email
-      try {
-        await sendVerificationEmail(username, name || username, verificationCode);
-        
+      // Send verification email only if needed
+      if (shouldSendEmail && verificationCode) {
+        try {
+          await sendVerificationEmail(username, name || username, verificationCode);
+          
+          res.status(201).json({
+            success: true,
+            message: "User created successfully! Verification email sent.",
+            userId: result.insertedId,
+            verificationSent: true,
+            email: username
+          });
+        } catch (emailError) {
+          console.error("❌ Email verification failed:", emailError);
+          
+          // User was created but email failed - return success with warning
+          res.status(201).json({
+            success: true,
+            message: "User created successfully! However, verification email could not be sent.",
+            userId: result.insertedId,
+            verificationSent: false,
+            email: username,
+            warning: "Please contact support to resend verification email."
+          });
+        }
+      } else {
+        // No email verification needed - user is already verified
         res.status(201).json({
           success: true,
-          message: "User created successfully! Verification email sent.",
-          userId: result.insertedId,
-          verificationSent: true,
-          email: username
-        });
-      } catch (emailError) {
-        console.error("❌ Email verification failed:", emailError);
-        
-        // User was created but email failed - return success with warning
-        res.status(201).json({
-          success: true,
-          message: "User created successfully! However, verification email could not be sent.",
+          message: "User created successfully! Email already verified - no verification needed.",
           userId: result.insertedId,
           verificationSent: false,
           email: username,
-          warning: "Please contact support to resend verification email."
+          isVerified: true
         });
       }
 
@@ -841,7 +1004,7 @@ app.get("/get-admins", async (req, res) => {
 
 app.get("/get-project-managers", async (req, res) => {
   try {
-    const { companyId, projectId, userRole } = req.query;
+    const { companyId, projectId, userRole, excludeAssigned } = req.query;
 
     // Handle both string and array formats for isProjectManager
     const query = {
@@ -854,8 +1017,10 @@ app.get("/get-project-managers", async (req, res) => {
     
     if (companyId && companyId !== "null") query.companyId = companyId;
 
-    if (projectId && projectId !== "null")
+    // If projectId is provided, include only users who are assigned to this project
+    if (projectId && projectId !== "null") {
       query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
+    }
 
     if (userRole && userRole !== "null") query.userRole = userRole;
 
@@ -863,7 +1028,7 @@ app.get("/get-project-managers", async (req, res) => {
 
     res.status(200).json(users);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch Admins" });
+    res.status(500).json({ error: "Failed to fetch Project Managers" });
   }
 });
 
@@ -1230,7 +1395,17 @@ app.get("/get-controls", async (req, res) => {
 // New endpoint for "controls of static report" collection
 app.post("/get-controls-of-static-report", async (req, res) => {
   try {
-    const { subjectMatterId, language, projectId } = req.body;
+    const { subjectMatterId, language, projectId: requestProjectId } = req.body;
+    
+    // Use static project ID as fallback if no project ID is provided
+    const projectId = requestProjectId || '68adb9b3a8c5323f1b948c6e';
+    
+    // Log when using fallback
+    if (!requestProjectId) {
+      console.log('⚠️ No projectId provided, using fallback:', projectId);
+    } else {
+      console.log('✅ Using provided projectId:', projectId);
+    }
 
     if (!subjectMatterId) {
       return res.status(400).json({ error: "subjectMatterId is required" });
@@ -1264,21 +1439,8 @@ app.post("/get-controls-of-static-report", async (req, res) => {
         console.log('❌ Error fetching from projectprofessioeurocode, will return empty results:', error.message);
       }
     } else {
-      console.log('⚠️ No projectId provided, returning empty results');
-      return res.status(200).json({
-        meta: {
-          subjectMatterId,
-          requestedLanguage: language ?? null,
-          appliedLanguageFilter: (language === "DK") ? "DK" : "non-DK",
-          euroCodes: [],
-          euroCodeSource: 'none', // No projectId provided
-          projectId: null,
-          docsMatched: 0,
-          entriesCount: 0,
-          message: 'No projectId provided - EuroCodes are only available for specific projects'
-        },
-        entries: []
-      });
+      console.log('⚠️ No projectId provided, using fallback project ID');
+      // This should not happen anymore since we have a fallback, but keeping for safety
     }
 
     // 2) If no project-specific EuroCodes found, return empty results (NO FALLBACK)
@@ -1335,6 +1497,7 @@ app.post("/get-controls-of-static-report", async (req, res) => {
         euroCodes: euroCodesStr,
         euroCodeSource: euroCodeSource, // Show where EuroCodes came from
         projectId: projectId || null,
+        usedFallbackProjectId: !requestProjectId, // Show if fallback was used
         docsMatched: docs.length,
         entriesCount: entries.length
       },
@@ -1477,10 +1640,213 @@ app.get("/get-gammas", async (req, res) => {
     if (point) {
       query.point = point;
     }
-    const controls = await db.collection("gammas").find(query).toArray();
+    const controls = await db.collection("gammas").find(query).sort({ createdAt: -1 }).toArray();
     res.status(200).json(controls);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch gammas" });
+  }
+});
+
+// Project Special Text API Routes
+app.get("/get-project-special-text", async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    
+    if (!projectId) {
+      return res.status(400).json({
+        error: "Project ID is required"
+      });
+    }
+
+    const specialText = await db.collection("projectspecialtext").findOne({
+      projectId: projectId
+    });
+
+    res.status(200).json({
+      success: true,
+      data: specialText
+    });
+  } catch (error) {
+    console.error("Error fetching project special text:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch project special text",
+      details: error.message 
+    });
+  }
+});
+
+app.post("/save-project-special-text", async (req, res) => {
+  try {
+    const { projectId, specialText } = req.body;
+    
+    if (!projectId || !specialText) {
+      return res.status(400).json({
+        error: "Project ID and special text are required"
+      });
+    }
+
+    // Check if special text already exists for this project
+    const existingText = await db.collection("projectspecialtext").findOne({
+      projectId: projectId
+    });
+
+    if (existingText) {
+      // Update existing record
+      const result = await db.collection("projectspecialtext").updateOne(
+        { projectId: projectId },
+        { 
+          $set: { 
+            specialText: specialText,
+            updatedAt: new Date()
+          }
+        }
+      );
+      
+      res.status(200).json({
+        success: true,
+        message: "Special text updated successfully",
+        data: { projectId, specialText }
+      });
+    } else {
+      // Create new record
+      const result = await db.collection("projectspecialtext").insertOne({
+        projectId: projectId,
+        specialText: specialText,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      
+      res.status(201).json({
+        success: true,
+        message: "Special text saved successfully",
+        data: { projectId, specialText }
+      });
+    }
+  } catch (error) {
+    console.error("Error saving project special text:", error);
+    res.status(500).json({ 
+      error: "Failed to save project special text",
+      details: error.message 
+    });
+  }
+});
+
+app.delete("/delete-project-special-text", async (req, res) => {
+  try {
+    const { projectId } = req.query;
+    
+    if (!projectId) {
+      return res.status(400).json({
+        error: "Project ID is required"
+      });
+    }
+
+    const result = await db.collection("projectspecialtext").deleteOne({
+      projectId: projectId
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        error: "Special text not found for this project"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Special text deleted successfully"
+    });
+  } catch (error) {
+    console.error("Error deleting project special text:", error);
+    res.status(500).json({ 
+      error: "Failed to delete project special text",
+      details: error.message 
+    });
+  }
+});
+
+// Static Report API Routes
+app.get("/get-static-report-cover-data", (req, res) => {
+  req.db = db; // Pass database connection
+  staticReportAPI.getStaticReportCoverData(req, res);
+});
+app.get("/get-static-report-template", (req, res) => {
+  req.db = db; // Pass database connection
+  staticReportAPI.getStaticReportTemplate(req, res);
+});
+app.get("/get-static-inspection-report-data", (req, res) => {
+  req.db = db; // Pass database connection
+  staticReportAPI.getStaticInspectionReportData(req, res);
+});
+app.get("/get-static-inspection-report-template", (req, res) => {
+  req.db = db; // Pass database connection
+  staticReportAPI.getStaticInspectionReportTemplate(req, res);
+});
+
+app.get("/get-static-document-checklist-report-template", (req, res) => {
+  try {
+    console.log('=== STATIC DOCUMENT CHECKLIST REPORT TEMPLATE API CALLED ===');
+    const { companyId, projectId, professionSubjectMatterId } = req.query;
+    
+    if (!companyId || !projectId || !professionSubjectMatterId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId, and professionSubjectMatterId" 
+      });
+    }
+
+    // Read the HTML template
+    const fs = require('fs');
+    const path = require('path');
+    const templatePath = path.join(__dirname, 'static-report-templates', 'static-document-checklist-report.html');
+    
+    console.log('Template path:', templatePath);
+    console.log('Template file exists:', fs.existsSync(templatePath));
+    
+    let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
+    console.log('Template loaded, length:', htmlTemplate.length);
+
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(htmlTemplate);
+
+  } catch (error) {
+    console.error("Error generating static document checklist report template:", error);
+    res.status(500).json({ 
+      error: "Failed to generate static document checklist report template",
+      details: error.message 
+    });
+  }
+});
+
+app.get("/get-static-report-registration-entries-template", (req, res) => {
+  try {
+    console.log('=== STATIC REPORT REGISTRATION ENTRIES TEMPLATE API CALLED ===');
+    const { companyId, projectId, subjectMatterId } = req.query;
+    
+    if (!companyId || !projectId || !subjectMatterId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId, and subjectMatterId" 
+      });
+    }
+
+    // Read the HTML template
+    const fs = require('fs');
+    const path = require('path');
+    const templatePath = path.join(__dirname, 'static-report-templates', 'static-report-registration-entries.html');
+    
+    console.log('Template path:', templatePath);
+    console.log('Template file exists:', fs.existsSync(templatePath));
+    
+    let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
+    console.log('Template loaded, length:', htmlTemplate.length);
+
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(htmlTemplate);
+
+  } catch (error) {
+    console.error("Error generating static report registration entries template:", error);
+    res.status(500).json({ 
+      error: "Failed to generate static report registration entries template",
+      details: error.message 
+    });
   }
 });
 
@@ -1721,7 +2087,7 @@ app.post(
   ]),
   async (req, res) => {
     try {
-      const { person1Name, person2Name, person3Name, companyId, projectId } =
+      const { person1Name, person2Name, person3Name, profession, companyId, projectId } =
         req.body;
 
       // Validate required fields
@@ -1729,6 +2095,18 @@ app.post(
         return res.status(400).json({
           error: "Company ID and Project ID are required",
         });
+      }
+
+      // Parse profession data
+      let parsedProfession = null;
+      let professionSubjectMatterId = null;
+      if (profession) {
+        try {
+          parsedProfession = typeof profession === "string" ? JSON.parse(profession) : profession;
+          professionSubjectMatterId = parsedProfession?.SubjectMatterId || null;
+        } catch (error) {
+          console.error("Error parsing profession:", error);
+        }
       }
 
       // Handle signature file uploads
@@ -1741,6 +2119,8 @@ app.post(
         person1Name: person1Name || null,
         person2Name: person2Name || null,
         person3Name: person3Name || null,
+        profession: parsedProfession,
+        professionSubjectMatterId: professionSubjectMatterId,
         signature1,
         signature2,
         signature3,
@@ -2344,6 +2724,1655 @@ app.get("/get-special-control", async (req, res) => {
   }
 });
 
+// Get special control points for table
+app.get("/get-special-control-points-table", async (req, res) => {
+  try {
+    const { projectId, companyId, professionSubjectMatterId } = req.query;
+
+    if (!projectId || !companyId || !professionSubjectMatterId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required parameters: projectId, companyId, professionSubjectMatterId" 
+      });
+    }
+
+    // Get all special control points for the project
+    const specialControlPoints = await db.collection("specialcontrol").find({
+      companyId: companyId,
+      projectsId: { $in: [projectId] }
+    }).sort({ createdAt: -1 }).toArray();
+
+    // Get project special text
+    const projectSpecialText = await db.collection("projectspecialtext").findOne({
+      projectId: projectId
+    });
+
+    const tableData = [];
+
+    for (const point of specialControlPoints) {
+      // Get the person name based on selectedType
+      let personName = '';
+      if (point.selectedType === 'projectManager' && point.projectManager) {
+        personName = point.projectManager.name || point.projectManager.firstName + ' ' + point.projectManager.lastName;
+      } else if (point.selectedType === 'independentController' && point.independentController) {
+        personName = point.independentController.name || point.independentController.firstName + ' ' + point.independentController.lastName;
+      } else if (point.selectedType === 'worker' && point.worker) {
+        personName = point.worker.name || point.worker.firstName + ' ' + point.worker.lastName;
+      }
+
+      // Create special control text (concatenate with project special text)
+      let specialControlText = '';
+      if (point.profession && point.profession.GroupName) {
+        specialControlText = point.profession.GroupName;
+      }
+      
+      if (projectSpecialText && projectSpecialText.specialText) {
+        specialControlText += ' - ' + projectSpecialText.specialText;
+      }
+
+      tableData.push({
+        controlId: point._id.toString(),
+        specialControl: specialControlText,
+        description: point.comment || '',
+        madeBy: personName,
+        createdAt: point.createdAt,
+        selectedType: point.selectedType
+      });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      data: tableData 
+    });
+
+  } catch (error) {
+    console.error("Error fetching special control points table:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
+
+// Helper function to inject static document checklist data from API
+async function injectStaticDocumentChecklistDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId) {
+  try {
+    // Call the working API to get the data
+    const response = await fetch(`http://localhost:3000/get-static-document-checklist-with-status?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+    const data = await response.json();
+
+    if (!data.success || !data.data || !data.data.checklistItems) {
+      throw new Error('Failed to fetch checklist data from API');
+    }
+
+    const checklistItems = data.data.checklistItems;
+    
+    // Group items by DS_GroupId
+    const b1Items = checklistItems.filter(item => item.DS_GroupId === 'B1');
+    const b2Items = checklistItems.filter(item => item.DS_GroupId === 'B2');
+    const b3Items = checklistItems.filter(item => item.DS_GroupId === 'B3');
+
+    // Helper functions
+    const formatDate = (dateString) => {
+      if (!dateString) return '[Select Date]';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    };
+
+    const getStatus = (item) => {
+      if (item.approvedDate) {
+        return 'Approved';
+      } else if (item.submittedDate) {
+        return 'Submitted';
+      } else {
+        return 'Pending';
+      }
+    };
+
+    const getStatusClass = (status) => {
+      switch (status) {
+        case 'Approved': return 'status-approved';
+        case 'Submitted': return 'status-submitted';
+        default: return 'status-pending';
+      }
+    };
+
+    const getIndependentControllerName = (item) => {
+      if (item.independentController && item.independentController.name) {
+        return item.independentController.name;
+      }
+      return 'Independent control of self-monitoring.';
+    };
+
+    const getDisplayDate = (item) => {
+      if (item.approvedDate) {
+        return formatDate(item.approvedDate);
+      } else if (item.submittedDate) {
+        return formatDate(item.submittedDate);
+      } else {
+        return '[Select Date]';
+      }
+    };
+
+    const createTableRows = (items) => {
+      if (!items || items.length === 0) {
+        return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
+      }
+
+      return items.map(item => {
+        const status = getStatus(item);
+        const statusClass = getStatusClass(status);
+        const displayDate = getDisplayDate(item);
+        const controllerName = getIndependentControllerName(item);
+        
+        return `
+          <tr>
+            <td>${item.ItemId || 'N/A'}</td>
+            <td class="date-field">${displayDate}</td>
+            <td>${item.Basis || 'N/A'}</td>
+            <td class="${statusClass}">${status}</td>
+            <td>${item.comment || 'No comments'}</td>
+            <td>${controllerName}</td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    // Replace the loading content with actual data
+    templateContent = templateContent.replace(
+      '<tbody id="section-b1-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b1-tbody">${createTableRows(b1Items)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b2-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b2-tbody">${createTableRows(b2Items)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b3-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b3-tbody">${createTableRows(b3Items)}</tbody>`
+    );
+
+    // Remove the JavaScript that tries to fetch data
+    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+
+    return templateContent;
+
+  } catch (error) {
+    console.error('Error injecting static document checklist data from API:', error);
+    // Return template with error message
+    return templateContent.replace(
+      /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
+      '<tbody><tr><td colspan="6" class="error">Error loading data</td></tr></tbody>'
+    );
+  }
+}
+
+// Helper function to inject static report registration data from API
+async function injectStaticReportRegistrationDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId) {
+  try {
+    // Call the working API to get the data
+    const response = await fetch(`http://localhost:3000/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${professionSubjectMatterId}`);
+    const data = await response.json();
+
+    if (!data.success || !data.data || !data.data.entries) {
+      throw new Error('Failed to fetch registration entries data from API');
+    }
+
+    const entries = data.data.entries;
+    
+    // Group entries by DS Group
+    const b4Entries = entries.filter(entry => entry.dsGroup === 'B4');
+    const b5Entries = entries.filter(entry => entry.dsGroup === 'B5');
+    const b6Entries = entries.filter(entry => entry.dsGroup === 'B6');
+
+    // Helper functions
+    const formatDate = (dateString) => {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    };
+
+    const createUserHTML = (entry) => {
+      if (entry.user) {
+        return `
+          <div class="user-info">
+            <div class="user-name">${entry.user.name}</div>
+            <div class="user-role">${entry.user.role} (${entry.user.type})</div>
+          </div>
+        `;
+      }
+      return 'No user assigned';
+    };
+
+    const createMediaFilesHTML = (entry) => {
+      let mediaHTML = '';
+      
+      if (entry.annotatedPdfImages && entry.annotatedPdfImages.length > 0) {
+        mediaHTML += '<div class="media-section"><strong>Annotated PDF Images:</strong>';
+        mediaHTML += '<div class="media-preview-container">';
+        entry.annotatedPdfImages.forEach(img => {
+          mediaHTML += `
+            <div class="media-preview-item">
+              <div class="image-container">
+                <img src="http://localhost:3000/uploads/${img.filename}" 
+                     alt="${img.originalName}" 
+                     onclick="window.open('http://localhost:3000/uploads/${img.filename}', '_blank')">
+              </div>
+              <div class="filename-text">${img.originalName}</div>
+              <div class="description-text">${img.description || 'No description'}</div>
+            </div>
+          `;
+        });
+        mediaHTML += '</div></div>';
+      }
+
+      if (entry.mainPictures && entry.mainPictures.length > 0) {
+        mediaHTML += '<div class="media-section"><strong>Main Pictures:</strong>';
+        mediaHTML += '<div class="media-preview-container">';
+        entry.mainPictures.forEach(pic => {
+          mediaHTML += `
+            <div class="media-preview-item">
+              <div class="image-container">
+                <img src="http://localhost:3000/uploads/${pic.filename}" 
+                     alt="${pic.originalName}" 
+                     onclick="window.open('http://localhost:3000/uploads/${pic.filename}', '_blank')">
+              </div>
+              <div class="filename-text">${pic.originalName}</div>
+              <div class="description-text">${pic.description || 'No description'}</div>
+            </div>
+          `;
+        });
+        mediaHTML += '</div></div>';
+      }
+
+      if (entry.markPictures && entry.markPictures.length > 0) {
+        mediaHTML += '<div class="media-section"><strong>Mark Pictures:</strong>';
+        mediaHTML += '<div class="media-preview-container">';
+        entry.markPictures.forEach(mark => {
+          mediaHTML += `
+            <div class="media-preview-item">
+              <div class="image-container">
+                <img src="http://localhost:3000/uploads/${mark.filename}" 
+                     alt="${mark.originalName} (Mark #${mark.markNumber})" 
+                     onclick="window.open('http://localhost:3000/uploads/${mark.filename}', '_blank')">
+              </div>
+              <div class="filename-text">${mark.originalName} (Mark #${mark.markNumber})</div>
+              <div class="description-text">${mark.description || 'No description'}</div>
+            </div>
+          `;
+        });
+        mediaHTML += '</div></div>';
+      }
+
+      return mediaHTML || 'No media files';
+    };
+
+    const createTableRows = (entries) => {
+      if (!entries || entries.length === 0) {
+        return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
+      }
+
+      return entries.map(entry => {
+        return `
+          <tr>
+            <td class="date-field">${formatDate(entry.registrationDate)}</td>
+            <td class="registration-id">${entry.registrationId}</td>
+            <td class="control-type">${entry.controlType}</td>
+            <td>${entry.subject}</td>
+            <td>${createUserHTML(entry)}</td>
+            <td>${createMediaFilesHTML(entry)}</td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    // Replace the loading content with actual data
+    templateContent = templateContent.replace(
+      '<tbody id="section-b4-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b4-tbody">${createTableRows(b4Entries)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b5-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b5-tbody">${createTableRows(b5Entries)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b6-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b6-tbody">${createTableRows(b6Entries)}</tbody>`
+    );
+
+    // Remove the JavaScript that tries to fetch data
+    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+
+    return templateContent;
+
+  } catch (error) {
+    console.error('Error injecting static report registration data from API:', error);
+    // Return template with error message
+    return templateContent.replace(
+      /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
+      '<tbody><tr><td colspan="6" class="error">Error loading data</td></tr></tbody>'
+    );
+  }
+}
+
+// Helper function to inject static document checklist data into HTML
+async function injectStaticDocumentChecklistData(templateContent, companyId, projectId, professionSubjectMatterId) {
+  try {
+    // Fetch the data using the same logic as the API
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
+    const professionKey = professionSubjectMatterId;
+    const staticDocumentCheckList = project.professionAssociatedData?.[professionKey]?.staticDocumentCheckList || [];
+    
+    // Get submitted entries - use the exact same logic as the working API
+    let submittedEntries = [];
+    
+    // Try multiple query variations like in the working API
+    try {
+      // Try with profession._id as ObjectId and staticDocumentCheckListId as ObjectId
+      submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
+        projectId: new ObjectId(projectId),
+        companyId: new ObjectId(companyId),
+        'profession._id': new ObjectId(project.professionAssociatedData?.[professionKey]?._id)
+      }).toArray();
+      console.log(`Query 1 (ObjectId/ObjectId): Found ${submittedEntries.length} entries`);
+    } catch (error) {
+      console.log('Query 1 failed:', error.message);
+    }
+    
+    if (submittedEntries.length === 0) {
+      try {
+        // Try with profession._id as ObjectId and staticDocumentCheckListId as string
+        submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
+          projectId: new ObjectId(projectId),
+          companyId: new ObjectId(companyId),
+          'profession._id': new ObjectId(project.professionAssociatedData?.[professionKey]?._id)
+        }).toArray();
+        console.log(`Query 2 (ObjectId/String): Found ${submittedEntries.length} entries`);
+      } catch (error) {
+        console.log('Query 2 failed:', error.message);
+      }
+    }
+    
+    if (submittedEntries.length === 0) {
+      try {
+        // Try without profession._id filter and staticDocumentCheckListId as ObjectId
+        submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
+          projectId: new ObjectId(projectId),
+          companyId: new ObjectId(companyId)
+        }).toArray();
+        console.log(`Query 3 (No profession filter): Found ${submittedEntries.length} entries`);
+      } catch (error) {
+        console.log('Query 3 failed:', error.message);
+      }
+    }
+    
+    if (submittedEntries.length === 0) {
+      try {
+        // Try without profession._id filter and staticDocumentCheckListId as string
+        submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
+          projectId: new ObjectId(projectId),
+          companyId: new ObjectId(companyId)
+        }).toArray();
+        console.log(`Query 4 (No profession filter, string): Found ${submittedEntries.length} entries`);
+      } catch (error) {
+        console.log('Query 4 failed:', error.message);
+      }
+    }
+
+    console.log(`Final result: Found ${submittedEntries.length} submitted entries for complete report`);
+
+    // Create approval status map
+    const approvalStatus = {};
+    submittedEntries.forEach(entry => {
+      const key = entry.staticDocumentCheckListId?.toString();
+      if (key) {
+        approvalStatus[key] = {
+          isSubmitted: true,
+          selectedDate: entry.selectedDate,
+          submittedDate: entry.submissionCreatedDate,
+          approvedDate: entry.approvedDate,
+          isApproved: !!entry.approvedDate,
+          approvedBy: !!entry.approvedDate,
+          comment: entry.comment,
+          projectManager: entry.projectManager,
+          independentController: entry.independentController,
+          status: entry.approvedDate ? 'Approved' : 'Submitted',
+          controlPlan: entry.controlPlan
+        };
+      }
+    });
+
+    // Enhance checklist items with status
+    const enhancedChecklistItems = staticDocumentCheckList.map(item => {
+      const status = approvalStatus[item._id.toString()] || {
+        isSubmitted: false,
+        selectedDate: null,
+        submittedDate: null,
+        approvedDate: null,
+        isApproved: false,
+        approvedBy: false,
+        comment: null,
+        projectManager: null,
+        independentController: null,
+        status: null,
+        controlPlan: null
+      };
+
+      return {
+        ...item,
+        ...status
+      };
+    });
+
+    // Group items by DS_GroupId
+    const b1Items = enhancedChecklistItems.filter(item => item.DS_GroupId === 'B1');
+    const b2Items = enhancedChecklistItems.filter(item => item.DS_GroupId === 'B2');
+    const b3Items = enhancedChecklistItems.filter(item => item.DS_GroupId === 'B3');
+
+    // Helper functions
+    const formatDate = (dateString) => {
+      if (!dateString) return '[Select Date]';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    };
+
+    const getStatus = (item) => {
+      if (item.approvedDate) {
+        return 'Approved';
+      } else if (item.submittedDate) {
+        return 'Submitted';
+      } else {
+        return 'Pending';
+      }
+    };
+
+    const getStatusClass = (status) => {
+      switch (status) {
+        case 'Approved': return 'status-approved';
+        case 'Submitted': return 'status-submitted';
+        default: return 'status-pending';
+      }
+    };
+
+    const getIndependentControllerName = (item) => {
+      if (item.independentController && item.independentController.name) {
+        return item.independentController.name;
+      }
+      return 'Independent control of self-monitoring.';
+    };
+
+    const getDisplayDate = (item) => {
+      if (item.approvedDate) {
+        return formatDate(item.approvedDate);
+      } else if (item.submittedDate) {
+        return formatDate(item.submittedDate);
+      } else {
+        return '[Select Date]';
+      }
+    };
+
+    const createTableRows = (items) => {
+      if (!items || items.length === 0) {
+        return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
+      }
+
+      return items.map(item => {
+        const status = getStatus(item);
+        const statusClass = getStatusClass(status);
+        const displayDate = getDisplayDate(item);
+        const controllerName = getIndependentControllerName(item);
+        
+        return `
+          <tr>
+            <td>${item.ItemId || 'N/A'}</td>
+            <td class="date-field">${displayDate}</td>
+            <td>${item.Basis || 'N/A'}</td>
+            <td class="${statusClass}">${status}</td>
+            <td>${item.comment || 'No comments'}</td>
+            <td>${controllerName}</td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    // Replace the loading content with actual data
+    templateContent = templateContent.replace(
+      '<tbody id="section-b1-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b1-tbody">${createTableRows(b1Items)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b2-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b2-tbody">${createTableRows(b2Items)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b3-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b3-tbody">${createTableRows(b3Items)}</tbody>`
+    );
+
+    // Remove the JavaScript that tries to fetch data
+    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+
+    return templateContent;
+
+  } catch (error) {
+    console.error('Error injecting static document checklist data:', error);
+    // Return template with error message
+    return templateContent.replace(
+      /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
+      '<tbody><tr><td colspan="6" class="error">Error loading data</td></tr></tbody>'
+    );
+  }
+}
+
+// Helper function to inject static report registration data into HTML
+async function injectStaticReportRegistrationData(templateContent, companyId, projectId, professionSubjectMatterId) {
+  try {
+    // Fetch special text
+    const specialTextResponse = await fetch(`http://localhost:3000/get-project-special-text?projectId=${projectId}`);
+    const specialTextData = await specialTextResponse.json();
+    const specialText = specialTextData.success ? specialTextData.data.specialText : '';
+
+    // Fetch registration entries
+    const entries = await db.collection('StaticReportRegistrationEntries').find({
+      companyId: new ObjectId(companyId),
+      projectId: new ObjectId(projectId)
+    }).toArray();
+
+    // Process entries
+    const processedEntries = [];
+    for (const entry of entries) {
+      const registrationId = `${entry.pos}_${Math.random().toString(36).substr(2, 9)}`;
+      const controlType = `${entry.constructionPart} ${specialText}`.trim();
+      
+      // Determine DS Group based on pos
+      let dsGroup = '';
+      if (entry.pos.startsWith('7.4')) dsGroup = 'B4';
+      else if (entry.pos.startsWith('7.5')) dsGroup = 'B5';
+      else if (entry.pos.startsWith('7.6')) dsGroup = 'B6';
+
+      // Get user info
+      let user = null;
+      if (entry.independentController) {
+        const userDoc = await db.collection('users').findOne({ _id: new ObjectId(entry.independentController) });
+        if (userDoc) {
+          user = {
+            name: userDoc.name,
+            role: userDoc.role,
+            type: 'independent_controller'
+          };
+        }
+      } else if (entry.selectedWorkers && entry.selectedWorkers.length > 0) {
+        const userDoc = await db.collection('users').findOne({ _id: new ObjectId(entry.selectedWorkers[0]) });
+        if (userDoc) {
+          user = {
+            name: userDoc.name,
+            role: userDoc.role,
+            type: 'worker'
+          };
+        }
+      }
+
+      processedEntries.push({
+        ...entry,
+        registrationId,
+        controlType,
+        dsGroup,
+        user,
+        registrationDate: entry.submissionCreatedDate
+      });
+    }
+
+    // Group entries by DS Group
+    const b4Entries = processedEntries.filter(entry => entry.dsGroup === 'B4');
+    const b5Entries = processedEntries.filter(entry => entry.dsGroup === 'B5');
+    const b6Entries = processedEntries.filter(entry => entry.dsGroup === 'B6');
+
+    // Helper functions
+    const formatDate = (dateString) => {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    };
+
+    const createUserHTML = (entry) => {
+      if (entry.user) {
+        return `
+          <div class="user-info">
+            <div class="user-name">${entry.user.name}</div>
+            <div class="user-role">${entry.user.role} (${entry.user.type})</div>
+          </div>
+        `;
+      }
+      return 'No user assigned';
+    };
+
+    const createMediaFilesHTML = (entry) => {
+      let mediaHTML = '';
+      
+      if (entry.annotatedPdfImages && entry.annotatedPdfImages.length > 0) {
+        mediaHTML += '<div class="media-section"><strong>Annotated PDF Images:</strong>';
+        mediaHTML += '<div class="media-preview-container">';
+        entry.annotatedPdfImages.forEach(img => {
+          mediaHTML += `
+            <div class="media-preview-item">
+              <div class="image-container">
+                <img src="http://localhost:3000/uploads/${img.filename}" 
+                     alt="${img.originalName}" 
+                     onclick="window.open('http://localhost:3000/uploads/${img.filename}', '_blank')">
+              </div>
+              <div class="filename-text">${img.originalName}</div>
+              <div class="description-text">${img.description || 'No description'}</div>
+            </div>
+          `;
+        });
+        mediaHTML += '</div></div>';
+      }
+
+      if (entry.mainPictures && entry.mainPictures.length > 0) {
+        mediaHTML += '<div class="media-section"><strong>Main Pictures:</strong>';
+        mediaHTML += '<div class="media-preview-container">';
+        entry.mainPictures.forEach(pic => {
+          mediaHTML += `
+            <div class="media-preview-item">
+              <div class="image-container">
+                <img src="http://localhost:3000/uploads/${pic.filename}" 
+                     alt="${pic.originalName}" 
+                     onclick="window.open('http://localhost:3000/uploads/${pic.filename}', '_blank')">
+              </div>
+              <div class="filename-text">${pic.originalName}</div>
+              <div class="description-text">${pic.description || 'No description'}</div>
+            </div>
+          `;
+        });
+        mediaHTML += '</div></div>';
+      }
+
+      if (entry.markPictures && entry.markPictures.length > 0) {
+        mediaHTML += '<div class="media-section"><strong>Mark Pictures:</strong>';
+        mediaHTML += '<div class="media-preview-container">';
+        entry.markPictures.forEach(mark => {
+          mediaHTML += `
+            <div class="media-preview-item">
+              <div class="image-container">
+                <img src="http://localhost:3000/uploads/${mark.filename}" 
+                     alt="${mark.originalName} (Mark #${mark.markNumber})" 
+                     onclick="window.open('http://localhost:3000/uploads/${mark.filename}', '_blank')">
+              </div>
+              <div class="filename-text">${mark.originalName} (Mark #${mark.markNumber})</div>
+              <div class="description-text">${mark.description || 'No description'}</div>
+            </div>
+          `;
+        });
+        mediaHTML += '</div></div>';
+      }
+
+      return mediaHTML || 'No media files';
+    };
+
+    const createTableRows = (entries) => {
+      if (!entries || entries.length === 0) {
+        return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
+      }
+
+      return entries.map(entry => {
+        return `
+          <tr>
+            <td class="date-field">${formatDate(entry.registrationDate)}</td>
+            <td class="registration-id">${entry.registrationId}</td>
+            <td class="control-type">${entry.controlType}</td>
+            <td>${entry.subject}</td>
+            <td>${createUserHTML(entry)}</td>
+            <td>${createMediaFilesHTML(entry)}</td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    // Replace the loading content with actual data
+    templateContent = templateContent.replace(
+      '<tbody id="section-b4-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b4-tbody">${createTableRows(b4Entries)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b5-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b5-tbody">${createTableRows(b5Entries)}</tbody>`
+    );
+
+    templateContent = templateContent.replace(
+      '<tbody id="section-b6-tbody">\n                    <tr>\n                        <td colspan="6" class="loading">Loading data...</td>\n                    </tr>\n                </tbody>',
+      `<tbody id="section-b6-tbody">${createTableRows(b6Entries)}</tbody>`
+    );
+
+    // Remove the JavaScript that tries to fetch data
+    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+
+    return templateContent;
+
+  } catch (error) {
+    console.error('Error injecting static report registration data:', error);
+    // Return template with error message
+    return templateContent.replace(
+      /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
+      '<tbody><tr><td colspan="6" class="error">Error loading data</td></tr></tbody>'
+    );
+  }
+}
+
+// Generate complete static report
+app.get("/generate-complete-static-report", async (req, res) => {
+  try {
+    const { projectId, companyId, professionSubjectMatterId } = req.query;
+
+    if (!projectId || !companyId || !professionSubjectMatterId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required parameters: projectId, companyId, professionSubjectMatterId" 
+      });
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+
+    // Read all HTML templates
+    const templatesDir = path.join(__dirname, 'static-report-templates');
+    
+    // List of all template files in order
+    const templateFiles = [
+      'static-control-report-cover.html',
+      'static-inspection-report.html', 
+      'document-completion-status.html',
+      'generally-section.html',
+      'general-controls-documentation.html',
+      'construction-execution-classes.html',
+      'control-points-selected.html',
+      'static-document-checklist-report.html',
+      'static-report-registration-entries.html'
+    ];
+
+    let completeReport = '';
+    let pageNumber = 1;
+
+    // Add table of contents
+    completeReport += generateTableOfContents(templateFiles);
+
+    // Process each template
+    for (const templateFile of templateFiles) {
+      const templatePath = path.join(templatesDir, templateFile);
+      
+      if (fs.existsSync(templatePath)) {
+        let templateContent = fs.readFileSync(templatePath, 'utf8');
+        
+        // Add page number
+        templateContent = templateContent.replace(
+          '<div class="page">',
+          `<div class="page" data-page="${pageNumber}">`
+        );
+
+        // Add page break before each page (except first)
+        if (pageNumber > 1) {
+          templateContent = `<div style="page-break-before: always;"></div>${templateContent}`;
+        }
+
+        // Handle dynamic templates that need data injection
+        if (templateFile === 'static-document-checklist-report.html') {
+          templateContent = await injectStaticDocumentChecklistDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId);
+        } else if (templateFile === 'static-report-registration-entries.html') {
+          templateContent = await injectStaticReportRegistrationDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId);
+        }
+
+        // Replace dynamic content with actual data
+        if (templateFile === 'static-inspection-report.html') {
+          // Use the working static-report-api.js function for signature handling
+          const { getStaticInspectionReportTemplate } = require('./static-report-api');
+          const mockReq = {
+            query: { projectId, companyId, professionSubjectMatterId },
+            db: db
+          };
+          const mockRes = {
+            setHeader: () => {},
+            status: () => ({ send: (html) => { templateContent = html; } })
+          };
+          await getStaticInspectionReportTemplate(mockReq, mockRes);
+        } else {
+          // Use the original function for other templates
+          templateContent = await replaceDynamicContent(templateContent, {
+            projectId,
+            companyId,
+            professionSubjectMatterId
+          }, db, templateFile);
+        }
+
+        completeReport += templateContent;
+        pageNumber++;
+      }
+    }
+
+    // Add CSS for page numbers and table of contents
+    const reportWithCSS = addReportCSS(completeReport);
+
+    // Set response headers for HTML
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `inline; filename="static-report-${projectId}.html"`);
+    res.status(200).send(reportWithCSS);
+
+  } catch (error) {
+    console.error("Error generating complete static report:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
+
+// Helper function to generate table of contents
+function generateTableOfContents(templateFiles) {
+  const toc = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Static Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .toc-header {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 40px;
+            padding: 20px;
+            border-bottom: 3px solid #1e3a8a;
+        }
+
+        .toc-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 16px;
+        }
+
+        .toc-item:last-child {
+            border-bottom: none;
+        }
+
+        .toc-title {
+            font-weight: 500;
+            color: #1f2937;
+        }
+
+        .toc-page {
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="toc-header">TABLE OF CONTENTS</div>
+        
+        <div class="toc-item">
+            <span class="toc-title">1. Static Control Report Cover</span>
+            <span class="toc-page">2</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">2. Static Inspection Report</span>
+            <span class="toc-page">3</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">3. Document Completion Status</span>
+            <span class="toc-page">4</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">4. Generally Section</span>
+            <span class="toc-page">5</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">5. Documentation of General Controls</span>
+            <span class="toc-page">6</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">6. Construction and Execution Classes</span>
+            <span class="toc-page">7</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">7. Control Points Selected</span>
+            <span class="toc-page">8</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">8. Static Document Checklist Report</span>
+            <span class="toc-page">9</span>
+        </div>
+        
+        <div class="toc-item">
+            <span class="toc-title">9. Static Report Registration Entries</span>
+            <span class="toc-page">10</span>
+        </div>
+        
+        <div class="page-number">Page 1</div>
+    </div>
+</body>
+</html>`;
+  
+  return toc;
+}
+
+// Helper function to replace dynamic content
+async function replaceDynamicContent(templateContent, params, db, templateName) {
+  const { projectId, companyId, professionSubjectMatterId } = params;
+
+  try {
+    
+    // Fetch company details
+    const company = await db.collection("companies").findOne({
+      _id: new ObjectId(companyId)
+    });
+
+    // Fetch the most recent static control plan from gammas collection
+    // First try with professionSubjectMatterId filter
+    let mostRecentControlPlan = await db.collection("gammas")
+      .find({
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+        "profession.SubjectMatterId": professionSubjectMatterId
+      })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .toArray();
+
+    // If no results found, try without professionSubjectMatterId filter
+    if (mostRecentControlPlan.length === 0) {
+      mostRecentControlPlan = await db.collection("gammas")
+        .find({
+          companyId: companyId,
+          projectsId: { $in: [projectId] }
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+    }
+
+    // Get the document number (count of static control plans for this project)
+    const totalControlPlans = await db.collection("gammas").countDocuments({
+      companyId: companyId,
+      projectsId: { $in: [projectId] },
+      "profession.SubjectMatterId": professionSubjectMatterId
+    });
+
+    // Get project special text
+    const projectSpecialText = await db.collection("projectspecialtext").findOne({
+      projectId: projectId
+    });
+
+    // Only apply cover page replacements to static-control-report-cover.html
+    if (templateName === 'static-control-report-cover.html') {
+      // Replace company name in executing party
+      if (company && company.name) {
+        templateContent = templateContent.replace(
+          'Executing party: _________________________',
+          `Executing party: ${company.name}`
+        );
+      }
+      
+      // Replace Document ID B3 with the x value from special control plan
+      let documentId = 'B3.1'; // Default fallback
+      if (mostRecentControlPlan.length > 0 && mostRecentControlPlan[0].x) {
+        documentId = `B3.${mostRecentControlPlan[0].x}`;
+      }
+      templateContent = templateContent.replace(
+        'Document ID: B3.',
+        `Document ID: ${documentId}`
+      );
+      
+      // Replace company logo placeholder with actual logo if available
+      if (company && (company.logo || company.picture)) {
+        const logoPath = company.logo || company.picture;
+        const logoHtml = `<img src="http://localhost:3000/uploads/${logoPath}" alt="Company Logo" style="width: 80px; height: 60px; object-fit: contain; border-radius: 4px;" />`;
+        
+        // Replace the entire company-logo-placeholder div with the image
+        templateContent = templateContent.replace(
+          /<div class="company-logo-placeholder">[\s\S]*?<\/div>/,
+          logoHtml
+        );
+      }
+
+      // Keep document fields empty (no special text)
+      // The document fields will remain empty as per user request
+    }
+
+    // Only apply inspection report replacements to static-inspection-report.html
+    if (templateName === 'static-inspection-report.html') {
+      // Fetch project details
+      const project = await db.collection("projects").findOne({
+        _id: new ObjectId(projectId)
+      });
+
+      // Replace project and company details in static inspection report
+      if (project) {
+        // Project Details
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="project-name">_________________________</div>',
+          `<div class="field-value" id="project-name">${project.name || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="project-id">_________________________</div>',
+          `<div class="field-value" id="project-id">${projectId}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="project-full-name">_________________________</div>',
+          `<div class="field-value" id="project-full-name">${project.name || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="project-address">_________________________</div>',
+          `<div class="field-value" id="project-address">${project.address || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="project-postal">_________________________</div>',
+          `<div class="field-value" id="project-postal">${project.postalCode || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="project-contact">_________________________</div>',
+          `<div class="field-value" id="project-contact">${project.contactPerson || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="project-startup">_________________________</div>',
+          `<div class="field-value" id="project-startup">${project.startDate || 'N/A'}</div>`
+        );
+      }
+
+      if (company) {
+        // Company Details
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="company-name">_________________________</div>',
+          `<div class="field-value" id="company-name">${company.name || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="company-full-name">_________________________</div>',
+          `<div class="field-value" id="company-full-name">${company.name || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="company-address">_________________________</div>',
+          `<div class="field-value" id="company-address">${company.address || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="company-postal">_________________________</div>',
+          `<div class="field-value" id="company-postal">${company.postalCode || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="company-cvr">_________________________</div>',
+          `<div class="field-value" id="company-cvr">${company.cvrNumber || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="company-email">_________________________</div>',
+          `<div class="field-value" id="company-email">${company.email || 'N/A'}</div>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<div class="field-value" id="company-contact">_________________________</div>',
+          `<div class="field-value" id="company-contact">${company.contactPerson || 'N/A'}</div>`
+        );
+      }
+    }
+
+    // Only apply special control points replacements to construction-execution-classes.html
+    if (templateName === 'construction-execution-classes.html') {
+      // First, populate Table 1: Control Sections and Classes with correct data
+      if (mostRecentControlPlan.length > 0) {
+        const controlPlan = mostRecentControlPlan[0];
+        
+        // Get the correct X value for B3.X
+        const xValue = controlPlan.x || 1;
+        const controlSection = `B3.${xValue}`;
+        
+        // Get construction and execution classes
+        const constructionClass = controlPlan.cc || 'KK3';
+        const executionClass = controlPlan.exc || 'EXC3';
+        
+        // Create control plan text
+        let controlPlanText = 'Static Control Plan';
+        if (projectSpecialText && projectSpecialText.specialText) {
+          controlPlanText += ': ' + projectSpecialText.specialText;
+        }
+        
+        // Replace Table 1 data
+        templateContent = templateContent.replace(
+          '<td class="control-section" id="control-section">Loading...</td>',
+          `<td class="control-section" id="control-section">${controlSection}</td>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<td class="control-plan" id="control-plan">Loading...</td>',
+          `<td class="control-plan" id="control-plan">${controlPlanText}</td>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<td class="construction-class" id="construction-class">Loading...</td>',
+          `<td class="construction-class" id="construction-class">${constructionClass.toUpperCase()}</td>`
+        );
+        
+        templateContent = templateContent.replace(
+          '<td class="execution-class" id="execution-class">Loading...</td>',
+          `<td class="execution-class" id="execution-class">${executionClass.toUpperCase()}</td>`
+        );
+      }
+      
+      // Then, fetch and replace special control points table data (Table 2)
+      const specialControlPoints = await db.collection("specialcontrol").find({
+        companyId: companyId,
+        projectsId: { $in: [projectId] }
+      }).sort({ createdAt: -1 }).toArray();
+
+      if (specialControlPoints.length > 0) {
+        let tableRows = '';
+        specialControlPoints.forEach(point => {
+          // Get the person name based on selectedType
+          let personName = '';
+          if (point.selectedType === 'projectManager' && point.projectManager) {
+            personName = point.projectManager.name || point.projectManager.firstName + ' ' + point.projectManager.lastName;
+          } else if (point.selectedType === 'independentController' && point.independentController) {
+            personName = point.independentController.name || point.independentController.firstName + ' ' + point.independentController.lastName;
+          } else if (point.selectedType === 'worker' && point.worker) {
+            personName = point.worker.name || point.worker.firstName + ' ' + point.worker.lastName;
+          }
+
+          // Create special control text
+          let specialControlText = '';
+          if (point.profession && point.profession.GroupName) {
+            specialControlText = point.profession.GroupName;
+          }
+          
+          if (projectSpecialText && projectSpecialText.specialText) {
+            specialControlText += ' - ' + projectSpecialText.specialText;
+          }
+
+          tableRows += `
+            <tr>
+              <td>${point._id.toString()}</td>
+              <td>${specialControlText}</td>
+              <td>${point.comment || ''}</td>
+              <td>${personName}</td>
+            </tr>
+          `;
+        });
+        
+        // Replace empty rows in special control points table (Table 2 only)
+        templateContent = templateContent.replace(
+          /<tbody id="special-control-points-table-body">[\s\S]*?<\/tbody>/,
+          `<tbody id="special-control-points-table-body">${tableRows}</tbody>`
+        );
+      }
+
+      // Finally, fetch and replace deviations table data (Table 3)
+      console.log('DEBUG: Fetching deviations for construction-execution-classes.html');
+      console.log('DEBUG: Query params:', { companyId, projectId, professionSubjectMatterId });
+      
+      const deviations = await db.collection("deviations").find({
+        companyId: companyId,
+        "projectsId.0": projectId,  // First index of projectsId array
+        "profession.SubjectMatterId": professionSubjectMatterId,
+        type: "Static Report"
+      }).sort({ submittedDate: -1 }).toArray();
+      
+      console.log('DEBUG: Found deviations:', deviations.length);
+
+      if (deviations.length > 0) {
+        let deviationRows = '';
+        deviations.forEach(deviation => {
+          deviationRows += `
+            <tr>
+              <td class="deviation-id">${deviation._id.toString()}</td>
+              <td>${deviation.comment || 'No description'}</td>
+              <td></td>
+            </tr>
+          `;
+        });
+
+        // Add empty rows if we have less than 5 total rows
+        const emptyRowsNeeded = Math.max(0, 5 - deviations.length);
+        for (let i = 0; i < emptyRowsNeeded; i++) {
+          deviationRows += `
+            <tr class="empty-row">
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          `;
+        }
+
+        // Replace the deviations table body (Table 3) - simple string replacement
+        console.log('DEBUG: Replacing deviations table with', deviations.length, 'deviations');
+        templateContent = templateContent.replace(
+          '<td class="deviation-id">AFV_01</td>',
+          `<td class="deviation-id">${deviations[0]._id.toString()}</td>`
+        );
+        templateContent = templateContent.replace(
+          '<td class="select-date">(Select Date)</td>',
+          `<td>${deviations[0].comment || 'No description'}</td>`
+        );
+      }
+    }
+
+    // Only apply control points replacements to control-points-selected.html
+    if (templateName === 'control-points-selected.html') {
+      console.log('DEBUG: Processing control-points-selected.html template');
+      
+      // Fetch project drawings
+      const drawings = await db.collection("drawings").find({
+        companyId: companyId,
+        projectsId: projectId
+      }).sort({ createdAt: -1 }).toArray();
+
+      console.log('DEBUG: Found drawings for control points:', drawings.length);
+
+      if (drawings.length > 0) {
+        let drawingsHtml = '';
+        
+        for (const drawing of drawings) {
+          if (drawing.mainDrawings && drawing.mainDrawings.length > 0) {
+            for (const mainDrawing of drawing.mainDrawings) {
+              // Check if it's a PDF file
+              const isPdf = mainDrawing.original.toLowerCase().endsWith('.pdf') || mainDrawing.stored.toLowerCase().endsWith('.pdf');
+              
+              let drawingContent = '';
+              if (isPdf) {
+                // For PDF files, show a placeholder with link to view
+                drawingContent = `
+                  <div class="placeholder-text" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center;">
+                    <div style="font-size: 48px; color: #dc2626; margin-bottom: 20px;">📄</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 10px;">PDF Drawing</div>
+                    <div style="font-size: 14px; color: #6b7280; margin-bottom: 15px;">${mainDrawing.original}</div>
+                    <a href="http://localhost:3000/uploads/${mainDrawing.stored}" target="_blank" style="color: #1e3a8a; text-decoration: underline; font-weight: bold; padding: 10px 20px; border: 2px solid #1e3a8a; border-radius: 4px; display: inline-block;">
+                      Click to View PDF
+                    </a>
+                  </div>
+                `;
+              } else {
+                drawingContent = `
+                  <img src="http://localhost:3000/uploads/${mainDrawing.stored}" alt="${mainDrawing.original}" style="max-width: 100%; max-height: 400px; object-fit: contain;" />
+                `;
+              }
+              
+              drawingsHtml += `
+                <div class="drawing-container">
+                  <div class="drawing-title">DRAWING NAME: ${mainDrawing.original}</div>
+                  <div class="drawing-placeholder">
+                    ${drawingContent}
+                  </div>
+                  <div class="drawing-info">
+                    <span class="drawing-name">${mainDrawing.original}</span>
+                    <span class="upload-date">Uploaded: ${new Date(mainDrawing.uploadedAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              `;
+            }
+          }
+        }
+
+        // Replace the drawings container
+        templateContent = templateContent.replace(
+          '<div id="drawings-container">',
+          `<div id="drawings-container">${drawingsHtml}`
+        );
+        
+        // Hide the no drawings message
+        templateContent = templateContent.replace(
+          'Loading drawings...',
+          ''
+        );
+      } else {
+        // Show no drawings message
+        templateContent = templateContent.replace(
+          'Loading drawings...',
+          'No drawings found for this project.'
+        );
+      }
+    }
+
+    // Only apply signature replacements to static-inspection-report.html
+    console.log('DEBUG: Template name:', templateName);
+    if (templateName === 'static-inspection-report.html') {
+      console.log('DEBUG: Processing static-inspection-report.html template');
+      console.log('DEBUG: Query parameters:', { companyId, projectId, professionSubjectMatterId });
+      
+      // Add a visible debug marker to confirm this code is running
+      templateContent = templateContent.replace(
+        '<div class="banner">SIGNING:</div>',
+        '<div class="banner">SIGNING: [DEBUG: TEMPLATE PROCESSING]</div>'
+      );
+      
+      // Fetch signatures data - try simpler query first
+      console.log('DEBUG: Testing simple query first...');
+      const simpleQuery = { companyId: companyId };
+      const simpleSignatures = await db.collection("signatures").find(simpleQuery).toArray();
+      console.log('DEBUG: Simple query found:', simpleSignatures.length, 'signatures');
+      
+      if (simpleSignatures.length > 0) {
+        console.log('DEBUG: First simple signature:', JSON.stringify(simpleSignatures[0], null, 2));
+      }
+      
+      // Now try the complex query
+      const query = {
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+        professionSubjectMatterId: professionSubjectMatterId
+      };
+      console.log('DEBUG: Complex database query:', JSON.stringify(query, null, 2));
+      
+      let signatures = [];
+      try {
+        signatures = await db.collection("signatures").find(query).toArray();
+        console.log('DEBUG: Found signatures count:', signatures.length);
+        if (signatures.length > 0) {
+          console.log('DEBUG: First signature:', JSON.stringify(signatures[0], null, 2));
+        }
+      } catch (error) {
+        console.log('DEBUG: Error in signature query:', error.message);
+        signatures = [];
+      }
+
+      // Get current date
+      const currentDate = new Date().toLocaleDateString('en-GB');
+
+      // Replace signature data
+      if (signatures.length > 0) {
+        const signature = signatures[0]; // Get the first signature document
+        console.log('DEBUG: Processing signature data:', JSON.stringify(signature, null, 2));
+        
+        // Test replacement by adding a visible marker
+        templateContent = templateContent.replace(
+          '<div class="banner">SIGNING: [DEBUG: TEMPLATE PROCESSING]</div>',
+          '<div class="banner">SIGNING: [DEBUG: SIGNATURES FOUND]</div>'
+        );
+        
+        // Replace person names (person1Name, person2Name, person3Name)
+        for (let i = 1; i <= 3; i++) {
+          const personName = signature[`person${i}Name`];
+          if (personName) {
+            console.log(`DEBUG: Replacing person${i} name: ${personName}`);
+            templateContent = templateContent.replace(
+              `<div class="role-text" id="person${i}-name">Enterprise</div>`,
+              `<div class="role-text" id="person${i}-name">${personName}</div>`
+            );
+          }
+          
+          // Replace signature images (signature1, signature2, signature3)
+          const signatureImage = signature[`signature${i}`];
+          if (signatureImage) {
+            console.log(`DEBUG: Replacing signature${i} image: ${signatureImage}`);
+            // Use regex to match the img tag even if it's split across lines
+            const imgRegex = new RegExp(`<img id="signature${i}-image"[^>]*style="display: none;"[^>]*>`, 'g');
+            templateContent = templateContent.replace(imgRegex, 
+              `<img id="signature${i}-image" class="signature-image" src="http://localhost:3000/uploads/${signatureImage}" alt="Signature ${i}" style="display: block; max-width: 100%; max-height: 60px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background-color: white;">`
+            );
+          }
+          
+          // Replace date
+          templateContent = templateContent.replace(
+            `data-date="" id="date${i}"`,
+            `data-date="${currentDate}" id="date${i}"`
+          );
+        }
+      } else {
+        console.log('DEBUG: No signatures found, setting dates only');
+        // If no signatures, just set the current date
+        for (let i = 1; i <= 3; i++) {
+          templateContent = templateContent.replace(
+            `data-date="" id="date${i}"`,
+            `data-date="${currentDate}" id="date${i}"`
+          );
+        }
+        
+        // Add debug marker for no signatures
+        templateContent = templateContent.replace(
+          '<div class="banner">SIGNING: [DEBUG: TEMPLATE PROCESSING]</div>',
+          '<div class="banner">SIGNING: [DEBUG: NO SIGNATURES FOUND]</div>'
+        );
+      }
+    }
+
+    return templateContent;
+
+  } catch (error) {
+    console.error('Error replacing dynamic content:', error);
+    return templateContent;
+  }
+}
+
+// Helper function to add CSS for complete report
+function addReportCSS(htmlContent) {
+  const css = `
+    <style>
+      .page {
+        page-break-after: always;
+      }
+      
+      .page:last-child {
+        page-break-after: avoid;
+      }
+      
+      .page-number {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        font-size: 12px;
+        color: #6b7280;
+      }
+      
+      @media print {
+        .page {
+          margin: 0;
+          box-shadow: none;
+        }
+      }
+    </style>
+  `;
+  
+  return htmlContent.replace('</head>', `${css}</head>`);
+}
+
+
+// API to get signatures data for testing
+app.get("/get-signatures", async (req, res) => {
+  try {
+    const { projectId, companyId, professionSubjectMatterId } = req.query;
+
+    if (!projectId || !companyId || !professionSubjectMatterId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required query parameters: projectId, companyId, professionSubjectMatterId" 
+      });
+    }
+
+    const signatures = await db.collection("signatures").find({
+      companyId: companyId,
+      projectsId: { $in: [projectId] },
+      "profession.SubjectMatterId": professionSubjectMatterId
+    }).toArray();
+
+    res.status(200).json({ 
+      success: true, 
+      data: signatures,
+      count: signatures.length 
+    });
+  } catch (error) {
+    console.error("Error fetching signatures:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch signatures", 
+      error: error.message 
+    });
+  }
+});
+
+// Debug API to test signature replacement
+app.get("/debug-signature-replacement", async (req, res) => {
+  try {
+    const { projectId, companyId, professionSubjectMatterId } = req.query;
+    
+    // Read the static inspection report template
+    const templatePath = path.join(__dirname, 'static-report-templates', 'static-inspection-report.html');
+    let templateContent = fs.readFileSync(templatePath, 'utf8');
+    
+    // Fetch signatures data
+    const signatures = await db.collection("signatures").find({
+      companyId: companyId,
+      projectsId: { $in: [projectId] },
+      "profession.SubjectMatterId": professionSubjectMatterId
+    }).toArray();
+
+    const currentDate = new Date().toLocaleDateString('en-GB');
+
+    // Apply signature replacements
+    console.log('Debug: Found signatures:', signatures.length);
+    if (signatures.length > 0) {
+      const signature = signatures[0];
+      console.log('Debug: Signature data:', {
+        person1Name: signature.person1Name,
+        person2Name: signature.person2Name,
+        person3Name: signature.person3Name,
+        signature1: signature.signature1,
+        signature2: signature.signature2,
+        signature3: signature.signature3
+      });
+      
+      for (let i = 1; i <= 3; i++) {
+        const personName = signature[`person${i}Name`];
+        console.log(`Debug: Processing person${i}Name:`, personName);
+        if (personName) {
+          const oldText = `<div class="role-text" id="person${i}-name">Enterprise</div>`;
+          const newText = `<div class="role-text" id="person${i}-name">${personName}</div>`;
+          console.log(`Debug: Replacing "${oldText}" with "${newText}"`);
+          templateContent = templateContent.replace(oldText, newText);
+        }
+        
+        const signatureImage = signature[`signature${i}`];
+        console.log(`Debug: Processing signature${i}:`, signatureImage);
+        if (signatureImage) {
+          const oldImg = `<img id="signature${i}-image" class="signature-image" style="display: none;" alt="Signature ${i}">`;
+          const newImg = `<img id="signature${i}-image" class="signature-image" src="http://localhost:3000/uploads/${signatureImage}" alt="Signature ${i}" style="display: block; max-width: 100%; max-height: 60px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background-color: white;">`;
+          console.log(`Debug: Replacing image "${oldImg}" with "${newImg}"`);
+          templateContent = templateContent.replace(oldImg, newImg);
+        }
+        
+        const oldDate = `data-date="" id="date${i}"`;
+        const newDate = `data-date="${currentDate}" id="date${i}"`;
+        console.log(`Debug: Replacing date "${oldDate}" with "${newDate}"`);
+        templateContent = templateContent.replace(oldDate, newDate);
+      }
+    } else {
+      console.log('Debug: No signatures found');
+    }
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(templateContent);
+  } catch (error) {
+    console.error('Debug signature replacement error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Simple test API to verify string replacement
+app.get("/test-replacement", async (req, res) => {
+  try {
+    let testHtml = '<div class="role-text" id="person1-name">Enterprise</div>';
+    const replacement = testHtml.replace(
+      '<div class="role-text" id="person1-name">Enterprise</div>',
+      '<div class="role-text" id="person1-name">person 1</div>'
+    );
+    
+    res.json({
+      original: testHtml,
+      replaced: replacement,
+      success: replacement !== testHtml
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/get-parts", async (req, res) => {
   try {
     const { SubjectMatterId } = req.query;
@@ -2573,6 +4602,280 @@ app.post("/users/login", async (req, res) => {
   } catch (error) {
     console.error("User login error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get worker user data with professions
+app.post("/get-worker-user-data", async (req, res) => {
+  try {
+    const { email, companyId, role, projectId } = req.body;
+    
+    console.log('=== GET WORKER USER DATA ===');
+    console.log('Email:', email);
+    console.log('Company ID:', companyId);
+    console.log('Role:', role);
+    console.log('Project ID:', projectId);
+
+    if (!email || !companyId || !role) {
+      return res.status(400).json({
+        error: "Email, companyId, and role are required"
+      });
+    }
+
+    // Find user with email, companyId, and role
+    const user = await db.collection('users').findOne({
+      username: email,
+      companyId: companyId,
+      role: role
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "Worker user not found with the specified email, company, and role"
+      });
+    }
+
+    console.log('Found user:', user._id);
+
+    // Get user professions if they exist
+    let professions = [];
+    let subjectMatterIds = [];
+
+    if (user.userProfession && Array.isArray(user.userProfession)) {
+      professions = user.userProfession;
+      
+          // Extract subjectMatterIds from professions
+    subjectMatterIds = professions
+      .filter(prof => prof.SubjectMatterId)
+      .map(prof => prof.SubjectMatterId);
+    }
+
+    console.log('User professions:', professions);
+    console.log('Subject matter IDs:', subjectMatterIds);
+
+    res.status(200).json({
+      success: true,
+      user: {
+        _id: user._id,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        phone: user.phone,
+        address: user.address,
+        postalCode: user.postalCode,
+        city: user.city,
+        startDate: user.startDate,
+        picture: user.picture,
+        contactPicture: user.contactPicture,
+        contactPerson: user.contactPerson,
+        contactPhone: user.contactPhone,
+        cvr: user.cvr,
+        projectsId: user.projectsId,
+        companyId: user.companyId,
+        isProjectManager: user.isProjectManager,
+        type: user.type,
+        mainId: user.mainId,
+        userProfession: user.userProfession,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt
+      },
+      professions: professions,
+      subjectMatterIds: subjectMatterIds,
+      projectId: projectId
+    });
+
+  } catch (error) {
+    console.error('Error fetching worker user data:', error);
+    res.status(500).json({
+      error: "Failed to fetch worker user data",
+      details: error.message
+    });
+  }
+});
+
+// Get all users assigned to a project (for Project Manager)
+app.post("/get-project-users", async (req, res) => {
+  try {
+    const { email, companyId, projectId, roles } = req.body;
+    
+    console.log('=== GET PROJECT USERS ===');
+    console.log('Email:', email);
+    console.log('Company ID:', companyId);
+    console.log('Project ID:', projectId);
+    console.log('Roles:', roles);
+
+    if (!email || !companyId || !projectId || !roles) {
+      return res.status(400).json({
+        error: "Email, companyId, projectId, and roles are required"
+      });
+    }
+
+    // Find users for the logged-in user's email with specified roles and assigned to this project
+    const users = await db.collection('users').find({
+      username: email,  // Filter by logged-in user's email
+      companyId: companyId,
+      projectsId: { $in: [projectId] },
+      role: { $in: roles }
+    }).toArray();
+
+    console.log('Found users for logged-in user:', users.length);
+    console.log('Users:', users.map(u => ({ username: u.username, role: u.role, projectsId: u.projectsId })));
+
+    res.status(200).json({
+      success: true,
+      users: users,
+      projectId: projectId,
+      companyId: companyId
+    });
+
+  } catch (error) {
+    console.error('Error fetching project users:', error);
+    res.status(500).json({
+      error: "Failed to fetch project users",
+      details: error.message
+    });
+  }
+});
+
+// 6.5. Determine user roles based on email
+app.post("/determine-user-roles", async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
+      });
+    }
+
+    console.log('Determining roles for email:', email);
+
+    // Query all collections where email might appear
+    const [users, companies] = await Promise.all([
+      // Check users collection
+      db.collection('users').find({ 
+        $or: [
+          { email: email },
+          { username: email }
+        ]
+      }).toArray(),
+      
+      // Check companies collection for admin
+      db.collection('companies').find({
+        $or: [
+          { 'admin.email': email },
+          { 'admin.username': email }
+        ]
+      }).toArray()
+    ]);
+
+    console.log('Query results:', {
+      users: users.length,
+      companies: companies.length
+    });
+
+    // Determine roles based on results
+    const roles = [];
+    const roleDetails = {};
+
+    // Check for Admin role - check all user records
+    const adminUsers = users.filter(user => user.role === 'Admin');
+    const adminCompany = companies.find(company => 
+      company.admin && (company.admin.email === email || company.admin.username === email)
+    );
+
+    if (adminUsers.length > 0 || adminCompany) {
+      roles.push('Admin');
+      roleDetails['Admin'] = {
+        title: 'Admin',
+        description: 'Manage company and projects',
+        icon: 'admin_panel_settings',
+        color: '#001F54',
+        source: adminUsers.length > 0 ? 'user_record' : 'company_admin'
+      };
+    }
+
+    // Check for Project Manager role - user must be assigned to at least one project
+    const projectManagerUser = users.find(user => {
+      // Check if user has projectsId array with valid project IDs
+      const hasValidProjects = user.projectsId && 
+        Array.isArray(user.projectsId) && 
+        user.projectsId.some(projectId => projectId && projectId !== 'undefined' && projectId !== 'null');
+      
+      // User must be a project manager AND assigned to projects
+      return (user.isProjectManager === 'yes' || user.role === 'Project Manager' || user.userRole === 'Project Manager') && hasValidProjects;
+    });
+
+    if (projectManagerUser) {
+      roles.push('Project Manager');
+      const validProjects = projectManagerUser.projectsId?.filter(p => p && p !== 'undefined' && p !== 'null') || [];
+      roleDetails['Project Manager'] = {
+        title: 'Project Manager',
+        description: 'Manage projects and teams',
+        icon: 'manage_accounts',
+        color: '#1976D2',
+        source: 'project_assignment',
+        projectCount: validProjects.length
+      };
+    }
+
+    // Check for Worker role - check all user records
+    const workerUsers = users.filter(user => user.role === 'Worker');
+    const subcontractorUsers = users.filter(user => user.role === 'Subcontractor');
+
+    // Worker gets Worker role (even if they're also a project manager)
+    if (workerUsers.length > 0) {
+      roles.push('Worker');
+      roleDetails['Worker'] = {
+        title: 'Worker',
+        description: 'Access your assigned projects',
+        icon: 'work',
+        color: '#388E3C',
+        source: 'user_record'
+      };
+    }
+
+    // Subcontractor assigned to projects gets Project Manager role
+    if (subcontractorUsers.length > 0 && projectManagerUser) {
+      if (!roles.includes('Project Manager')) {
+        roles.push('Project Manager');
+        const validProjects = projectManagerUser.projectsId?.filter(p => p && p !== 'undefined' && p !== 'null') || [];
+        roleDetails['Project Manager'] = {
+          title: 'Project Manager',
+          description: 'Manage projects and teams',
+          icon: 'manage_accounts',
+          color: '#1976D2',
+          source: 'subcontractor_assignment',
+          projectCount: validProjects.length
+        };
+      }
+    }
+
+    console.log('Determined roles:', roles);
+    console.log('Role details:', roleDetails);
+
+    res.status(200).json({
+      success: true,
+      email: email,
+      roles: roles,
+      roleDetails: roleDetails,
+      hasMultipleRoles: roles.length > 1,
+      userInfo: {
+        foundInUsers: users.length > 0,
+        foundInCompanies: companies.length > 0,
+        isProjectManager: projectManagerUser ? true : false,
+        assignedProjects: projectManagerUser?.projectsId?.filter(p => p && p !== 'undefined' && p !== 'null').length || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error determining user roles:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      details: error.message
+    });
   }
 });
 
@@ -2843,6 +5146,143 @@ app.post("/get-user-projects", async (req, res) => {
     });
   } catch (error) {
     console.error("Get user projects error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// 11. Get all companies and projects for a specific email (username)
+app.post("/get-user-companies-projects", async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    
+    console.log(`Fetching companies and projects for email: ${email}`);
+    
+    // Find all users with this email
+    const users = await db.collection("users").find({ 
+      username: email 
+    }).toArray();
+    
+    if (!users || users.length === 0) {
+      return res.status(404).json({ error: "No users found with this email" });
+    }
+    
+    console.log(`Found ${users.length} users with email: ${email}`);
+    
+    // Group users by company and collect project IDs
+    const companyMap = new Map();
+    
+    for (const user of users) {
+      const companyId = user.companyId;
+      
+      if (!companyId) {
+        console.log(`User ${user._id} has no companyId, skipping`);
+        continue;
+      }
+      
+      if (!companyMap.has(companyId)) {
+        companyMap.set(companyId, {
+          companyId: companyId,
+          users: [],
+          projectIds: new Set()
+        });
+      }
+      
+      const companyData = companyMap.get(companyId);
+      companyData.users.push({
+        userId: user._id,
+        name: user.name,
+        role: user.role,
+        isProjectManager: user.isProjectManager
+      });
+      
+      // Add project IDs from this user
+      if (user.projectsId && Array.isArray(user.projectsId)) {
+        user.projectsId.forEach(projectId => {
+          if (projectId) {
+            companyData.projectIds.add(projectId.toString());
+          }
+        });
+      }
+    }
+    
+    // Convert to array and fetch company details and projects
+    const result = [];
+    
+    for (const [companyId, companyData] of companyMap) {
+      try {
+        // Get company details
+        const company = await db.collection("companies").findOne({ 
+          _id: new ObjectId(companyId) 
+        });
+        
+        if (!company) {
+          console.log(`Company not found for ID: ${companyId}`);
+          continue;
+        }
+        
+        // Get projects for this company
+        const projectIds = Array.from(companyData.projectIds);
+        let projects = [];
+        
+        if (projectIds.length > 0) {
+          try {
+            const validProjectIds = projectIds
+              .filter(id => id && typeof id === 'string' && id.length === 24)
+              .map(id => new ObjectId(id));
+            
+            if (validProjectIds.length > 0) {
+              const projectList = await db.collection("projects").find({
+                _id: { $in: validProjectIds }
+              }).toArray();
+              
+              projects = projectList.map(project => ({
+                projectId: project._id,
+                projectName: project.name,
+                address: project.address,
+                city: project.city,
+                postalCode: project.postalCode,
+                startDate: project.startDate,
+                endDate: project.endDate,
+                status: project.status,
+                description: project.description
+              }));
+            }
+          } catch (error) {
+            console.error(`Error fetching projects for company ${companyId}:`, error);
+          }
+        }
+        
+        result.push({
+          company: {
+            companyId: company._id,
+            companyName: company.name,
+            address: company.address,
+            city: company.city,
+            postalCode: company.postalCode,
+            cvr: company.cvr
+          },
+          users: companyData.users,
+          projects: projects
+        });
+        
+      } catch (error) {
+        console.error(`Error processing company ${companyId}:`, error);
+      }
+    }
+    
+    console.log(`Returning ${result.length} companies with their projects`);
+    
+    res.status(200).json({ 
+      email: email,
+      companies: result
+    });
+    
+  } catch (error) {
+    console.error("Get user companies projects error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -5081,6 +7521,8 @@ app.get("/check-static-document-checklist-status", async (req, res) => {
     const { projectId, professionId, checklistIds } = req.query;
     
     console.log("API called with params:", { projectId, professionId, checklistIds });
+    console.log('professionId type:', typeof professionId);
+    console.log('professionId value:', professionId);
     
     if (!projectId || !professionId || !checklistIds) {
       return res.status(400).json({ 
@@ -5101,35 +7543,70 @@ app.get("/check-static-document-checklist-status", async (req, res) => {
     // Convert string IDs to ObjectIds
     const checklistObjectIds = parsedChecklistIds.map(id => new ObjectId(id));
 
-    const query = {
-      projectId: projectId,
-      "profession._id": professionId,
-      staticDocumentCheckListId: { $in: checklistObjectIds }
-    };
-
-    // Also try with string values in case staticDocumentCheckListId is stored as string
-    const queryWithStringIds = {
-      projectId: projectId,
-      "profession._id": professionId,
-      staticDocumentCheckListId: { $in: parsedChecklistIds }
-    };
-
-    console.log("Trying ObjectId query first...");
-    let submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
-      .find(query)
-      .toArray();
-
-    if (submittedEntries.length === 0) {
-      console.log("No results with ObjectId query, trying string query...");
-      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
-        .find(queryWithStringIds)
-        .toArray();
+    // Search for entries matching projectId AND profession
+    console.log('Searching for entries with projectId:', projectId, 'and professionId:', professionId);
+    
+    // Try multiple profession matching approaches
+    const queries = [
+      // Query 1: Match by profession.SubjectMatterId
+      {
+        projectId: projectId,
+        "profession.SubjectMatterId": professionId
+      },
+      // Query 2: Match by profession._id (fallback)
+      {
+        projectId: projectId,
+        "profession._id": professionId
+      },
+      // Query 3: Match by profession._id as ObjectId (fallback) - only if professionId looks like ObjectId
+      ...(professionId && professionId.length === 24 && /^[0-9a-fA-F]{24}$/.test(professionId) ? [{
+        projectId: projectId,
+        "profession._id": new ObjectId(professionId)
+      }] : [])
+    ];
+    
+    let submittedEntries = [];
+    
+    for (let i = 0; i < queries.length; i++) {
+      try {
+        console.log(`Trying profession query ${i + 1}...`);
+        const result = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find(queries[i]).toArray();
+        console.log(`Profession query ${i + 1} found ${result.length} entries`);
+        
+        if (result.length > 0) {
+          submittedEntries = result;
+          console.log(`✅ Found matching profession entries with query ${i + 1}`);
+          break;
+        }
+      } catch (error) {
+        console.log(`Profession query ${i + 1} failed:`, error.message);
+      }
     }
+    
+    console.log(`Final result: Found ${submittedEntries.length} entries for profession ${professionId}`);
 
-    console.log("MongoDB query:", JSON.stringify(query, null, 2));
-
-    console.log("Found entries:", submittedEntries.length);
+    console.log("Final result - Found entries:", submittedEntries.length);
     console.log("Entries:", JSON.stringify(submittedEntries, null, 2));
+    
+    // Debug: Check what's actually in the collection
+    console.log("=== DEBUG: Checking what's in the collection ===");
+    const allEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find({}).limit(5).toArray();
+    console.log("Total entries in collection:", allEntries.length);
+    if (allEntries.length > 0) {
+      console.log("Sample entry structure:", JSON.stringify(allEntries[0], null, 2));
+    }
+    
+    // Check if there are any entries for this project
+    const projectEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find({
+      projectId: projectId
+    }).toArray();
+    console.log("Entries for this project:", projectEntries.length);
+    
+    // Check if there are any entries for this profession
+    const professionEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find({
+      "profession.SubjectMatterId": professionId
+    }).toArray();
+    console.log("Entries for this profession:", professionEntries.length);
 
     // Create a map of submitted checklist IDs and approval status
     const submittedChecklistIds = submittedEntries.map(entry => entry.staticDocumentCheckListId.toString());
@@ -5261,6 +7738,363 @@ app.post("/approve-static-document-checklist", async (req, res) => {
   } catch (error) {
     console.error("Error approving checklist item:", error);
     res.status(500).json({ error: "Failed to approve checklist item" });
+  }
+});
+
+// API endpoint to get static document checklist with status for a specific profession
+app.get("/get-static-document-checklist-with-status", async (req, res) => {
+  // Add CORS headers
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  try {
+    const { projectId, professionSubjectMatterId, companyId } = req.query;
+    
+    console.log("=== GET STATIC DOCUMENT CHECKLIST WITH STATUS ===");
+    console.log("Project ID:", projectId);
+    console.log("Profession Subject Matter ID:", professionSubjectMatterId);
+    console.log("Company ID:", companyId);
+    
+    if (!projectId || !professionSubjectMatterId || !companyId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: projectId, professionSubjectMatterId, companyId" 
+      });
+    }
+
+    // Use global database connection (same pattern as other endpoints)
+
+    // Fetch project details
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId)
+    });
+
+    if (!project) {
+      return res.status(404).json({ 
+        error: "Project not found" 
+      });
+    }
+
+    // Get the profession-specific static document checklist
+    const professionData = project.professionAssociatedData?.[professionSubjectMatterId];
+    
+    if (!professionData || !professionData.staticDocumentCheckList) {
+      return res.status(404).json({ 
+        error: "No static document checklist found for this profession" 
+      });
+    }
+
+    const checklistItems = professionData.staticDocumentCheckList;
+    console.log("Found checklist items:", checklistItems.length);
+
+    // Get checklist IDs for status checking
+    const checklistIds = checklistItems.map(item => item._id.toString());
+    console.log("Checklist IDs:", checklistIds);
+
+    // Check submission and approval status for each item
+    // First, let's see what entries exist for this project
+    const allProjectEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+      .find({
+        projectId: projectId
+      })
+      .toArray();
+
+    console.log("All entries for project:", allProjectEntries.length);
+    console.log("Sample entry structure:", allProjectEntries[0]);
+
+    // Try different query variations to find submitted entries
+    // First try with profession filter and ObjectId comparison
+    let submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+      .find({
+        projectId: projectId,
+        "profession._id": professionSubjectMatterId,
+        staticDocumentCheckListId: { $in: checklistIds }
+      })
+      .toArray();
+
+    console.log("Found submitted entries with profession filter and ObjectId:", submittedEntries.length);
+
+    // If no results, try with profession filter and string comparison
+    if (submittedEntries.length === 0) {
+      console.log("Trying with profession filter and string comparison...");
+      const stringChecklistIds = checklistIds.map(id => id.toString());
+      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+        .find({
+          projectId: projectId,
+          "profession._id": professionSubjectMatterId,
+          staticDocumentCheckListId: { $in: stringChecklistIds }
+        })
+        .toArray();
+      console.log("Found submitted entries with profession filter and string:", submittedEntries.length);
+    }
+
+    // If no results, try without profession filter but with ObjectId
+    if (submittedEntries.length === 0) {
+      console.log("Trying without profession filter but with ObjectId...");
+      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+        .find({
+          projectId: projectId,
+          staticDocumentCheckListId: { $in: checklistIds }
+        })
+        .toArray();
+      console.log("Found submitted entries without profession filter and ObjectId:", submittedEntries.length);
+    }
+
+    // If still no results, try without profession filter and with string comparison
+    if (submittedEntries.length === 0) {
+      console.log("Trying without profession filter and with string comparison...");
+      const stringChecklistIds = checklistIds.map(id => id.toString());
+      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+        .find({
+          projectId: projectId,
+          staticDocumentCheckListId: { $in: stringChecklistIds }
+        })
+        .toArray();
+      console.log("Found submitted entries without profession filter and string:", submittedEntries.length);
+    }
+
+    // If still no results, try with just projectId to see what's available
+    if (submittedEntries.length === 0) {
+      console.log("Trying with just projectId to see available entries...");
+      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+        .find({
+          projectId: projectId
+        })
+        .toArray();
+      console.log("Found all entries for project:", submittedEntries.length);
+      
+      if (submittedEntries.length > 0) {
+        console.log("Sample entry profession structure:", submittedEntries[0].profession);
+        console.log("Sample entry staticDocumentCheckListId:", submittedEntries[0].staticDocumentCheckListId);
+        console.log("Sample entry staticDocumentCheckListId type:", typeof submittedEntries[0].staticDocumentCheckListId);
+      }
+    }
+
+    // Create status maps
+    const submittedChecklistIds = submittedEntries.map(entry => entry.staticDocumentCheckListId.toString());
+    const approvalStatus = {};
+    
+    submittedEntries.forEach(entry => {
+      approvalStatus[entry.staticDocumentCheckListId.toString()] = {
+        approvedBy: entry.approvedBy || false,
+        approvedDate: entry.approvedDate || null,
+        submittedDate: entry.submittedDate || null,
+        selectedDate: entry.selectedDate || entry.date || null,
+        comment: entry.comment || null,
+        projectManager: entry.projectManager || null,
+        independentController: entry.independentController || null,
+        status: entry.status || null,
+        controlPlan: entry.controlPlan || null
+      };
+    });
+
+    // Enhance checklist items with status information
+    const enhancedChecklistItems = checklistItems.map(item => {
+      const itemId = item._id.toString();
+      const isSubmitted = submittedChecklistIds.includes(itemId);
+      const status = approvalStatus[itemId] || {};
+      
+      return {
+        ...item,
+        isSubmitted: isSubmitted,
+        selectedDate: status.selectedDate || null,
+        submittedDate: status.submittedDate || null,
+        approvedDate: status.approvedDate || null,
+        isApproved: status.approvedBy || false,
+        approvedBy: status.approvedBy || false,
+        comment: status.comment || null,
+        projectManager: status.projectManager || null,
+        independentController: status.independentController || null,
+        status: status.status || null,
+        controlPlan: status.controlPlan || null
+      };
+    });
+
+    // Calculate summary
+    const summary = {
+      totalItems: enhancedChecklistItems.length,
+      submittedItems: enhancedChecklistItems.filter(item => item.isSubmitted).length,
+      approvedItems: enhancedChecklistItems.filter(item => item.isApproved).length,
+      pendingItems: enhancedChecklistItems.filter(item => !item.isSubmitted).length
+    };
+
+    console.log("Summary:", summary);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        projectId: projectId,
+        professionSubjectMatterId: professionSubjectMatterId,
+        companyId: companyId,
+        checklistItems: enhancedChecklistItems,
+        summary: summary
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching static document checklist with status:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch static document checklist with status",
+      details: error.message 
+    });
+  }
+});
+
+// API endpoint to get static report registration entries with details
+app.get("/get-static-report-registration-entries", async (req, res) => {
+  // Add CORS headers
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  try {
+    const { companyId, projectId, subjectMatterId } = req.query;
+    
+    console.log("=== GET STATIC REPORT REGISTRATION ENTRIES ===");
+    console.log("Company ID:", companyId);
+    console.log("Project ID:", projectId);
+    console.log("Subject Matter ID:", subjectMatterId);
+    
+    if (!companyId || !projectId || !subjectMatterId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId, subjectMatterId" 
+      });
+    }
+
+    // Use global database connection
+    // Fetch project details
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId)
+    });
+
+    if (!project) {
+      return res.status(404).json({ 
+        error: "Project not found" 
+      });
+    }
+
+    // Get special text from the separate API endpoint
+    let specialText = '';
+    try {
+      const specialTextResponse = await fetch(`http://localhost:3000/get-project-special-text?projectId=${projectId}`);
+      const specialTextData = await specialTextResponse.json();
+      
+      if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
+        specialText = specialTextData.data.specialText;
+      }
+    } catch (error) {
+      console.log('Error fetching special text:', error);
+      // Continue without special text if API fails
+    }
+
+    // Fetch static report registration entries
+    const entries = await db.collection("StaticReportRegistrationEntries")
+      .find({
+        companyId: companyId,
+        projectId: new ObjectId(projectId)
+      })
+      .toArray();
+
+    console.log("Found entries:", entries.length);
+
+    // Process entries to include required fields
+    const processedEntries = await Promise.all(entries.map(async (entry) => {
+      const pos = entry.staticReportItem?.pos || '';
+      const constructionPart = entry.staticReportItem?.constructionPart || '';
+      
+      // Determine DS Group based on pos
+      let dsGroup = '';
+      if (pos.startsWith('7.4')) {
+        dsGroup = 'B4';
+      } else if (pos.startsWith('7.5')) {
+        dsGroup = 'B5';
+      } else if (pos.startsWith('7.6')) {
+        dsGroup = 'B6';
+      }
+
+      // Get user object (independent controller or worker)
+      let userObject = null;
+      if (entry.independentController && entry.independentController !== 'null') {
+        const controller = await db.collection("users").findOne({
+          _id: new ObjectId(entry.independentController)
+        });
+        if (controller) {
+          userObject = {
+            _id: controller._id,
+            name: controller.name,
+            role: controller.role,
+            type: 'independent_controller'
+          };
+        }
+      } else if (entry.selectedWorkers && entry.selectedWorkers.length > 0) {
+        const worker = await db.collection("users").findOne({
+          _id: new ObjectId(entry.selectedWorkers[0])
+        });
+        if (worker) {
+          userObject = {
+            _id: worker._id,
+            name: worker.name,
+            role: worker.role,
+            type: 'worker'
+          };
+        }
+      }
+
+      return {
+        _id: entry._id,
+        registrationDate: entry.submissionCreatedDate,
+        registrationId: `${pos}_${Math.random().toString(36).substr(2, 9)}`,
+        controlType: `${constructionPart} ${specialText}`.trim(),
+        dsGroup: dsGroup,
+        pos: pos,
+        subject: entry.staticReportItem?.subject || '',
+        constructionPart: constructionPart,
+        basis: entry.staticReportItem?.basis || '',
+        controlMethod: entry.staticReportItem?.controlMethod || '',
+        acceptanceCriteria: entry.staticReportItem?.acceptanceCriteria || '',
+        time: entry.staticReportItem?.time || '',
+        comment: entry.comment || '',
+        controlPlan: entry.controlPlan || '',
+        date: entry.date || '',
+        user: userObject,
+        // Media files
+        annotatedPdfImages: entry.annotatedPdfImages?.map(img => ({
+          filename: img.filename,
+          originalName: img.originalName,
+          description: img.description || ''
+        })) || [],
+        mainPictures: entry.mainPictures?.map(pic => ({
+          filename: pic.filename,
+          originalName: pic.originalName,
+          description: pic.description || ''
+        })) || [],
+        markPictures: entry.markPictures?.map(mark => ({
+          filename: mark.filename,
+          originalName: mark.originalName,
+          description: mark.description || '',
+          markNumber: mark.markNumber || ''
+        })) || []
+      };
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        projectId: projectId,
+        companyId: companyId,
+        subjectMatterId: subjectMatterId,
+        specialText: specialText,
+        entries: processedEntries,
+        totalEntries: processedEntries.length
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching static report registration entries:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch static report registration entries",
+      details: error.message 
+    });
   }
 });
 
@@ -5819,6 +8653,414 @@ app.get("/get-static-report-hierarchy", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch static report hierarchy",
+    });
+  }
+});
+
+// API endpoints for Quality Assurance Signatures
+// Get project professions
+app.get("/get-project-professions", async (req, res) => {
+  try {
+    const { companyId, projectId } = req.query;
+    
+    if (!companyId || !projectId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId" 
+      });
+    }
+
+    // Get professions associated with this project from gammas collection
+    const professions = await db.collection("gammas").find({
+      companyId: companyId,
+      projectsId: { $in: [projectId] }
+    }).toArray();
+
+    // Extract profession data
+    const professionData = professions.map(item => item.profession).filter(Boolean);
+
+    res.json(professionData);
+  } catch (error) {
+    console.error("Error fetching project professions:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch project professions",
+      details: error.message 
+    });
+  }
+});
+
+// Get quality assurance signature
+app.post("/get-quality-assurance-signature", async (req, res) => {
+  try {
+    const { companyId, projectId, professionId } = req.body;
+    
+    if (!companyId || !projectId || !professionId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId, professionId" 
+      });
+    }
+
+    const signatures = await db.collection("quality assurance signature")
+      .find({
+        companyId: companyId,
+        projectId: projectId,
+        professionId: professionId
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json(signatures);
+  } catch (error) {
+    console.error("Error fetching quality assurance signature:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch quality assurance signature",
+      details: error.message 
+    });
+  }
+});
+
+// Create new quality assurance signature
+app.post("/create-quality-assurance-signature", async (req, res) => {
+  try {
+    const { 
+      companyId, 
+      projectId, 
+      professionId,
+      professionName,
+      name, 
+      description, 
+      profession, 
+      signature, 
+      signatureDate 
+    } = req.body;
+    
+    if (!companyId || !projectId || !professionId || !name || !profession) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId, professionId, name, profession" 
+      });
+    }
+
+    // Check if signature already exists for this profession
+    const existingSignature = await db.collection("quality assurance signature").findOne({
+      companyId: companyId,
+      projectId: projectId,
+      professionId: professionId
+    });
+
+    if (existingSignature) {
+      return res.status(409).json({ 
+        error: "Signature already exists for this profession. Use update endpoint instead." 
+      });
+    }
+
+    const signatureData = {
+      companyId,
+      projectId,
+      professionId,
+      professionName: professionName || '',
+      name,
+      description: description || '',
+      profession,
+      signature,
+      signatureDate: signatureDate || new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await db.collection("quality assurance signature").insertOne(signatureData);
+
+    res.json({
+      success: true,
+      signatureId: result.insertedId,
+      message: "Quality assurance signature created successfully"
+    });
+  } catch (error) {
+    console.error("Error creating quality assurance signature:", error);
+    res.status(500).json({ 
+      error: "Failed to create quality assurance signature",
+      details: error.message 
+    });
+  }
+});
+
+// Update existing quality assurance signature
+app.put("/update-quality-assurance-signature/:signatureId", async (req, res) => {
+  try {
+    const { signatureId } = req.params;
+    const { 
+      name, 
+      description, 
+      profession, 
+      signature, 
+      signatureDate 
+    } = req.body;
+    
+    if (!signatureId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: signatureId" 
+      });
+    }
+
+    const updateData = {
+      updatedAt: new Date().toISOString()
+    };
+
+    // Only update fields that are provided
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (profession !== undefined) updateData.profession = profession;
+    if (signature !== undefined) updateData.signature = signature;
+    if (signatureDate !== undefined) updateData.signatureDate = signatureDate;
+
+    const result = await db.collection("quality assurance signature").updateOne(
+      { _id: new ObjectId(signatureId) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ 
+        error: "Signature not found" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Quality assurance signature updated successfully"
+    });
+  } catch (error) {
+    console.error("Error updating quality assurance signature:", error);
+    res.status(500).json({ 
+      error: "Failed to update quality assurance signature",
+      details: error.message 
+    });
+  }
+});
+
+// Delete quality assurance signature
+app.delete("/delete-quality-assurance-signature/:signatureId", async (req, res) => {
+  try {
+    const { signatureId } = req.params;
+    
+    if (!signatureId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: signatureId" 
+      });
+    }
+
+    const result = await db.collection("quality assurance signature").deleteOne({
+      _id: new ObjectId(signatureId)
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ 
+        error: "Signature not found" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Quality assurance signature deleted successfully"
+    });
+  } catch (error) {
+    console.error("Error deleting quality assurance signature:", error);
+    res.status(500).json({ 
+      error: "Failed to delete quality assurance signature",
+      details: error.message 
+    });
+  }
+});
+
+// API endpoints for Static Report Signatures
+// Get static report signatures
+app.post("/get-static-report-signatures", async (req, res) => {
+  try {
+    const { companyId, projectId, subjectMatterId } = req.body;
+    
+    console.log("get-static-report-signatures called with:", { companyId, projectId, subjectMatterId });
+    
+    if (!companyId || !projectId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId" 
+      });
+    }
+
+    const query = {
+      companyId: companyId,
+      projectId: projectId
+    };
+
+    // Add subjectMatterId filter if provided
+    if (subjectMatterId) {
+      query.subjectMatterId = subjectMatterId;
+    }
+
+    console.log("Query:", query);
+
+    const signatures = await db.collection("static report signatures")
+      .find(query)
+      .sort({ signatureType: 1, createdAt: -1 })
+      .toArray();
+
+    console.log("Found signatures:", signatures);
+
+    res.json(signatures);
+  } catch (error) {
+    console.error("Error fetching static report signatures:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch static report signatures",
+      details: error.message 
+    });
+  }
+});
+
+// Create new static report signature
+app.post("/create-static-report-signature", async (req, res) => {
+  try {
+    const { 
+      companyId, 
+      projectId, 
+      subjectMatterId, 
+      signatureType, 
+      name, 
+      description, 
+      profession, 
+      signature, 
+      signatureDate 
+    } = req.body;
+    
+    if (!companyId || !projectId || !signatureType || !name || !profession) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: companyId, projectId, signatureType, name, profession" 
+      });
+    }
+
+    // Check if signature already exists for this combination
+    const existingSignature = await db.collection("static report signatures").findOne({
+      companyId: companyId,
+      projectId: projectId,
+      subjectMatterId: subjectMatterId || null,
+      signatureType: parseInt(signatureType)
+    });
+
+    if (existingSignature) {
+      return res.status(409).json({ 
+        error: "Signature already exists for this combination. Use update endpoint instead." 
+      });
+    }
+
+
+    const signatureData = {
+      companyId,
+      projectId,
+      subjectMatterId: subjectMatterId || null,
+      signatureType: parseInt(signatureType),
+      name,
+      description: description || '',
+      profession,
+      signature: signature || null,
+      signatureDate: signatureDate || new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const result = await db.collection("static report signatures").insertOne(signatureData);
+
+    res.status(201).json({
+      success: true,
+      message: "Signature created successfully",
+      signatureId: result.insertedId
+    });
+  } catch (error) {
+    console.error("Error creating static report signature:", error);
+    res.status(500).json({ 
+      error: "Failed to create static report signature",
+      details: error.message 
+    });
+  }
+});
+
+// Update existing static report signature
+app.put("/update-static-report-signature/:signatureId", async (req, res) => {
+  try {
+    const { signatureId } = req.params;
+    const { 
+      name, 
+      description, 
+      profession, 
+      signature, 
+      signatureDate 
+    } = req.body;
+    
+    if (!signatureId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: signatureId" 
+      });
+    }
+
+    const updateData = {
+      updatedAt: new Date().toISOString()
+    };
+
+    // Only update fields that are provided
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (profession !== undefined) updateData.profession = profession;
+    if (signature !== undefined) updateData.signature = signature;
+    if (signatureDate !== undefined) updateData.signatureDate = signatureDate;
+
+    const result = await db.collection("static report signatures").updateOne(
+      { _id: new ObjectId(signatureId) },
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ 
+        error: "Signature not found" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Signature updated successfully"
+    });
+  } catch (error) {
+    console.error("Error updating static report signature:", error);
+    res.status(500).json({ 
+      error: "Failed to update static report signature",
+      details: error.message 
+    });
+  }
+});
+
+// Delete static report signature
+app.delete("/delete-static-report-signature/:signatureId", async (req, res) => {
+  try {
+    const { signatureId } = req.params;
+    
+    if (!signatureId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: signatureId" 
+      });
+    }
+
+    const result = await db.collection("static report signatures").deleteOne({
+      _id: new ObjectId(signatureId)
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ 
+        error: "Signature not found" 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Signature deleted successfully"
+    });
+  } catch (error) {
+    console.error("Error deleting static report signature:", error);
+    res.status(500).json({ 
+      error: "Failed to delete static report signature",
+      details: error.message 
     });
   }
 });
@@ -6630,12 +9872,33 @@ app.post(
     try {
       console.log('Received deviation submission:', {
         body: req.body,
+        bodyKeys: Object.keys(req.body),
         files: req.files ? Object.keys(req.files) : 'No files',
         fileDetails: req.files ? Object.keys(req.files).map(key => ({
           field: key,
           count: req.files[key].length,
           filenames: req.files[key].map(f => f.filename)
         })) : 'No files'
+      });
+      
+      // Log ALL body fields to see what's actually there
+      console.log('ALL BODY FIELDS:');
+      Object.keys(req.body).forEach(key => {
+        console.log(`  ${key}:`, req.body[key], `(type: ${typeof req.body[key]})`);
+      });
+      
+      // Debug specific fields that might be empty
+      console.log('DEBUG - Description fields:', {
+        generalPictureDescriptions: req.body.generalPictureDescriptions,
+        generalPictureDescriptionsType: typeof req.body.generalPictureDescriptions,
+        generalPictureDescriptionsIsArray: Array.isArray(req.body.generalPictureDescriptions),
+        markPictureDescriptions: req.body.markPictureDescriptions,
+        markPictureDescriptionsType: typeof req.body.markPictureDescriptions,
+        markPictureDescriptionsIsArray: Array.isArray(req.body.markPictureDescriptions),
+        pictureDescriptions: req.body.pictureDescriptions,
+        markPictureIndices: req.body.markPictureIndices,
+        markPictureIndicesType: typeof req.body.markPictureIndices,
+        markPictureIndicesIsArray: Array.isArray(req.body.markPictureIndices)
       });
       
       // Validate required fields
@@ -6697,6 +9960,80 @@ app.post(
         return res.status(400).json({ error: 'Invalid profession JSON' });
       }
 
+      // Parse description fields - handle multiple form fields
+      let parsedGeneralPictureDescriptions = [];
+      try {
+        // Check if it's an array (multiple form fields) or single string
+        if (Array.isArray(req.body.generalPictureDescriptions)) {
+          parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions;
+        } else if (typeof req.body.generalPictureDescriptions === 'string') {
+          // If it's a string, treat it as a single description (not JSON)
+          parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions ? [req.body.generalPictureDescriptions] : [];
+        } else {
+          parsedGeneralPictureDescriptions = [];
+        }
+        console.log('General picture descriptions parsed successfully:', parsedGeneralPictureDescriptions);
+      } catch (e) {
+        console.error('Error parsing generalPictureDescriptions:', e);
+        console.log('Raw generalPictureDescriptions:', req.body.generalPictureDescriptions);
+        parsedGeneralPictureDescriptions = [];
+      }
+
+      let parsedMarkPictureDescriptions = [];
+      try {
+        // Check if it's an array (multiple form fields) or single string
+        if (Array.isArray(req.body.markPictureDescriptions)) {
+          parsedMarkPictureDescriptions = req.body.markPictureDescriptions;
+        } else if (typeof req.body.markPictureDescriptions === 'string') {
+          // If it's a string, treat it as a single description (not JSON)
+          parsedMarkPictureDescriptions = req.body.markPictureDescriptions ? [req.body.markPictureDescriptions] : [];
+        } else {
+          parsedMarkPictureDescriptions = [];
+        }
+        console.log('Mark picture descriptions parsed successfully:', parsedMarkPictureDescriptions);
+      } catch (e) {
+        console.error('Error parsing markPictureDescriptions:', e);
+        console.log('Raw markPictureDescriptions:', req.body.markPictureDescriptions);
+        parsedMarkPictureDescriptions = [];
+      }
+
+      let parsedPictureDescriptions = [];
+      try {
+        parsedPictureDescriptions = req.body.pictureDescriptions ? JSON.parse(req.body.pictureDescriptions) : [];
+        console.log('Picture descriptions parsed successfully:', parsedPictureDescriptions);
+      } catch (e) {
+        console.error('Error parsing pictureDescriptions:', e);
+        console.log('Raw pictureDescriptions:', req.body.pictureDescriptions);
+        parsedPictureDescriptions = [];
+      }
+
+      let parsedMarkPictureIndices = [];
+      try {
+        // Check if it's an array (multiple form fields) or single string
+        if (Array.isArray(req.body.markPictureIndices)) {
+          // Parse each JSON string in the array
+          parsedMarkPictureIndices = req.body.markPictureIndices.map(indexStr => {
+            try {
+              return JSON.parse(indexStr);
+            } catch (e) {
+              console.error('Error parsing individual markPictureIndex:', e);
+              return null;
+            }
+          }).filter(index => index !== null);
+        } else if (typeof req.body.markPictureIndices === 'string') {
+          // If it's a single JSON string, parse it and wrap in array
+          const parsedIndex = req.body.markPictureIndices ? JSON.parse(req.body.markPictureIndices) : null;
+          parsedMarkPictureIndices = parsedIndex ? [parsedIndex] : [];
+        } else {
+          parsedMarkPictureIndices = [];
+        }
+        console.log('Mark picture indices parsed successfully:', parsedMarkPictureIndices);
+      } catch (e) {
+        console.error('Error parsing markPictureIndices:', e);
+        console.log('Raw markPictureIndices:', req.body.markPictureIndices);
+        parsedMarkPictureIndices = [];
+      }
+
       let pictures = [];
 
       // Handle multiple pictures upload
@@ -6729,6 +10066,18 @@ app.post(
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => file.filename);
       }
 
+      // Handle general pictures
+      let generalPictures = [];
+      if (req.files["generalPictures"] && req.files["generalPictures"].length > 0) {
+        generalPictures = req.files["generalPictures"].map((file) => file.filename);
+      }
+
+      // Handle mark pictures
+      let markPictures = [];
+      if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
+        markPictures = req.files["markPictures"].map((file) => file.filename);
+      }
+
       // Prepare data for insertion
       const deviationData = {
         companyId,
@@ -6749,19 +10098,27 @@ app.post(
           try { return JSON.parse(selectedProjectManager); } catch (e) { console.error('Error parsing selectedProjectManager:', e); return null; }
         })() : null,
         pictures, // Add pictures field
-        pictureDescriptions: req.body.pictureDescriptions ? (() => {
-          try { return JSON.parse(req.body.pictureDescriptions); } catch (e) { console.error('Error parsing pictureDescriptions:', e); return []; }
-        })() : [], // Parse JSON array
-        generalPictures: [], // Fix undefined variable
-        generalPictureDescriptions: generalPictureDescriptions || [],
-        markPictures: [], // Fix undefined variable
-        markPictureDescriptions: markPictureDescriptions || [],
+        pictureDescriptions: parsedPictureDescriptions,
+        generalPictures: generalPictures,
+        generalPictureDescriptions: parsedGeneralPictureDescriptions,
+        markPictures: markPictures,
+        markPictureDescriptions: parsedMarkPictureDescriptions,
+        markPictureIndices: parsedMarkPictureIndices,
         originalPdf: originalPdfFilename,
         annotatedPdf: annotatedPdfFilename,
         annotatedPdfs,
       };
       
-      console.log('Attempting to insert deviation data:', deviationData);
+      console.log('Attempting to insert deviation data:', {
+        ...deviationData,
+        // Show specific fields that were problematic
+        generalPictures: deviationData.generalPictures,
+        generalPictureDescriptions: deviationData.generalPictureDescriptions,
+        markPictures: deviationData.markPictures,
+        markPictureDescriptions: deviationData.markPictureDescriptions,
+        pictureDescriptions: deviationData.pictureDescriptions,
+        markPictureIndices: deviationData.markPictureIndices
+      });
       
       // Insert the data into the database
       const result = await db.collection("deviations").insertOne(deviationData);
@@ -6781,10 +10138,7 @@ app.post(
 
 app.post(
   "/store-special-control",
-  upload.fields([
-    { name: "pictures", maxCount: 10 },
-    { name: "annotatedImage", maxCount: 10 },
-  ]),
+  upload.any(), // Use upload.any() to accept any field names
   async (req, res) => {
     try {
       const {
@@ -6795,6 +10149,16 @@ app.post(
         buildingParts,
         drawing,
         type,
+        projectManager,
+        independentController,
+        worker,
+        selectedType,
+        createdAt,
+        markPictures,
+        markDescriptions,
+        markers,
+        annotatedImages,
+        annotatedImagePNGs,
       } = req.body;
 
       const parsedBuildingParts = buildingParts
@@ -6805,19 +10169,42 @@ app.post(
 
       const parsedProfession = profession ? JSON.parse(profession) : null;
 
+      const parsedProjectManager = projectManager ? JSON.parse(projectManager) : null;
+      const parsedIndependentController = independentController ? JSON.parse(independentController) : null;
+      const parsedWorker = worker ? JSON.parse(worker) : null;
+      const parsedMarkPictures = markPictures ? JSON.parse(markPictures) : [];
+      const parsedMarkDescriptions = markDescriptions ? JSON.parse(markDescriptions) : [];
+      const parsedMarkers = markers ? JSON.parse(markers) : [];
+      const parsedAnnotatedImages = annotatedImages ? JSON.parse(annotatedImages) : {};
+      const parsedAnnotatedImagePNGs = annotatedImagePNGs ? JSON.parse(annotatedImagePNGs) : {};
+
       let pictures = [];
-
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
-
       let annotatedImage = null;
-      if (
-        req.files["annotatedImage"] &&
-        req.files["annotatedImage"].length > 0
-      ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+      let markPicturesFiles = [];
+      let annotatedPdfs = [];
+      let annotatedPdfImages = [];
+
+      // Handle all uploaded files (req.files is now an array with upload.any())
+      if (req.files && req.files.length > 0) {
+        req.files.forEach(file => {
+          if (file.fieldname === 'pictures') {
+            pictures.push(file.filename);
+          } else if (file.fieldname === 'annotatedImage') {
+            annotatedImage = file.filename;
+          } else if (file.fieldname.startsWith('markPictures_')) {
+            markPicturesFiles.push(file.filename);
+          } else if (file.fieldname === 'annotatedPdfs') {
+            annotatedPdfs.push({
+              filename: file.filename,
+              originalName: file.originalname,
+            });
+          } else if (file.fieldname === 'annotatedPdfImages') {
+            annotatedPdfImages.push({
+              filename: file.filename,
+              originalName: file.originalname,
+            });
+          }
+        });
       }
 
       // Insert the data into the database
@@ -6830,6 +10217,19 @@ app.post(
         buildingParts: parsedBuildingParts,
         drawing: parsedDrawing,
         pictures,
+        projectManager: parsedProjectManager,
+        independentController: parsedIndependentController,
+        worker: parsedWorker,
+        selectedType: selectedType || null,
+        createdAt: createdAt || new Date().toISOString(),
+        markPictures: parsedMarkPictures,
+        markDescriptions: parsedMarkDescriptions,
+        markers: parsedMarkers,
+        markPicturesFiles: markPicturesFiles,
+        annotatedPdfs: annotatedPdfs,
+        annotatedPdfImages: annotatedPdfImages,
+        annotatedImages: parsedAnnotatedImages,
+        annotatedImagePNGs: parsedAnnotatedImagePNGs,
       });
 
       res.status(201).json(result);
@@ -6839,6 +10239,47 @@ app.post(
     }
   }
 );
+
+// Delete special control point
+app.delete("/delete-special-control", async (req, res) => {
+  try {
+    const { specialControleId, companyId, projectId } = req.body;
+
+    if (!specialControleId || !companyId || !projectId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required fields: specialControleId, companyId, projectId" 
+      });
+    }
+
+    // Delete the special control point
+    const result = await db.collection("specialcontrol").deleteOne({
+      _id: new ObjectId(specialControleId),
+      companyId: companyId,
+      projectsId: { $in: [projectId] }
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Special control point not found" 
+      });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Special control point deleted successfully",
+      deletedCount: result.deletedCount
+    });
+
+  } catch (error) {
+    console.error("Error deleting special control point:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
 
 app.post(
   "/update-deviation/:id",
@@ -7696,6 +11137,7 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
       email,
       projectsId,
       companyId,
+      createdAt,
     } = req.fields || req.body; // Handle both multipart and JSON
 
     const parsedProfessions =
@@ -7721,6 +11163,7 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
       projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
       companyId,
       picture,
+      createdAt: createdAt || new Date().toISOString(),
     };
 
     // Only add optional fields if they exist and are not empty
@@ -9918,7 +13361,7 @@ app.get("/users/authenticated", authenticateToken, (req, res) => {
 // PDF Generation API
 const puppeteer = require('puppeteer');
 const Handlebars = require('handlebars');
-const fs = require('fs').promises;
+const fsPromises = require('fs').promises;
 
 // Test API to verify data fetching
 app.get("/api/test-report-data/:companyId/:projectId/:professionId", async (req, res) => {
@@ -10785,6 +14228,103 @@ The Assurement Team`,
   }
 }
 
+// Send forgot password email
+async function sendForgotPasswordEmail(email, username, forgotPasswordCode) {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: "email-smtp.eu-north-1.amazonaws.com",
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      logger: true,
+      debug: true,
+    });
+
+    const mailOptions = {
+      from: "info@assurement.dk",
+      to: email,
+      subject: "Assurement - Password Reset Code",
+      text: `Hello ${username},
+
+You have requested to reset your password for your Assurement account.
+
+Your password reset code is: ${forgotPasswordCode}
+
+Please use this code to reset your password.
+
+Best regards,
+The Assurement Team`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h2 style="color: #2c3e50;">Password Reset Code</h2>
+            <p style="color: #7f8c8d;">Reset your Assurement account password</p>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <h3 style="color: #e74c3c; margin: 0;">Your Code</h3>
+            <div style="font-size: 32px; font-weight: bold; color: #2c3e50; letter-spacing: 5px; margin: 15px 0; padding: 15px; background-color: white; border: 2px dashed #e74c3c; border-radius: 8px;">
+              ${forgotPasswordCode}
+            </div>
+          </div>
+          
+          <div style="margin: 30px 0;">
+            <p style="color: #2c3e50; line-height: 1.6;">
+              Hello <strong>${username}</strong>,<br><br>
+              You have requested to reset your password for your Assurement account. Please use the code above to complete the password reset process.
+            </p>
+          </div>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+          <p style="text-align: center; color: #7f8c8d; font-size: 12px;">
+            Sent from Assurement Backend Server
+          </p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Forgot password email sent successfully to:", email, "Message ID:", info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("❌ Failed to send forgot password email to:", email, "Error:", error.message);
+    throw error;
+  }
+}
+
+// Test forgot password email specifically
+app.post("/test-forgot-password-email", async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const testCode = "123456";
+    const testUsername = "Test User";
+    
+    // Test the forgot password email function directly
+    await sendForgotPasswordEmail(email, testUsername, testCode);
+    
+    res.status(200).json({
+      success: true,
+      message: "Forgot password test email sent successfully",
+      email: email,
+      testCode: testCode
+    });
+  } catch (error) {
+    console.error("❌ Test forgot password email error:", error);
+    res.status(500).json({ 
+      error: "Failed to send test forgot password email",
+      details: error.message 
+    });
+  }
+});
+
 // Simple test email endpoint
 app.post("/test-email", async (req, res) => {
   try {
@@ -11257,8 +14797,506 @@ app.post("/resend-verification", async (req, res) => {
   }
 });
 
-// Static file serving - moved here after all API routes
-app.use(express.static(path.join(__dirname, "public")));
+// Check user verification status endpoint
+app.post("/check-user-verification-status", async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: "Email is required" 
+      });
+    }
+
+    console.log(`🔍 Checking verification status for email: ${email}`);
+
+    // Find all users with this email (username)
+    const users = await db.collection("users").find({
+      username: email
+    }).toArray();
+
+    if (users.length === 0) {
+      console.log(`❌ No users found with email: ${email}`);
+      return res.status(200).json({
+        status: "userNotFound",
+        message: "No user found with this email address"
+      });
+    }
+
+    // Check if any user document has isVerified: true
+    const hasVerifiedUser = users.some(user => user.isVerified === true);
+    
+    if (hasVerifiedUser) {
+      console.log(`✅ User with email ${email} is already verified`);
+      return res.status(200).json({
+        status: "verified",
+        message: "User is already verified and can login",
+        hasVerifiedUser: true,
+        verificationRequired: false
+      });
+    } else {
+      console.log(`⚠️ User with email ${email} needs verification`);
+      return res.status(200).json({
+        status: "unverified",
+        message: "User needs to verify email before login",
+        hasVerifiedUser: false,
+        verificationRequired: true
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ Check verification status error:", error);
+    res.status(500).json({ 
+      error: "Failed to check verification status",
+      details: error.message 
+    });
+  }
+});
+
+// Set password after verification endpoint
+app.post("/set-password-after-verification", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ 
+        error: "Email and password are required" 
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ 
+        error: "Password must be at least 6 characters long" 
+      });
+    }
+
+    console.log(`🔐 Setting password for email: ${email}`);
+
+    // Find all users with this email (username) and update their passwords
+    const result = await db.collection("users").updateMany(
+      { username: email },
+      { 
+        $set: { 
+          password: password,
+          passwordSetAt: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      console.log(`❌ No users found with email: ${email}`);
+      return res.status(404).json({
+        error: "No user found with this email address"
+      });
+    }
+
+    console.log(`✅ Password updated for ${result.modifiedCount} user documents with email: ${email}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Password set successfully! You can now login.",
+      email: email,
+      usersUpdated: result.modifiedCount
+    });
+
+  } catch (error) {
+    console.error("❌ Set password error:", error);
+    res.status(500).json({ 
+      error: "Failed to set password",
+      details: error.message 
+    });
+  }
+});
+
+// Forgot password request endpoint
+app.post("/forgot-password-request", async (req, res) => {
+  try {
+    const { email, platform } = req.body; // platform: 'flutter' or 'react'
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: "Email is required" 
+      });
+    }
+
+    console.log(`🔍 Forgot password request for email: ${email} (platform: ${platform})`);
+
+    // Define allowed roles based on platform
+    const allowedRoles = platform === 'react' 
+      ? ['Admin'] // React dashboard only for Admin
+      : ['Worker', 'Sub Contractor', 'Independent Controller', 'Admin']; // Flutter for all roles
+
+    // Find users with this email and allowed roles
+    const users = await db.collection("users").find({
+      username: email,
+      role: { $in: allowedRoles }
+    }).toArray();
+
+    if (users.length === 0) {
+      console.log(`❌ No users found with email: ${email} and allowed roles: ${allowedRoles.join(', ')}`);
+      return res.status(404).json({
+        error: "No user found with this email address for the selected platform"
+      });
+    }
+
+    // Check if any user document has isVerified: true
+    const hasVerifiedUser = users.some(user => user.isVerified === true);
+    
+    if (!hasVerifiedUser) {
+      console.log(`❌ No verified users found with email: ${email}`);
+      return res.status(400).json({
+        error: "Please verify your email address before resetting password"
+      });
+    }
+
+    // Generate forgot password code
+    const forgotPasswordCode = generateVerificationCode();
+    
+    // Update all matching users with forgot password code
+    const result = await db.collection("users").updateMany(
+      { 
+        username: email,
+        role: { $in: allowedRoles }
+      },
+      { 
+        $set: { 
+          forgotPasswordCode: forgotPasswordCode,
+          forgotPasswordSentAt: new Date()
+        }
+      }
+    );
+
+    // Send forgot password email
+    try {
+      await sendForgotPasswordEmail(email, users[0].name || users[0].username, forgotPasswordCode);
+      
+      console.log(`✅ Forgot password code sent to ${email} for ${result.modifiedCount} users`);
+      
+      res.status(200).json({
+        success: true,
+        message: "Forgot password code sent to your email address",
+        email: email,
+        usersUpdated: result.modifiedCount
+      });
+    } catch (emailError) {
+      console.error("❌ Failed to send forgot password email:", emailError);
+      res.status(500).json({ 
+        error: "Failed to send forgot password email",
+        details: emailError.message 
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ Forgot password request error:", error);
+    res.status(500).json({ 
+      error: "Failed to process forgot password request",
+      details: error.message 
+    });
+  }
+});
+
+// Verify forgot password code endpoint
+app.post("/verify-forgot-password-code", async (req, res) => {
+  try {
+    const { email, code, platform } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({ 
+        error: "Email and code are required" 
+      });
+    }
+
+    console.log(`🔍 Verifying forgot password code for email: ${email}`);
+
+    // Define allowed roles based on platform
+    const allowedRoles = platform === 'react' 
+      ? ['Admin'] // React dashboard only for Admin
+      : ['Worker', 'Sub Contractor', 'Independent Controller', 'Admin']; // Flutter for all roles
+
+    // Find user with this email, code, and allowed role
+    const user = await db.collection("users").findOne({
+      username: email,
+      forgotPasswordCode: code,
+      role: { $in: allowedRoles },
+      isVerified: true
+    });
+
+    if (!user) {
+      console.log(`❌ Invalid forgot password code for email: ${email}`);
+      return res.status(400).json({
+        error: "Invalid or expired forgot password code"
+      });
+    }
+
+    // Check if code is not expired (24 hours)
+    const codeAge = Date.now() - new Date(user.forgotPasswordSentAt).getTime();
+    const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+    if (codeAge > maxAge) {
+      console.log(`❌ Expired forgot password code for email: ${email}`);
+      return res.status(400).json({
+        error: "Forgot password code has expired. Please request a new one."
+      });
+    }
+
+    console.log(`✅ Forgot password code verified for email: ${email}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Code verified successfully. You can now reset your password.",
+      email: email
+    });
+
+  } catch (error) {
+    console.error("❌ Verify forgot password code error:", error);
+    res.status(500).json({ 
+      error: "Failed to verify forgot password code",
+      details: error.message 
+    });
+  }
+});
+
+// Reset password endpoint
+app.post("/reset-password", async (req, res) => {
+  try {
+    const { email, newPassword, platform } = req.body;
+    
+    if (!email || !newPassword) {
+      return res.status(400).json({ 
+        error: "Email and new password are required" 
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: "Password must be at least 6 characters long" 
+      });
+    }
+
+    console.log(`🔐 Resetting password for email: ${email}`);
+
+    // Define allowed roles based on platform
+    const allowedRoles = platform === 'react' 
+      ? ['Admin'] // React dashboard only for Admin
+      : ['Worker', 'Sub Contractor', 'Independent Controller', 'Admin']; // Flutter for all roles
+
+    // Find all users with this email and allowed roles, and update their passwords
+    const result = await db.collection("users").updateMany(
+      { 
+        username: email,
+        role: { $in: allowedRoles }
+      },
+      { 
+        $set: { 
+          password: newPassword,
+          passwordResetAt: new Date()
+        },
+        $unset: { 
+          forgotPasswordCode: "",
+          forgotPasswordSentAt: ""
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      console.log(`❌ No users found with email: ${email} and allowed roles: ${allowedRoles.join(', ')}`);
+      return res.status(404).json({
+        error: "No user found with this email address for the selected platform"
+      });
+    }
+
+    console.log(`✅ Password reset for ${result.modifiedCount} user documents with email: ${email}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Password reset successfully! You can now login with your new password.",
+      email: email,
+      usersUpdated: result.modifiedCount
+    });
+
+  } catch (error) {
+    console.error("❌ Reset password error:", error);
+    res.status(500).json({ 
+      error: "Failed to reset password",
+      details: error.message 
+    });
+  }
+});
+
+// Debug endpoint to test signature replacement logic
+app.get("/debug-signatures", async (req, res) => {
+  try {
+    const { projectId, companyId, professionSubjectMatterId } = req.query;
+
+    if (!projectId || !companyId || !professionSubjectMatterId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required query parameters" 
+      });
+    }
+
+    // Test the same query as in replaceDynamicContent
+    const query = {
+      companyId: companyId,
+      projectsId: { $in: [projectId] },
+      professionSubjectMatterId: professionSubjectMatterId
+    };
+
+    console.log('DEBUG: Debug endpoint query:', JSON.stringify(query, null, 2));
+    
+    // Test simple query first
+    const allSignatures = await db.collection("signatures").find({}).toArray();
+    console.log('DEBUG: Total signatures in database:', allSignatures.length);
+    
+    const signatures = await db.collection("signatures").find(query).toArray();
+    
+    console.log('DEBUG: Debug endpoint found signatures:', signatures.length);
+
+    res.status(200).json({ 
+      success: true, 
+      query: query,
+      signatures: signatures,
+      count: signatures.length 
+    });
+
+  } catch (error) {
+    console.error("Error in debug endpoint:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error",
+      error: error.message 
+    });
+  }
+});
+
+// API endpoint to get deviations for static reports
+app.get("/get-deviations", async (req, res) => {
+  try {
+    const { projectId, companyId, professionSubjectMatterId } = req.query;
+
+    if (!projectId || !companyId || !professionSubjectMatterId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required query parameters: projectId, companyId, professionSubjectMatterId" 
+      });
+    }
+
+    console.log('=== GETTING DEVIATIONS ===');
+    console.log('Company ID:', companyId);
+    console.log('Project ID:', projectId);
+    console.log('Profession Subject Matter ID:', professionSubjectMatterId);
+
+    // Query to find deviations matching your criteria
+    const query = {
+      companyId: companyId,
+      "projectsId.0": projectId,  // First index of projectsId array
+      "profession.SubjectMatterId": professionSubjectMatterId,
+      type: "static report"
+    };
+
+    console.log('DEBUG: Deviations query:', JSON.stringify(query, null, 2));
+
+    const deviations = await db.collection("deviations")
+      .find(query)
+      .sort({ submittedDate: -1 }) // Sort by newest first
+      .toArray();
+
+    console.log('DEBUG: Found deviations:', deviations.length);
+
+    // Format deviations for the table
+    const formattedDeviations = deviations.map(deviation => ({
+      id: deviation._id.toString().substring(0, 8), // Short ID
+      description: deviation.comment || 'No description',
+      fullId: deviation._id.toString(),
+      submittedDate: deviation.submittedDate
+    }));
+
+    res.status(200).json({ 
+      success: true, 
+      query: query,
+      deviations: formattedDeviations,
+      count: deviations.length,
+      rawDeviations: deviations // Include raw data for debugging
+    });
+
+  } catch (error) {
+    console.error("Error fetching deviations:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error",
+      error: error.message 
+    });
+  }
+});
+
+// API endpoint to get project main drawings
+app.get("/get-project-main-drawings", async (req, res) => {
+  try {
+    const { projectId, companyId } = req.query;
+
+    console.log('=== GET PROJECT MAIN DRAWINGS API CALLED ===');
+    console.log('Query parameters:', { projectId, companyId });
+
+    if (!projectId || !companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required query parameters: projectId, companyId"
+      });
+    }
+
+    // Build query object to find drawings associated with the project
+    const query = {
+      companyId: companyId,
+      projectsId: projectId
+    };
+
+    console.log('MongoDB query:', JSON.stringify(query, null, 2));
+
+    // Fetch drawings from database
+    const drawings = await db.collection("drawings")
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    console.log('Found drawings:', drawings.length);
+
+    // Format the response to extract main drawings
+    const mainDrawings = [];
+    drawings.forEach(drawing => {
+      if (drawing.mainDrawings && Array.isArray(drawing.mainDrawings)) {
+        drawing.mainDrawings.forEach((mainDrawing, index) => {
+          mainDrawings.push({
+            drawingId: drawing._id,
+            mainDrawingIndex: index,
+            stored: mainDrawing.stored,
+            original: mainDrawing.original,
+            uploadedAt: mainDrawing.uploadedAt,
+            drawingName: drawing.drawingName || `Drawing ${index + 1}`,
+            createdAt: drawing.createdAt
+          });
+        });
+      }
+    });
+
+    console.log('Extracted main drawings:', mainDrawings.length);
+
+    res.status(200).json({
+      success: true,
+      query: query,
+      mainDrawings: mainDrawings,
+      count: mainDrawings.length,
+      rawDrawings: drawings
+    });
+
+  } catch (error) {
+    console.error('Error fetching project main drawings:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch project main drawings",
+      error: error.message
+    });
+  }
+});
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

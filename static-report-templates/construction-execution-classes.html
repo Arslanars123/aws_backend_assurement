@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction and Execution Classes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: white;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 20mm;
+            background: white;
+            position: relative;
+        }
+
+        .section-header {
+            background-color: #1e3a8a;
+            color: white;
+            padding: 15px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .subsection {
+            margin-bottom: 25px;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .subsection-content {
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.8;
+            margin-bottom: 15px;
+        }
+
+        .subsection-content p {
+            margin-bottom: 12px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 2px solid #1e3a8a;
+        }
+
+        .table th {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 14px;
+            border-bottom: 1px solid #d1d5db;
+            border-right: 1px solid #d1d5db;
+        }
+
+        .table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            border-right: 1px solid #e5e7eb;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table td:last-child,
+        .table th:last-child {
+            border-right: none;
+        }
+
+        .table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        .table-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1f2937;
+            margin: 25px 0 15px 0;
+            text-align: center;
+        }
+
+        .control-section {
+            font-weight: 500;
+            color: #1f2937;
+        }
+
+        .control-plan {
+            color: #374151;
+        }
+
+        .construction-class {
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+
+        .execution-class {
+            font-weight: bold;
+            color: #059669;
+        }
+
+        .empty-row {
+            height: 40px;
+        }
+
+        .empty-row td {
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .deviation-id {
+            font-weight: bold;
+            color: #dc2626;
+        }
+
+        .select-date {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        .b7-reference {
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+
+        @media print {
+            .page {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="section-header">3. LIST OF SELECTED CONSTRUCTION AND EXECUTION CLASSES</div>
+
+        <div class="subsection">
+            <div class="subsection-title">3.1 Construction and execution classes selected.</div>
+            <div class="subsection-content">
+                <p>Below, the building designer has indicated which classes have been determined from the project material. These control sections are covered by the following:</p>
+            </div>
+        </div>
+
+        <div class="table-title">Table 1: Control Sections and Classes</div>
+        
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Control section</th>
+                    <th>Control plan</th>
+                    <th>Construction class</th>
+                    <th>Execution class</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="control-section" id="control-section">Loading...</td>
+                    <td class="control-plan" id="control-plan">Loading...</td>
+                    <td class="construction-class" id="construction-class">Loading...</td>
+                    <td class="execution-class" id="execution-class">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="section-header">4. DOCUMENTATION SPECIAL CONTROLS</div>
+
+        <div class="subsection">
+            <div class="subsection-title">4.1 General</div>
+            <div class="subsection-content">
+                <p>There are no special controls assigned by the building designers, cf. This construction section. Should there be special controls, they will be stated in section 3.2</p>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">4.2 Special control points</div>
+            <div class="subsection-content">
+                <p>Cf. section 3.1, no special controls are required. If there are special checks, it will be stated below in the form, otherwise there will be none.</p>
+            </div>
+        </div>
+
+        <div class="table-title">Table 2: Special Control Points</div>
+        
+        <table class="table" id="special-control-points-table">
+            <thead>
+                <tr>
+                    <th>Control ID</th>
+                    <th>Special control</th>
+                    <th>Description</th>
+                    <th>Made by:</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="empty-row">
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr class="empty-row">
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr class="empty-row">
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="section-header">5. FOLLOW-UP ON DEVIATIONS</div>
+
+        <div class="subsection">
+            <div class="subsection-title">5.1 Handling of any deviations <span class="b7-reference">B7</span></div>
+            <div class="subsection-content">
+                <p>It is the Contractor's responsibility that the corrective action is carried out, and then that the independent inspector re-checks the deviations that may have occurred during the process.</p>
+                <p>The list below shows in writing the registered deviations. If the list is empty, no one is registered.</p>
+            </div>
+        </div>
+
+        <div class="table-title">Table 3: Registered Deviations</div>
+        
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>DEVIATION ID</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="deviation-id">AFV_01</td>
+                    <td class="select-date">(Select Date)</td>
+                </tr>
+                <tr class="empty-row">
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr class="empty-row">
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr class="empty-row">
+                    <td></td>
+                    <td></td>
+                </tr>
+                <tr class="empty-row">
+                    <td></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="subsection-content">
+            <p>The above is updated every time a deviation occurs in the execution.</p>
+        </div>
+    </div>
+
+    <script>
+        // Function to get URL parameters
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // Function to fetch and populate dynamic data
+        async function populateTableData() {
+            try {
+                // Get parameters from URL
+                const companyId = getUrlParameter('companyId') || '68adb95ea8c5323f1b948c6c';
+                const projectId = getUrlParameter('projectId') || '68adb9b3a8c5323f1b948c6e';
+                const professionSubjectMatterId = getUrlParameter('professionSubjectMatterId') || 'KP13';
+
+                // Fetch static control plan data
+                const response = await fetch(`http://localhost:3000/get-static-inspection-report-data?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const data = await response.json();
+
+                if (data.success && data.data) {
+                    const staticControlPlan = data.data.staticControlPlan.latest;
+                    
+                    // Update Construction Class
+                    const constructionClassElement = document.getElementById('construction-class');
+                    if (staticControlPlan && staticControlPlan.cc) {
+                        constructionClassElement.textContent = staticControlPlan.cc.toUpperCase();
+                    } else {
+                        constructionClassElement.textContent = 'KK3';
+                    }
+
+                    // Update Execution Class
+                    const executionClassElement = document.getElementById('execution-class');
+                    if (staticControlPlan && staticControlPlan.exc) {
+                        executionClassElement.textContent = staticControlPlan.exc.toUpperCase();
+                    } else {
+                        executionClassElement.textContent = 'EXC3';
+                    }
+
+                    // Update Control Section (B3.x where x is from database)
+                    const controlSectionElement = document.getElementById('control-section');
+                    if (staticControlPlan && staticControlPlan.x) {
+                        controlSectionElement.textContent = `B3.${staticControlPlan.x}`;
+                    } else {
+                        controlSectionElement.textContent = 'B3.1';
+                    }
+
+                    // Update Control Plan with special text
+                    const controlPlanElement = document.getElementById('control-plan');
+                    let controlPlanText = 'Static Control Plan:';
+                    
+                    // Fetch special text for the project
+                    try {
+                        const specialTextResponse = await fetch(`http://localhost:3000/get-project-special-text?projectId=${projectId}`);
+                        const specialTextData = await specialTextResponse.json();
+                        
+                        if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
+                            controlPlanText += ` ${specialTextData.data.specialText}`;
+                        }
+                    } catch (error) {
+                        console.log('No special text found or error fetching special text');
+                    }
+                    
+                    controlPlanElement.textContent = controlPlanText;
+                } else {
+                    // Fallback to default values if no data found
+                    document.getElementById('construction-class').textContent = 'KK3';
+                    document.getElementById('execution-class').textContent = 'EXC3';
+                    document.getElementById('control-section').textContent = 'B3.1';
+                    document.getElementById('control-plan').textContent = 'Static Control Plan:';
+                }
+
+                // Fetch and populate special control points table
+                await populateSpecialControlPointsTable(companyId, projectId, professionSubjectMatterId);
+
+                // Fetch and populate deviations table
+                await populateDeviationsTable(companyId, projectId, professionSubjectMatterId);
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                // Fallback to default values on error
+                document.getElementById('construction-class').textContent = 'KK3';
+                document.getElementById('execution-class').textContent = 'EXC3';
+                document.getElementById('control-section').textContent = 'B3.1';
+                document.getElementById('control-plan').textContent = 'Static Control Plan:';
+                
+                // Still try to fetch deviations even if other data fails
+                try {
+                    const companyId = getUrlParameter('companyId') || '68adb95ea8c5323f1b948c6c';
+                    const projectId = getUrlParameter('projectId') || '68adb9b3a8c5323f1b948c6e';
+                    const professionSubjectMatterId = getUrlParameter('professionSubjectMatterId') || 'KP13';
+                    await populateDeviationsTable(companyId, projectId, professionSubjectMatterId);
+                } catch (deviationError) {
+                    console.error('Error fetching deviations in fallback:', deviationError);
+                }
+            }
+        }
+
+        // Function to populate special control points table
+        async function populateSpecialControlPointsTable(companyId, projectId, professionSubjectMatterId) {
+            try {
+                const response = await fetch(`http://localhost:3000/get-special-control-points-table?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const result = await response.json();
+
+                if (result.success && result.data && result.data.length > 0) {
+                    // Clear existing empty rows
+                    const tableBody = document.querySelector('#special-control-points-table tbody');
+                    tableBody.innerHTML = '';
+
+                    // Add data rows
+                    result.data.forEach((row, index) => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${row.controlId}</td>
+                            <td>${row.specialControl}</td>
+                            <td>${row.description}</td>
+                            <td>${row.madeBy}</td>
+                        `;
+                        tableBody.appendChild(tr);
+                    });
+                } else {
+                    // Keep empty rows if no data
+                    console.log('No special control points found');
+                }
+            } catch (error) {
+                console.error('Error fetching special control points:', error);
+            }
+        }
+
+        // Function to populate deviations table
+        async function populateDeviationsTable(companyId, projectId, professionSubjectMatterId) {
+            try {
+                const response = await fetch(`http://localhost:3000/get-deviations?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const result = await response.json();
+
+                if (result.success && result.deviations && result.deviations.length > 0) {
+                    // Find the deviations table (Table 3)
+                    const deviationsTable = document.querySelector('.table:nth-of-type(3) tbody');
+                    if (deviationsTable) {
+                        // Clear existing rows
+                        deviationsTable.innerHTML = '';
+
+                        // Add deviation data rows
+                        result.deviations.forEach((deviation, index) => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td class="deviation-id">${deviation._id}</td>
+                                <td>${deviation.comment || 'No description'}</td>
+                            `;
+                            deviationsTable.appendChild(tr);
+                        });
+
+                        // Add empty rows if we have less than 5 total rows
+                        const currentRowCount = deviationsTable.children.length;
+                        const emptyRowsNeeded = Math.max(0, 5 - currentRowCount);
+                        
+                        for (let i = 0; i < emptyRowsNeeded; i++) {
+                            const tr = document.createElement('tr');
+                            tr.className = 'empty-row';
+                            tr.innerHTML = `
+                                <td></td>
+                                <td></td>
+                            `;
+                            deviationsTable.appendChild(tr);
+                        }
+                    }
+                } else {
+                    console.log('No deviations found');
+                    // Keep the existing empty rows if no deviations
+                }
+            } catch (error) {
+                console.error('Error fetching deviations:', error);
+            }
+        }
+
+        // Function to update data from external API calls
+        window.updateConstructionExecutionData = function(companyId, projectId, professionSubjectMatterId) {
+            // Update URL parameters and reload data
+            const url = new URL(window.location);
+            url.searchParams.set('companyId', companyId);
+            url.searchParams.set('projectId', projectId);
+            url.searchParams.set('professionSubjectMatterId', professionSubjectMatterId);
+            window.history.replaceState({}, '', url);
+            populateTableData();
+        };
+
+        // Initialize the page when it loads
+        document.addEventListener('DOMContentLoaded', function() {
+            populateTableData();
+        });
+    </script>
+</body>
+</html>
