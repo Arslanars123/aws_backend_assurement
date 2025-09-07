@@ -1,10 +1,6 @@
 // Import required ars
-const express = require("express");
 const { MongoClient, ObjectId } = require("mongodb");
-const bodyParser = require("body-parser");
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const cors = require("cors");
 const multer = require("multer");
 const xlsx = require("xlsx");
 const path = require("path");
@@ -43,20 +39,10 @@ async function convertPdfToPng(pdfPath, outputDir) {
   }
 }
 
-// Initialize app and middleware
-const app = express();
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true })); // Add this for form data
-app.use(cors());
-app.use("/uploads", express.static("uploads"));
-app.use("/uploads/previews", express.static("uploads/previews"));
-app.use("/templates", express.static("static-report-templates"));
-app.use(express.json()); // to parse JSON body
+// Initialize app (middleware and static serving is configured in app.js)
+const app = require("./app");
 
-// Serve frontend build assets from public
-app.use(express.static(path.join(__dirname, "public")));
-
-// Note: Static file serving moved to the end after API routes
+// Note: Keep API routes defined before the SPA fallback at the end
 
 // Health check endpoint
 app.get("/health", (req, res) => {
