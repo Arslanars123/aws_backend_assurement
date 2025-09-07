@@ -14,8 +14,7 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
 // Import static report API
-const staticReportAPI = require('./static-report-api');
-
+const staticReportAPI = require("./static-report-api");
 
 // PDF to PNG conversion function
 async function convertPdfToPng(pdfPath, outputDir) {
@@ -24,16 +23,16 @@ async function convertPdfToPng(pdfPath, outputDir) {
     const { fromPath } = require("pdf2pic");
     const options = {
       density: 300,
-      saveFilename: path.basename(pdfPath, '.pdf'),
+      saveFilename: path.basename(pdfPath, ".pdf"),
       savePath: outputDir,
       format: "png",
       width: 2048,
-      height: 2048
+      height: 2048,
     };
-    
+
     const convert = fromPath(pdfPath, options);
     const pageData = await convert(1); // Convert first page
-    
+
     if (pageData && pageData.path) {
       return path.basename(pageData.path);
     }
@@ -58,10 +57,10 @@ app.use(express.json()); // to parse JSON body
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "ok", 
+  res.status(200).json({
+    status: "ok",
     timestamp: new Date().toISOString(),
-    message: "Server is running"
+    message: "Server is running",
   });
 });
 
@@ -70,12 +69,13 @@ app.get("/get-project-managers", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
     const query = addFilters({}, companyId, projectId);
-    
+
     // Fetch project managers from users collection with isProjectManager 'yes'
-    const projectManagers = await db.collection("users")
+    const projectManagers = await db
+      .collection("users")
       .find({ ...query, isProjectManager: "yes" })
       .toArray();
-    
+
     res.status(200).json(projectManagers);
   } catch (error) {
     console.error("Error fetching project managers:", error);
@@ -88,12 +88,13 @@ app.get("/get-independent-controllers", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
     const query = addFilters({}, companyId, projectId);
-    
+
     // Fetch independent controllers from users collection with role 'Independent Controller'
-    const independentControllers = await db.collection("users")
+    const independentControllers = await db
+      .collection("users")
       .find({ ...query, role: "Independent Controller" })
       .toArray();
-    
+
     res.status(200).json(independentControllers);
   } catch (error) {
     console.error("Error fetching independent controllers:", error);
@@ -106,12 +107,13 @@ app.get("/get-workers", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
     const query = addFilters({}, companyId, projectId);
-    
+
     // Fetch workers from users collection with role 'Worker'
-    const workers = await db.collection("users")
+    const workers = await db
+      .collection("users")
       .find({ ...query, role: "Worker" })
       .toArray();
-    
+
     res.status(200).json(workers);
   } catch (error) {
     console.error("Error fetching workers:", error);
@@ -124,12 +126,13 @@ app.get("/get-child-drawings", async (req, res) => {
   try {
     const { parentDrawingId, companyId, projectId } = req.query;
     const query = addFilters({}, companyId, projectId);
-    
+
     // Fetch child drawings where parentDrawingId matches the selected drawing
-    const childDrawings = await db.collection("draws")
+    const childDrawings = await db
+      .collection("draws")
       .find({ ...query, parentDrawingId: parentDrawingId })
       .toArray();
-    
+
     res.status(200).json(childDrawings);
   } catch (error) {
     console.error("Error fetching child drawings:", error);
@@ -141,27 +144,27 @@ app.get("/get-child-drawings", async (req, res) => {
 app.get("/convert-pdf-to-png", async (req, res) => {
   try {
     const { filename } = req.query;
-    
+
     if (!filename) {
       return res.status(400).json({ error: "Filename is required" });
     }
-    
+
     const pdfPath = path.join(__dirname, "uploads", filename);
     const outputDir = path.join(__dirname, "uploads");
-    
+
     // Check if PDF file exists
-    if (!require('fs').existsSync(pdfPath)) {
+    if (!require("fs").existsSync(pdfPath)) {
       return res.status(404).json({ error: "PDF file not found" });
     }
-    
+
     // Convert PDF to PNG
     const pngFilename = await convertPdfToPng(pdfPath, outputDir);
-    
+
     if (pngFilename) {
-      res.status(200).json({ 
-        success: true, 
+      res.status(200).json({
+        success: true,
         pngFilename: pngFilename,
-        pngUrl: `/uploads/${pngFilename}`
+        pngUrl: `/uploads/${pngFilename}`,
       });
     } else {
       res.status(500).json({ error: "Failed to convert PDF to PNG" });
@@ -173,7 +176,9 @@ app.get("/convert-pdf-to-png", async (req, res) => {
 });
 
 // Try cloud MongoDB first, fallback to local MongoDB
-const cloudUri = process.env.MONGODB_BASE_URI || "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
+const cloudUri =
+  process.env.MONGODB_BASE_URI ||
+  "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
 const localUri = "mongodb://localhost:27017/construction_db";
 let uri = cloudUri;
 let client = new MongoClient(uri, {
@@ -187,7 +192,7 @@ let client = new MongoClient(uri, {
   minPoolSize: 1,
   maxIdleTimeMS: 30000,
   // Add heartbeat options
-  heartbeatFrequencyMS: 10000
+  heartbeatFrequencyMS: 10000,
 });
 const dbName = "construction_db";
 let db;
@@ -199,11 +204,15 @@ const JWT_SECRET = "your_jwt_secret_key";
 async function connectToMongoDB() {
   const maxRetries = 3;
   let retryCount = 0;
-  
+
   // Try cloud MongoDB first
   while (retryCount < maxRetries) {
     try {
-      console.log(`Attempting to connect to cloud MongoDB (attempt ${retryCount + 1}/${maxRetries})...`);
+      console.log(
+        `Attempting to connect to cloud MongoDB (attempt ${
+          retryCount + 1
+        }/${maxRetries})...`
+      );
       uri = cloudUri;
       const cloudClient = new MongoClient(uri, {
         serverSelectionTimeoutMS: 30000,
@@ -214,9 +223,9 @@ async function connectToMongoDB() {
         retryReads: true,
         minPoolSize: 1,
         maxIdleTimeMS: 30000,
-        heartbeatFrequencyMS: 10000
+        heartbeatFrequencyMS: 10000,
       });
-      
+
       await cloudClient.connect();
       console.log("Connected to cloud MongoDB successfully!");
       client = cloudClient;
@@ -224,25 +233,32 @@ async function connectToMongoDB() {
       return; // Success, exit the function
     } catch (error) {
       retryCount++;
-      console.error(`Error connecting to cloud MongoDB (attempt ${retryCount}/${maxRetries}):`, error.message);
-      
+      console.error(
+        `Error connecting to cloud MongoDB (attempt ${retryCount}/${maxRetries}):`,
+        error.message
+      );
+
       if (retryCount >= maxRetries) {
         console.log("Cloud MongoDB connection failed, trying local MongoDB...");
         break; // Try local MongoDB
       }
-      
+
       // Wait before retrying (exponential backoff)
       const waitTime = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
       console.log(`Retrying in ${waitTime}ms...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
-  
+
   // Try local MongoDB as fallback
   retryCount = 0;
   while (retryCount < maxRetries) {
     try {
-      console.log(`Attempting to connect to local MongoDB (attempt ${retryCount + 1}/${maxRetries})...`);
+      console.log(
+        `Attempting to connect to local MongoDB (attempt ${
+          retryCount + 1
+        }/${maxRetries})...`
+      );
       uri = localUri;
       const localClient = new MongoClient(uri, {
         serverSelectionTimeoutMS: 10000,
@@ -250,9 +266,9 @@ async function connectToMongoDB() {
         socketTimeoutMS: 10000,
         maxPoolSize: 10,
         retryWrites: true,
-        retryReads: true
+        retryReads: true,
       });
-      
+
       await localClient.connect();
       console.log("Connected to local MongoDB successfully!");
       client = localClient;
@@ -260,18 +276,23 @@ async function connectToMongoDB() {
       return; // Success, exit the function
     } catch (error) {
       retryCount++;
-      console.error(`Error connecting to local MongoDB (attempt ${retryCount}/${maxRetries}):`, error.message);
-      
+      console.error(
+        `Error connecting to local MongoDB (attempt ${retryCount}/${maxRetries}):`,
+        error.message
+      );
+
       if (retryCount >= maxRetries) {
-        console.error("Failed to connect to both cloud and local MongoDB after all retry attempts");
+        console.error(
+          "Failed to connect to both cloud and local MongoDB after all retry attempts"
+        );
         console.log("Starting server without database connection...");
         return; // Don't exit, let the server start without DB
       }
-      
+
       // Wait before retrying
       const waitTime = 2000;
       console.log(`Retrying in ${waitTime}ms...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
 }
@@ -280,13 +301,13 @@ async function connectToMongoDB() {
 async function startServer() {
   try {
     await connectToMongoDB();
-    
+
     const PORT = process.env.PORT || 3000;
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error("Failed to start server:", error);
     process.exit(1);
   }
 }
@@ -323,9 +344,9 @@ function authorizeRoles(roles) {
 // Middleware to check database connection
 function checkDatabaseConnection(req, res, next) {
   if (!db) {
-    return res.status(503).json({ 
+    return res.status(503).json({
       error: "Database connection not available. Please try again later.",
-      details: "The server is running but cannot connect to the database."
+      details: "The server is running but cannot connect to the database.",
     });
   }
   next();
@@ -351,15 +372,15 @@ app.get("/health", async (req, res) => {
       server: "running",
       timestamp: new Date().toISOString(),
       database: db ? "connected" : "disconnected",
-      port: 3000
+      port: 3000,
     };
-    
+
     res.status(200).json(healthStatus);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ 
+    res.status(500).json({
       server: "error",
-      error: err.message 
+      error: err.message,
     });
   }
 });
@@ -409,9 +430,9 @@ app.post(
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(username)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Invalid email format. Please provide a valid email address.",
-          field: "username"
+          field: "username",
         });
       }
 
@@ -424,10 +445,10 @@ app.post(
       }
 
       // Check for duplicate email+role+company combination
-      const duplicateCheck = await db.collection("users").findOne({ 
+      const duplicateCheck = await db.collection("users").findOne({
         username: username,
         role: role,
-        companyId: companyId
+        companyId: companyId,
       });
 
       if (duplicateCheck) {
@@ -439,13 +460,15 @@ app.post(
             email: duplicateCheck.username,
             role: duplicateCheck.role,
             companyId: duplicateCheck.companyId,
-            name: duplicateCheck.name
-          }
+            name: duplicateCheck.name,
+          },
         });
       }
 
       // Check if user with same email already exists and is verified
-      const existingUser = await db.collection("users").findOne({ username: username });
+      const existingUser = await db
+        .collection("users")
+        .findOne({ username: username });
       let isVerified = false;
       let verificationCode = null;
       let verificationSentAt = null;
@@ -455,14 +478,16 @@ app.post(
         // Email already verified, set new user as verified by default
         isVerified = true;
         shouldSendEmail = false;
-        console.log(`✅ User with email ${username} already verified. New user will be verified by default.`);
+        console.log(
+          `✅ User with email ${username} already verified. New user will be verified by default.`
+        );
       } else {
         // Generate verification code for new or unverified user
         verificationCode = generateVerificationCode();
         verificationSentAt = new Date();
         shouldSendEmail = true;
       }
-      
+
       // Create user document with verification status
       // Password is set to null by default - user will set it after email verification
       const userData = {
@@ -489,7 +514,7 @@ app.post(
         verificationCode,
         isVerified,
         verificationSentAt,
-        createdAt: new Date()
+        createdAt: new Date(),
       };
 
       // Insert user into database
@@ -498,45 +523,50 @@ app.post(
       // Send verification email only if needed
       if (shouldSendEmail && verificationCode) {
         try {
-          await sendVerificationEmail(username, name || username, verificationCode);
-          
+          await sendVerificationEmail(
+            username,
+            name || username,
+            verificationCode
+          );
+
           res.status(201).json({
             success: true,
             message: "User created successfully! Verification email sent.",
             userId: result.insertedId,
             verificationSent: true,
-            email: username
+            email: username,
           });
         } catch (emailError) {
           console.error("❌ Email verification failed:", emailError);
-          
+
           // User was created but email failed - return success with warning
           res.status(201).json({
             success: true,
-            message: "User created successfully! However, verification email could not be sent.",
+            message:
+              "User created successfully! However, verification email could not be sent.",
             userId: result.insertedId,
             verificationSent: false,
             email: username,
-            warning: "Please contact support to resend verification email."
+            warning: "Please contact support to resend verification email.",
           });
         }
       } else {
         // No email verification needed - user is already verified
         res.status(201).json({
           success: true,
-          message: "User created successfully! Email already verified - no verification needed.",
+          message:
+            "User created successfully! Email already verified - no verification needed.",
           userId: result.insertedId,
           verificationSent: false,
           email: username,
-          isVerified: true
+          isVerified: true,
         });
       }
-
     } catch (error) {
       console.error("❌ Error creating user:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to create user",
-        details: error.message 
+        details: error.message,
       });
     }
   }
@@ -757,7 +787,12 @@ app.get("/get-cons", async (req, res) => {
 
     const populatedUsers = await Promise.all(
       users.map(async (user) => {
-        if (user.mainId && user.mainId !== "null" && user.mainId !== "undefined" && user.mainId.length === 24) {
+        if (
+          user.mainId &&
+          user.mainId !== "null" &&
+          user.mainId !== "undefined" &&
+          user.mainId.length === 24
+        ) {
           try {
             const mainUser = await db
               .collection("users")
@@ -767,7 +802,9 @@ app.get("/get-cons", async (req, res) => {
               mainUser: mainUser || null, // Attach the main user data
             };
           } catch (error) {
-            console.error(`Invalid mainId for user ${user._id}: ${user.mainId}`);
+            console.error(
+              `Invalid mainId for user ${user._id}: ${user.mainId}`
+            );
             return {
               ...user,
               mainUser: null, // Set to null if mainId is invalid
@@ -904,7 +941,7 @@ app.post("/get-filter-users", async (req, res) => {
       // This handles cases where the profession ID is stored in different fields
       query["$or"] = [
         { "userProfession._id": { $in: professionsIds } },
-        { "userProfession.professionID": { $in: professionsIds } }
+        { "userProfession.professionID": { $in: professionsIds } },
       ];
     }
     if (roles?.length) {
@@ -1011,10 +1048,10 @@ app.get("/get-project-managers", async (req, res) => {
       $or: [
         { isProjectManager: "yes" }, // String format
         { "isProjectManager._id": "yes" }, // Array format with _id
-        { "isProjectManager.name": "Yes" } // Array format with name
-      ]
+        { "isProjectManager.name": "Yes" }, // Array format with name
+      ],
     };
-    
+
     if (companyId && companyId !== "null") query.companyId = companyId;
 
     // If projectId is provided, include only users who are assigned to this project
@@ -1109,21 +1146,22 @@ app.get("/get-tasks-by-subject-matter", async (req, res) => {
     const { subjectMatterId } = req.query;
 
     if (!subjectMatterId) {
-      return res.status(400).json({ 
-        error: "subjectMatterId is required as query parameter" 
+      return res.status(400).json({
+        error: "subjectMatterId is required as query parameter",
       });
     }
 
     // Find all tasks with the specified SubjectMatterId
-    const tasks = await db.collection("tasks")
+    const tasks = await db
+      .collection("tasks")
       .find({ SubjectMatterId: subjectMatterId })
       .sort({ ControlId: 1 }) // Sort by ControlId for proper order
       .toArray();
 
     if (!tasks || tasks.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: `No tasks found for SubjectMatterId: ${subjectMatterId}`,
-        subjectMatterId: subjectMatterId
+        subjectMatterId: subjectMatterId,
       });
     }
 
@@ -1131,10 +1169,10 @@ app.get("/get-tasks-by-subject-matter", async (req, res) => {
     const organizedTasks = {
       receive: [],
       process: [],
-      final: []
+      final: [],
     };
 
-    tasks.forEach(task => {
+    tasks.forEach((task) => {
       const taskData = {
         _id: task._id,
         Index: task.Index,
@@ -1147,16 +1185,16 @@ app.get("/get-tasks-by-subject-matter", async (req, res) => {
         Method: task.Method,
         DocumentationRequirements: task.DocumentationRequirements,
         Scope: task.Scope,
-        Language: task.Language
+        Language: task.Language,
       };
 
       // Categorize by Type (case-insensitive)
       const taskType = task.Type?.toLowerCase();
-      if (taskType === 'receive') {
+      if (taskType === "receive") {
         organizedTasks.receive.push(taskData);
-      } else if (taskType === 'process') {
+      } else if (taskType === "process") {
         organizedTasks.process.push(taskData);
-      } else if (taskType === 'final') {
+      } else if (taskType === "final") {
         organizedTasks.final.push(taskData);
       }
     });
@@ -1169,18 +1207,17 @@ app.get("/get-tasks-by-subject-matter", async (req, res) => {
       summary: {
         receive: organizedTasks.receive.length,
         process: organizedTasks.process.length,
-        final: organizedTasks.final.length
+        final: organizedTasks.final.length,
       },
-      tasks: organizedTasks
+      tasks: organizedTasks,
     };
 
     res.status(200).json(response);
-
   } catch (error) {
     console.error("Error fetching tasks by SubjectMatterId:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch tasks by SubjectMatterId",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1191,28 +1228,31 @@ app.post("/get-project-management-supervision", async (req, res) => {
     const { subjectMatterId, projectId, companyId } = req.body;
 
     if (!subjectMatterId || !projectId || !companyId) {
-      return res.status(400).json({ 
-        error: "subjectMatterId, projectId, and companyId are required" 
+      return res.status(400).json({
+        error: "subjectMatterId, projectId, and companyId are required",
       });
     }
 
-    console.log(`🔍 Fetching supers for SubjectMatterId: ${subjectMatterId}, ProjectId: ${projectId}, CompanyId: ${companyId}`);
+    console.log(
+      `🔍 Fetching supers for SubjectMatterId: ${subjectMatterId}, ProjectId: ${projectId}, CompanyId: ${companyId}`
+    );
 
     // Find documents from supers collection with matching criteria
-    const supers = await db.collection("supers")
+    const supers = await db
+      .collection("supers")
       .find({
         companyId: companyId,
         projectsId: { $in: [projectId] },
-        "professionObject.SubjectMatterId": subjectMatterId
+        "professionObject.SubjectMatterId": subjectMatterId,
       })
       .toArray();
 
     if (!supers || supers.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: `No supers documents found for the specified criteria`,
         subjectMatterId,
         projectId,
-        companyId
+        companyId,
       });
     }
 
@@ -1221,18 +1261,18 @@ app.post("/get-project-management-supervision", async (req, res) => {
     // Function to calculate string similarity score
     const calculateSimilarity = (str1, str2) => {
       if (!str1 || !str2) return 0;
-      
+
       const s1 = str1.toLowerCase().trim();
       const s2 = str2.toLowerCase().trim();
-      
+
       if (s1 === s2) return 1.0;
-      
+
       // Simple similarity calculation
       const longer = s1.length > s2.length ? s1 : s2;
       const shorter = s1.length > s2.length ? s2 : s1;
-      
+
       if (longer.length === 0) return 1.0;
-      
+
       const editDistance = levenshteinDistance(longer, shorter);
       return (longer.length - editDistance) / longer.length;
     };
@@ -1265,32 +1305,33 @@ app.post("/get-project-management-supervision", async (req, res) => {
     // Define template titles in order
     const templateTitles = [
       "Process - Project Review",
-      "Miscellaneous", 
-      "Controls for the contractor"
+      "Miscellaneous",
+      "Controls for the contractor",
     ];
 
     // Organize documents by best matching title
     const organizedDocs = {
       "Process - Project Review": [],
-      "Miscellaneous": [],
-      "Controls for the contractor": []
+      Miscellaneous: [],
+      "Controls for the contractor": [],
     };
 
-    supers.forEach(doc => {
+    supers.forEach((doc) => {
       if (!doc.title) return;
-      
+
       let bestMatch = null;
       let bestScore = 0;
-      
+
       // Find best matching template title
-      templateTitles.forEach(templateTitle => {
+      templateTitles.forEach((templateTitle) => {
         const score = calculateSimilarity(doc.title, templateTitle);
-        if (score > bestScore && score > 0.6) { // Threshold of 0.6
+        if (score > bestScore && score > 0.6) {
+          // Threshold of 0.6
           bestScore = score;
           bestMatch = templateTitle;
         }
       });
-      
+
       if (bestMatch) {
         organizedDocs[bestMatch].push({
           _id: doc._id,
@@ -1304,7 +1345,7 @@ app.post("/get-project-management-supervision", async (req, res) => {
           pictures: doc.pictures || [],
           users: doc.users || [],
           professionObject: doc.professionObject,
-          createdAt: doc.createdAt
+          createdAt: doc.createdAt,
         });
       }
     });
@@ -1317,21 +1358,26 @@ app.post("/get-project-management-supervision", async (req, res) => {
       companyId,
       totalDocuments: supers.length,
       summary: {
-        "Process - Project Review": organizedDocs["Process - Project Review"].length,
-        "Miscellaneous": organizedDocs["Miscellaneous"].length,
-        "Controls for the contractor": organizedDocs["Controls for the contractor"].length
+        "Process - Project Review":
+          organizedDocs["Process - Project Review"].length,
+        Miscellaneous: organizedDocs["Miscellaneous"].length,
+        "Controls for the contractor":
+          organizedDocs["Controls for the contractor"].length,
       },
-      documents: organizedDocs
+      documents: organizedDocs,
     };
 
-    console.log(`✅ Organized ${supers.length} documents into ${Object.keys(organizedDocs).length} categories`);
+    console.log(
+      `✅ Organized ${supers.length} documents into ${
+        Object.keys(organizedDocs).length
+      } categories`
+    );
     res.status(200).json(response);
-
   } catch (error) {
     console.error("Error fetching project management supervision:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch project management supervision",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1395,16 +1441,14 @@ app.get("/get-controls", async (req, res) => {
 // New endpoint for "controls of static report" collection
 app.post("/get-controls-of-static-report", async (req, res) => {
   try {
-    const { subjectMatterId, language, projectId: requestProjectId } = req.body;
-    
-    // Use static project ID as fallback if no project ID is provided
-    const projectId = requestProjectId || '68adb9b3a8c5323f1b948c6e';
-    
+    const { subjectMatterId, language, projectId } = req.body;
+
     // Log when using fallback
-    if (!requestProjectId) {
-      console.log('⚠️ No projectId provided, using fallback:', projectId);
+    if (!projectId) {
+      console.log("⚠️ No projectId provided, using fallback:", projectId);
+      return res.status(400).json({ error: "projectId is required" });
     } else {
-      console.log('✅ Using provided projectId:', projectId);
+      console.log("✅ Using provided projectId:", projectId);
     }
 
     if (!subjectMatterId) {
@@ -1412,100 +1456,127 @@ app.post("/get-controls-of-static-report", async (req, res) => {
     }
 
     let euroCodesStr = [];
-    let euroCodeSource = 'inputs'; // Track where EuroCodes came from
+    let euroCodeSource = "inputs"; // Track where EuroCodes came from
 
     // 1) First try to get EuroCodes from projectprofessioeurocode collection (user's selection)
     if (projectId) {
       try {
-        console.log('🔍 Looking for project EuroCodes:', { projectId, subjectMatterId });
-        
-        const projectEuroCodesDoc = await db.collection("projectprofessioeurocode").findOne({
-          subjectMatterId: subjectMatterId,
-          projectId: projectId
+        console.log("🔍 Looking for project EuroCodes:", {
+          projectId,
+          subjectMatterId,
         });
 
-        console.log('📋 Found project EuroCodes doc:', projectEuroCodesDoc);
+        const projectEuroCodesDoc = await db
+          .collection("projectprofessioeurocode")
+          .findOne({
+            subjectMatterId: subjectMatterId,
+            projectId: projectId,
+          });
 
-        if (projectEuroCodesDoc && projectEuroCodesDoc.eurocodes && Array.isArray(projectEuroCodesDoc.eurocodes)) {
+        console.log("📋 Found project EuroCodes doc:", projectEuroCodesDoc);
+
+        if (
+          projectEuroCodesDoc &&
+          projectEuroCodesDoc.eurocodes &&
+          Array.isArray(projectEuroCodesDoc.eurocodes)
+        ) {
           euroCodesStr = projectEuroCodesDoc.eurocodes
-            .filter(v => v !== undefined && v !== null && `${v}`.trim() !== "")
-            .map(v => String(v).trim());
-          euroCodeSource = 'projectprofessioeurocode';
-          console.log('✅ Using project EuroCodes:', euroCodesStr);
+            .filter(
+              (v) => v !== undefined && v !== null && `${v}`.trim() !== ""
+            )
+            .map((v) => String(v).trim());
+          euroCodeSource = "projectprofessioeurocode";
+          console.log("✅ Using project EuroCodes:", euroCodesStr);
         } else {
-          console.log('❌ No valid project EuroCodes found, will return empty results');
+          console.log(
+            "❌ No valid project EuroCodes found, will return empty results"
+          );
         }
       } catch (error) {
-        console.log('❌ Error fetching from projectprofessioeurocode, will return empty results:', error.message);
+        console.log(
+          "❌ Error fetching from projectprofessioeurocode, will return empty results:",
+          error.message
+        );
       }
     } else {
-      console.log('⚠️ No projectId provided, using fallback project ID');
+      console.log("⚠️ No projectId provided, using fallback project ID");
       // This should not happen anymore since we have a fallback, but keeping for safety
     }
 
     // 2) If no project-specific EuroCodes found, return empty results (NO FALLBACK)
     if (euroCodesStr.length === 0) {
-      console.log('❌ No project-specific EuroCodes found, returning empty results (no fallback)');
-      
+      console.log(
+        "❌ No project-specific EuroCodes found, returning empty results (no fallback)"
+      );
+
       return res.status(200).json({
         meta: {
           subjectMatterId,
           requestedLanguage: language ?? null,
-          appliedLanguageFilter: (language === "DK") ? "DK" : "non-DK",
+          appliedLanguageFilter: language === "DK" ? "DK" : "non-DK",
           euroCodes: [],
-          euroCodeSource: 'none', // No EuroCodes found
+          euroCodeSource: "none", // No EuroCodes found
           projectId: projectId || null,
           docsMatched: 0,
           entriesCount: 0,
-          message: 'No project-specific EuroCodes configured for this project and subject matter'
+          message:
+            "No project-specific EuroCodes configured for this project and subject matter",
         },
-        entries: []
+        entries: [],
       });
     }
 
     // 3) Build language filter per your rule
-    const langFilter = (language === "DK")
-      ? { language: "DK" }            // Danish only
-      : { language: { $ne: "DK" } };  // Non-Danish (default when missing or anything else)
+    const langFilter =
+      language === "DK"
+        ? { language: "DK" } // Danish only
+        : { language: { $ne: "DK" } }; // Non-Danish (default when missing or anything else)
 
     // 4) Query controls of static report by euroCode IN EuroCode[] AND language rule
     const filter = {
-      euroCode: { $in: euroCodesStr },  // controls store "1" (string) in your screenshot
-      ...langFilter
+      euroCode: { $in: euroCodesStr }, // controls store "1" (string) in your screenshot
+      ...langFilter,
     };
 
     // Only fetch the entries array (and minimal meta for context)
-    const docs = await db.collection("controls of static report")
-      .find(filter, { projection: { _id: 1, euroCode: 1, language: 1, entries: 1 } })
+    const docs = await db
+      .collection("controls of static report")
+      .find(filter, {
+        projection: { _id: 1, euroCode: 1, language: 1, entries: 1 },
+      })
       .toArray();
 
     if (!docs.length) {
       return res.status(404).json({
         error: "No controls found for the given EuroCode(s) and language rule",
-        filter
+        filter,
       });
     }
 
     // 5) Return ENTRIES ONLY (flattened) + meta if you need it
-    const entries = docs.flatMap(d => Array.isArray(d.entries) ? d.entries : []);
+    const entries = docs.flatMap((d) =>
+      Array.isArray(d.entries) ? d.entries : []
+    );
 
     return res.status(200).json({
       meta: {
         subjectMatterId,
         requestedLanguage: language ?? null,
-        appliedLanguageFilter: (language === "DK") ? "DK" : "non-DK",
+        appliedLanguageFilter: language === "DK" ? "DK" : "non-DK",
         euroCodes: euroCodesStr,
         euroCodeSource: euroCodeSource, // Show where EuroCodes came from
         projectId: projectId || null,
-        usedFallbackProjectId: !requestProjectId, // Show if fallback was used
+        usedFallbackProjectId: !projectId, // Show if fallback was used
         docsMatched: docs.length,
-        entriesCount: entries.length
+        entriesCount: entries.length,
       },
-      entries
+      entries,
     });
   } catch (error) {
     console.error("Error fetching controls of static report:", error);
-    return res.status(500).json({ error: "Failed to fetch controls of static report" });
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch controls of static report" });
   }
 });
 
@@ -1513,26 +1584,33 @@ app.post("/get-controls-of-static-report", async (req, res) => {
 app.get("/debug-project-eurocodes", async (req, res) => {
   try {
     const { companyId, projectId, subjectMatterId } = req.query;
-    
-    console.log('🔍 Debug query params:', { companyId, projectId, subjectMatterId });
-    
+
+    console.log("🔍 Debug query params:", {
+      companyId,
+      projectId,
+      subjectMatterId,
+    });
+
     let query = {};
     if (companyId) query.companyId = companyId;
     if (projectId) query.projectId = projectId;
     if (subjectMatterId) query.subjectMatterId = subjectMatterId;
-    
-    const docs = await db.collection("projectprofessioeurocode").find(query).toArray();
-    
-    console.log('📋 Found docs:', docs);
-    
+
+    const docs = await db
+      .collection("projectprofessioeurocode")
+      .find(query)
+      .toArray();
+
+    console.log("📋 Found docs:", docs);
+
     res.status(200).json({
       success: true,
       query,
       count: docs.length,
-      data: docs
+      data: docs,
     });
   } catch (error) {
-    console.error('Debug error:', error);
+    console.error("Debug error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1540,55 +1618,62 @@ app.get("/debug-project-eurocodes", async (req, res) => {
 // Fix missing subjectMatterId in projectprofessioeurocode collection
 app.post("/fix-missing-subject-matter-ids", async (req, res) => {
   try {
-    console.log('🔧 Starting to fix missing subjectMatterId fields...');
-    
+    console.log("🔧 Starting to fix missing subjectMatterId fields...");
+
     // Find all records without subjectMatterId
-    const docsWithoutSubjectMatterId = await db.collection("projectprofessioeurocode")
+    const docsWithoutSubjectMatterId = await db
+      .collection("projectprofessioeurocode")
       .find({ subjectMatterId: { $exists: false } })
       .toArray();
-    
-    console.log('📋 Found docs without subjectMatterId:', docsWithoutSubjectMatterId.length);
-    
+
+    console.log(
+      "📋 Found docs without subjectMatterId:",
+      docsWithoutSubjectMatterId.length
+    );
+
     let fixedCount = 0;
-    
+
     for (const doc of docsWithoutSubjectMatterId) {
       try {
         // Get the profession to find its SubjectMatterId
         const profession = await db.collection("professions").findOne({
-          _id: doc.professionId
+          _id: doc.professionId,
         });
-        
+
         if (profession && profession.SubjectMatterId) {
           // Update the record with the missing subjectMatterId
           await db.collection("projectprofessioeurocode").updateOne(
             { _id: doc._id },
-            { 
-              $set: { 
+            {
+              $set: {
                 subjectMatterId: profession.SubjectMatterId,
-                updatedAt: new Date()
-              } 
+                updatedAt: new Date(),
+              },
             }
           );
-          
-          console.log(`✅ Fixed record ${doc._id} with subjectMatterId: ${profession.SubjectMatterId}`);
+
+          console.log(
+            `✅ Fixed record ${doc._id} with subjectMatterId: ${profession.SubjectMatterId}`
+          );
           fixedCount++;
         } else {
-          console.log(`❌ Could not find SubjectMatterId for profession ${doc.professionId}`);
+          console.log(
+            `❌ Could not find SubjectMatterId for profession ${doc.professionId}`
+          );
         }
       } catch (error) {
         console.error(`❌ Error fixing record ${doc._id}:`, error.message);
       }
     }
-    
+
     res.status(200).json({
       success: true,
       message: `Fixed ${fixedCount} records with missing subjectMatterId`,
       totalFound: docsWithoutSubjectMatterId.length,
-      fixedCount
+      fixedCount,
     });
-    
   } catch (error) {
-    console.error('❌ Error in fix-missing-subject-matter-ids:', error);
+    console.error("❌ Error in fix-missing-subject-matter-ids:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1602,30 +1687,32 @@ app.post("/get-inputs-by-subject-matter-id", async (req, res) => {
       return res.status(400).json({ error: "subjectMatterId is required" });
     }
 
-    console.log('Fetching inputs document for SubjectMatterId:', subjectMatterId);
+    console.log(
+      "Fetching inputs document for SubjectMatterId:",
+      subjectMatterId
+    );
 
     // Find the document in inputs collection by SubjectMatterId
-    const inputDoc = await db.collection("inputs").findOne(
-      { SubjectMatterId: subjectMatterId }
-    );
+    const inputDoc = await db
+      .collection("inputs")
+      .findOne({ SubjectMatterId: subjectMatterId });
 
     if (!inputDoc) {
       return res.status(404).json({
-        error: `No inputs document found for SubjectMatterId: ${subjectMatterId}`
+        error: `No inputs document found for SubjectMatterId: ${subjectMatterId}`,
       });
     }
 
-    console.log('Found inputs document:', {
+    console.log("Found inputs document:", {
       _id: inputDoc._id,
       SubjectMatterId: inputDoc.SubjectMatterId,
       GroupName: inputDoc.GroupName,
       Language: inputDoc.Language,
-      EuroCode: inputDoc.EuroCode
+      EuroCode: inputDoc.EuroCode,
     });
 
     // Return the complete profession object
     return res.status(200).json(inputDoc);
-
   } catch (error) {
     console.error("Error fetching inputs by subjectMatterId:", error);
     return res.status(500).json({ error: "Failed to fetch inputs document" });
@@ -1640,7 +1727,11 @@ app.get("/get-gammas", async (req, res) => {
     if (point) {
       query.point = point;
     }
-    const controls = await db.collection("gammas").find(query).sort({ createdAt: -1 }).toArray();
+    const controls = await db
+      .collection("gammas")
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
     res.status(200).json(controls);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch gammas" });
@@ -1651,26 +1742,26 @@ app.get("/get-gammas", async (req, res) => {
 app.get("/get-project-special-text", async (req, res) => {
   try {
     const { projectId } = req.query;
-    
+
     if (!projectId) {
       return res.status(400).json({
-        error: "Project ID is required"
+        error: "Project ID is required",
       });
     }
 
     const specialText = await db.collection("projectspecialtext").findOne({
-      projectId: projectId
+      projectId: projectId,
     });
 
     res.status(200).json({
       success: true,
-      data: specialText
+      data: specialText,
     });
   } catch (error) {
     console.error("Error fetching project special text:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch project special text",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1678,34 +1769,34 @@ app.get("/get-project-special-text", async (req, res) => {
 app.post("/save-project-special-text", async (req, res) => {
   try {
     const { projectId, specialText } = req.body;
-    
+
     if (!projectId || !specialText) {
       return res.status(400).json({
-        error: "Project ID and special text are required"
+        error: "Project ID and special text are required",
       });
     }
 
     // Check if special text already exists for this project
     const existingText = await db.collection("projectspecialtext").findOne({
-      projectId: projectId
+      projectId: projectId,
     });
 
     if (existingText) {
       // Update existing record
       const result = await db.collection("projectspecialtext").updateOne(
         { projectId: projectId },
-        { 
-          $set: { 
+        {
+          $set: {
             specialText: specialText,
-            updatedAt: new Date()
-          }
+            updatedAt: new Date(),
+          },
         }
       );
-      
+
       res.status(200).json({
         success: true,
         message: "Special text updated successfully",
-        data: { projectId, specialText }
+        data: { projectId, specialText },
       });
     } else {
       // Create new record
@@ -1713,20 +1804,20 @@ app.post("/save-project-special-text", async (req, res) => {
         projectId: projectId,
         specialText: specialText,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
-      
+
       res.status(201).json({
         success: true,
         message: "Special text saved successfully",
-        data: { projectId, specialText }
+        data: { projectId, specialText },
       });
     }
   } catch (error) {
     console.error("Error saving project special text:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to save project special text",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1734,32 +1825,32 @@ app.post("/save-project-special-text", async (req, res) => {
 app.delete("/delete-project-special-text", async (req, res) => {
   try {
     const { projectId } = req.query;
-    
+
     if (!projectId) {
       return res.status(400).json({
-        error: "Project ID is required"
+        error: "Project ID is required",
       });
     }
 
     const result = await db.collection("projectspecialtext").deleteOne({
-      projectId: projectId
+      projectId: projectId,
     });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({
-        error: "Special text not found for this project"
+        error: "Special text not found for this project",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: "Special text deleted successfully"
+      message: "Special text deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting project special text:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to delete project special text",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1784,68 +1875,84 @@ app.get("/get-static-inspection-report-template", (req, res) => {
 
 app.get("/get-static-document-checklist-report-template", (req, res) => {
   try {
-    console.log('=== STATIC DOCUMENT CHECKLIST REPORT TEMPLATE API CALLED ===');
+    console.log("=== STATIC DOCUMENT CHECKLIST REPORT TEMPLATE API CALLED ===");
     const { companyId, projectId, professionSubjectMatterId } = req.query;
-    
+
     if (!companyId || !projectId || !professionSubjectMatterId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId, and professionSubjectMatterId" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: companyId, projectId, and professionSubjectMatterId",
       });
     }
 
     // Read the HTML template
-    const fs = require('fs');
-    const path = require('path');
-    const templatePath = path.join(__dirname, 'static-report-templates', 'static-document-checklist-report.html');
-    
-    console.log('Template path:', templatePath);
-    console.log('Template file exists:', fs.existsSync(templatePath));
-    
-    let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
-    console.log('Template loaded, length:', htmlTemplate.length);
+    const fs = require("fs");
+    const path = require("path");
+    const templatePath = path.join(
+      __dirname,
+      "static-report-templates",
+      "static-document-checklist-report.html"
+    );
 
-    res.setHeader('Content-Type', 'text/html');
+    console.log("Template path:", templatePath);
+    console.log("Template file exists:", fs.existsSync(templatePath));
+
+    let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+    console.log("Template loaded, length:", htmlTemplate.length);
+
+    res.setHeader("Content-Type", "text/html");
     res.status(200).send(htmlTemplate);
-
   } catch (error) {
-    console.error("Error generating static document checklist report template:", error);
-    res.status(500).json({ 
+    console.error(
+      "Error generating static document checklist report template:",
+      error
+    );
+    res.status(500).json({
       error: "Failed to generate static document checklist report template",
-      details: error.message 
+      details: error.message,
     });
   }
 });
 
 app.get("/get-static-report-registration-entries-template", (req, res) => {
   try {
-    console.log('=== STATIC REPORT REGISTRATION ENTRIES TEMPLATE API CALLED ===');
+    console.log(
+      "=== STATIC REPORT REGISTRATION ENTRIES TEMPLATE API CALLED ==="
+    );
     const { companyId, projectId, subjectMatterId } = req.query;
-    
+
     if (!companyId || !projectId || !subjectMatterId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId, and subjectMatterId" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: companyId, projectId, and subjectMatterId",
       });
     }
 
     // Read the HTML template
-    const fs = require('fs');
-    const path = require('path');
-    const templatePath = path.join(__dirname, 'static-report-templates', 'static-report-registration-entries.html');
-    
-    console.log('Template path:', templatePath);
-    console.log('Template file exists:', fs.existsSync(templatePath));
-    
-    let htmlTemplate = fs.readFileSync(templatePath, 'utf8');
-    console.log('Template loaded, length:', htmlTemplate.length);
+    const fs = require("fs");
+    const path = require("path");
+    const templatePath = path.join(
+      __dirname,
+      "static-report-templates",
+      "static-report-registration-entries.html"
+    );
 
-    res.setHeader('Content-Type', 'text/html');
+    console.log("Template path:", templatePath);
+    console.log("Template file exists:", fs.existsSync(templatePath));
+
+    let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+    console.log("Template loaded, length:", htmlTemplate.length);
+
+    res.setHeader("Content-Type", "text/html");
     res.status(200).send(htmlTemplate);
-
   } catch (error) {
-    console.error("Error generating static report registration entries template:", error);
-    res.status(500).json({ 
+    console.error(
+      "Error generating static report registration entries template:",
+      error
+    );
+    res.status(500).json({
       error: "Failed to generate static report registration entries template",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -2087,8 +2194,14 @@ app.post(
   ]),
   async (req, res) => {
     try {
-      const { person1Name, person2Name, person3Name, profession, companyId, projectId } =
-        req.body;
+      const {
+        person1Name,
+        person2Name,
+        person3Name,
+        profession,
+        companyId,
+        projectId,
+      } = req.body;
 
       // Validate required fields
       if (!companyId || !projectId) {
@@ -2102,7 +2215,10 @@ app.post(
       let professionSubjectMatterId = null;
       if (profession) {
         try {
-          parsedProfession = typeof profession === "string" ? JSON.parse(profession) : profession;
+          parsedProfession =
+            typeof profession === "string"
+              ? JSON.parse(profession)
+              : profession;
           professionSubjectMatterId = parsedProfession?.SubjectMatterId || null;
         } catch (error) {
           console.error("Error parsing profession:", error);
@@ -2360,7 +2476,9 @@ app.post(
         updatedAt: new Date(),
       };
 
-      const result = await db.collection("nameSignatures").insertOne(signatureData);
+      const result = await db
+        .collection("nameSignatures")
+        .insertOne(signatureData);
 
       res.status(201).json({
         message: "Name and signature added successfully",
@@ -2455,7 +2573,8 @@ app.put(
       if (name !== undefined) updateData.name = name;
       if (companyId !== undefined) updateData.companyId = companyId;
       if (projectId !== undefined) updateData.projectId = projectId;
-      if (signature !== existingSignature.signature) updateData.signature = signature;
+      if (signature !== existingSignature.signature)
+        updateData.signature = signature;
 
       const result = await db
         .collection("nameSignatures")
@@ -2634,7 +2753,9 @@ app.post("/add/professions_in_a_company", async (req, res) => {
 app.post("/get-project-detail", async (req, res) => {
   try {
     if (!db) {
-      return res.status(503).json({ error: "Database connection not available" });
+      return res
+        .status(503)
+        .json({ error: "Database connection not available" });
     }
 
     const { projectId } = req.body;
@@ -2651,12 +2772,15 @@ app.post("/get-project-detail", async (req, res) => {
       // Get all profession ids from the keys (SubjectMatterId or similar)
       const professionKeys = Object.keys(project.professionAssociatedData);
       // Find all professions in the professions collection
-      const professions = await db.collection("professions").find({
-        SubjectMatterId: { $in: professionKeys }
-      }).toArray();
+      const professions = await db
+        .collection("professions")
+        .find({
+          SubjectMatterId: { $in: professionKeys },
+        })
+        .toArray();
       // Map by SubjectMatterId for quick lookup
       const professionMap = {};
-      professions.forEach(prof => {
+      professions.forEach((prof) => {
         if (prof.SubjectMatterId) {
           professionMap[prof.SubjectMatterId] = prof;
         }
@@ -2730,114 +2854,141 @@ app.get("/get-special-control-points-table", async (req, res) => {
     const { projectId, companyId, professionSubjectMatterId } = req.query;
 
     if (!projectId || !companyId || !professionSubjectMatterId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required parameters: projectId, companyId, professionSubjectMatterId" 
+      return res.status(400).json({
+        success: false,
+        message:
+          "Missing required parameters: projectId, companyId, professionSubjectMatterId",
       });
     }
 
     // Get all special control points for the project
-    const specialControlPoints = await db.collection("specialcontrol").find({
-      companyId: companyId,
-      projectsId: { $in: [projectId] }
-    }).sort({ createdAt: -1 }).toArray();
+    const specialControlPoints = await db
+      .collection("specialcontrol")
+      .find({
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
 
     // Get project special text
-    const projectSpecialText = await db.collection("projectspecialtext").findOne({
-      projectId: projectId
-    });
+    const projectSpecialText = await db
+      .collection("projectspecialtext")
+      .findOne({
+        projectId: projectId,
+      });
 
     const tableData = [];
 
     for (const point of specialControlPoints) {
       // Get the person name based on selectedType
-      let personName = '';
-      if (point.selectedType === 'projectManager' && point.projectManager) {
-        personName = point.projectManager.name || point.projectManager.firstName + ' ' + point.projectManager.lastName;
-      } else if (point.selectedType === 'independentController' && point.independentController) {
-        personName = point.independentController.name || point.independentController.firstName + ' ' + point.independentController.lastName;
-      } else if (point.selectedType === 'worker' && point.worker) {
-        personName = point.worker.name || point.worker.firstName + ' ' + point.worker.lastName;
+      let personName = "";
+      if (point.selectedType === "projectManager" && point.projectManager) {
+        personName =
+          point.projectManager.name ||
+          point.projectManager.firstName + " " + point.projectManager.lastName;
+      } else if (
+        point.selectedType === "independentController" &&
+        point.independentController
+      ) {
+        personName =
+          point.independentController.name ||
+          point.independentController.firstName +
+            " " +
+            point.independentController.lastName;
+      } else if (point.selectedType === "worker" && point.worker) {
+        personName =
+          point.worker.name ||
+          point.worker.firstName + " " + point.worker.lastName;
       }
 
       // Create special control text (concatenate with project special text)
-      let specialControlText = '';
+      let specialControlText = "";
       if (point.profession && point.profession.GroupName) {
         specialControlText = point.profession.GroupName;
       }
-      
+
       if (projectSpecialText && projectSpecialText.specialText) {
-        specialControlText += ' - ' + projectSpecialText.specialText;
+        specialControlText += " - " + projectSpecialText.specialText;
       }
 
       tableData.push({
         controlId: point._id.toString(),
         specialControl: specialControlText,
-        description: point.comment || '',
+        description: point.comment || "",
         madeBy: personName,
         createdAt: point.createdAt,
-        selectedType: point.selectedType
+        selectedType: point.selectedType,
       });
     }
 
-    res.status(200).json({ 
-      success: true, 
-      data: tableData 
+    res.status(200).json({
+      success: true,
+      data: tableData,
     });
-
   } catch (error) {
     console.error("Error fetching special control points table:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 });
 
 // Helper function to inject static document checklist data from API
-async function injectStaticDocumentChecklistDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId) {
+async function injectStaticDocumentChecklistDataFromAPI(
+  templateContent,
+  companyId,
+  projectId,
+  professionSubjectMatterId
+) {
   try {
     // Call the working API to get the data
-    const response = await fetch(`http://localhost:3000/get-static-document-checklist-with-status?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+    const response = await fetch(
+      `http://localhost:3000/get-static-document-checklist-with-status?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`
+    );
     const data = await response.json();
 
     if (!data.success || !data.data || !data.data.checklistItems) {
-      throw new Error('Failed to fetch checklist data from API');
+      throw new Error("Failed to fetch checklist data from API");
     }
 
     const checklistItems = data.data.checklistItems;
-    
+
     // Group items by DS_GroupId
-    const b1Items = checklistItems.filter(item => item.DS_GroupId === 'B1');
-    const b2Items = checklistItems.filter(item => item.DS_GroupId === 'B2');
-    const b3Items = checklistItems.filter(item => item.DS_GroupId === 'B3');
+    const b1Items = checklistItems.filter((item) => item.DS_GroupId === "B1");
+    const b2Items = checklistItems.filter((item) => item.DS_GroupId === "B2");
+    const b3Items = checklistItems.filter((item) => item.DS_GroupId === "B3");
 
     // Helper functions
     const formatDate = (dateString) => {
-      if (!dateString) return '[Select Date]';
+      if (!dateString) return "[Select Date]";
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
       });
     };
 
     const getStatus = (item) => {
       if (item.approvedDate) {
-        return 'Approved';
+        return "Approved";
       } else if (item.submittedDate) {
-        return 'Submitted';
+        return "Submitted";
       } else {
-        return 'Pending';
+        return "Pending";
       }
     };
 
     const getStatusClass = (status) => {
       switch (status) {
-        case 'Approved': return 'status-approved';
-        case 'Submitted': return 'status-submitted';
-        default: return 'status-pending';
+        case "Approved":
+          return "status-approved";
+        case "Submitted":
+          return "status-submitted";
+        default:
+          return "status-pending";
       }
     };
 
@@ -2845,7 +2996,7 @@ async function injectStaticDocumentChecklistDataFromAPI(templateContent, company
       if (item.independentController && item.independentController.name) {
         return item.independentController.name;
       }
-      return 'Independent control of self-monitoring.';
+      return "Independent control of self-monitoring.";
     };
 
     const getDisplayDate = (item) => {
@@ -2854,7 +3005,7 @@ async function injectStaticDocumentChecklistDataFromAPI(templateContent, company
       } else if (item.submittedDate) {
         return formatDate(item.submittedDate);
       } else {
-        return '[Select Date]';
+        return "[Select Date]";
       }
     };
 
@@ -2863,23 +3014,25 @@ async function injectStaticDocumentChecklistDataFromAPI(templateContent, company
         return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
       }
 
-      return items.map(item => {
-        const status = getStatus(item);
-        const statusClass = getStatusClass(status);
-        const displayDate = getDisplayDate(item);
-        const controllerName = getIndependentControllerName(item);
-        
-        return `
+      return items
+        .map((item) => {
+          const status = getStatus(item);
+          const statusClass = getStatusClass(status);
+          const displayDate = getDisplayDate(item);
+          const controllerName = getIndependentControllerName(item);
+
+          return `
           <tr>
-            <td>${item.ItemId || 'N/A'}</td>
+            <td>${item.ItemId || "N/A"}</td>
             <td class="date-field">${displayDate}</td>
-            <td>${item.Basis || 'N/A'}</td>
+            <td>${item.Basis || "N/A"}</td>
             <td class="${statusClass}">${status}</td>
-            <td>${item.comment || 'No comments'}</td>
+            <td>${item.comment || "No comments"}</td>
             <td>${controllerName}</td>
           </tr>
         `;
-      }).join('');
+        })
+        .join("");
     };
 
     // Replace the loading content with actual data
@@ -2899,12 +3052,17 @@ async function injectStaticDocumentChecklistDataFromAPI(templateContent, company
     );
 
     // Remove the JavaScript that tries to fetch data
-    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+    templateContent = templateContent.replace(
+      /<script>[\s\S]*?<\/script>/g,
+      ""
+    );
 
     return templateContent;
-
   } catch (error) {
-    console.error('Error injecting static document checklist data from API:', error);
+    console.error(
+      "Error injecting static document checklist data from API:",
+      error
+    );
     // Return template with error message
     return templateContent.replace(
       /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
@@ -2914,31 +3072,38 @@ async function injectStaticDocumentChecklistDataFromAPI(templateContent, company
 }
 
 // Helper function to inject static report registration data from API
-async function injectStaticReportRegistrationDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId) {
+async function injectStaticReportRegistrationDataFromAPI(
+  templateContent,
+  companyId,
+  projectId,
+  professionSubjectMatterId
+) {
   try {
     // Call the working API to get the data
-    const response = await fetch(`http://localhost:3000/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${professionSubjectMatterId}`);
+    const response = await fetch(
+      `http://localhost:3000/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${professionSubjectMatterId}`
+    );
     const data = await response.json();
 
     if (!data.success || !data.data || !data.data.entries) {
-      throw new Error('Failed to fetch registration entries data from API');
+      throw new Error("Failed to fetch registration entries data from API");
     }
 
     const entries = data.data.entries;
-    
+
     // Group entries by DS Group
-    const b4Entries = entries.filter(entry => entry.dsGroup === 'B4');
-    const b5Entries = entries.filter(entry => entry.dsGroup === 'B5');
-    const b6Entries = entries.filter(entry => entry.dsGroup === 'B6');
+    const b4Entries = entries.filter((entry) => entry.dsGroup === "B4");
+    const b5Entries = entries.filter((entry) => entry.dsGroup === "B5");
+    const b6Entries = entries.filter((entry) => entry.dsGroup === "B6");
 
     // Helper functions
     const formatDate = (dateString) => {
-      if (!dateString) return 'N/A';
+      if (!dateString) return "N/A";
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
       });
     };
 
@@ -2951,70 +3116,87 @@ async function injectStaticReportRegistrationDataFromAPI(templateContent, compan
           </div>
         `;
       }
-      return 'No user assigned';
+      return "No user assigned";
     };
 
     const createMediaFilesHTML = (entry) => {
-      let mediaHTML = '';
-      
+      let mediaHTML = "";
+
       if (entry.annotatedPdfImages && entry.annotatedPdfImages.length > 0) {
-        mediaHTML += '<div class="media-section"><strong>Annotated PDF Images:</strong>';
+        mediaHTML +=
+          '<div class="media-section"><strong>Annotated PDF Images:</strong>';
         mediaHTML += '<div class="media-preview-container">';
-        entry.annotatedPdfImages.forEach(img => {
+        entry.annotatedPdfImages.forEach((img) => {
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
                 <img src="http://localhost:3000/uploads/${img.filename}" 
                      alt="${img.originalName}" 
-                     onclick="window.open('http://localhost:3000/uploads/${img.filename}', '_blank')">
+                     onclick="window.open('http://localhost:3000/uploads/${
+                       img.filename
+                     }', '_blank')">
               </div>
               <div class="filename-text">${img.originalName}</div>
-              <div class="description-text">${img.description || 'No description'}</div>
+              <div class="description-text">${
+                img.description || "No description"
+              }</div>
             </div>
           `;
         });
-        mediaHTML += '</div></div>';
+        mediaHTML += "</div></div>";
       }
 
       if (entry.mainPictures && entry.mainPictures.length > 0) {
-        mediaHTML += '<div class="media-section"><strong>Main Pictures:</strong>';
+        mediaHTML +=
+          '<div class="media-section"><strong>Main Pictures:</strong>';
         mediaHTML += '<div class="media-preview-container">';
-        entry.mainPictures.forEach(pic => {
+        entry.mainPictures.forEach((pic) => {
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
                 <img src="http://localhost:3000/uploads/${pic.filename}" 
                      alt="${pic.originalName}" 
-                     onclick="window.open('http://localhost:3000/uploads/${pic.filename}', '_blank')">
+                     onclick="window.open('http://localhost:3000/uploads/${
+                       pic.filename
+                     }', '_blank')">
               </div>
               <div class="filename-text">${pic.originalName}</div>
-              <div class="description-text">${pic.description || 'No description'}</div>
+              <div class="description-text">${
+                pic.description || "No description"
+              }</div>
             </div>
           `;
         });
-        mediaHTML += '</div></div>';
+        mediaHTML += "</div></div>";
       }
 
       if (entry.markPictures && entry.markPictures.length > 0) {
-        mediaHTML += '<div class="media-section"><strong>Mark Pictures:</strong>';
+        mediaHTML +=
+          '<div class="media-section"><strong>Mark Pictures:</strong>';
         mediaHTML += '<div class="media-preview-container">';
-        entry.markPictures.forEach(mark => {
+        entry.markPictures.forEach((mark) => {
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
                 <img src="http://localhost:3000/uploads/${mark.filename}" 
                      alt="${mark.originalName} (Mark #${mark.markNumber})" 
-                     onclick="window.open('http://localhost:3000/uploads/${mark.filename}', '_blank')">
+                     onclick="window.open('http://localhost:3000/uploads/${
+                       mark.filename
+                     }', '_blank')">
               </div>
-              <div class="filename-text">${mark.originalName} (Mark #${mark.markNumber})</div>
-              <div class="description-text">${mark.description || 'No description'}</div>
+              <div class="filename-text">${mark.originalName} (Mark #${
+            mark.markNumber
+          })</div>
+              <div class="description-text">${
+                mark.description || "No description"
+              }</div>
             </div>
           `;
         });
-        mediaHTML += '</div></div>';
+        mediaHTML += "</div></div>";
       }
 
-      return mediaHTML || 'No media files';
+      return mediaHTML || "No media files";
     };
 
     const createTableRows = (entries) => {
@@ -3022,8 +3204,9 @@ async function injectStaticReportRegistrationDataFromAPI(templateContent, compan
         return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
       }
 
-      return entries.map(entry => {
-        return `
+      return entries
+        .map((entry) => {
+          return `
           <tr>
             <td class="date-field">${formatDate(entry.registrationDate)}</td>
             <td class="registration-id">${entry.registrationId}</td>
@@ -3033,7 +3216,8 @@ async function injectStaticReportRegistrationDataFromAPI(templateContent, compan
             <td>${createMediaFilesHTML(entry)}</td>
           </tr>
         `;
-      }).join('');
+        })
+        .join("");
     };
 
     // Replace the loading content with actual data
@@ -3053,12 +3237,17 @@ async function injectStaticReportRegistrationDataFromAPI(templateContent, compan
     );
 
     // Remove the JavaScript that tries to fetch data
-    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+    templateContent = templateContent.replace(
+      /<script>[\s\S]*?<\/script>/g,
+      ""
+    );
 
     return templateContent;
-
   } catch (error) {
-    console.error('Error injecting static report registration data from API:', error);
+    console.error(
+      "Error injecting static report registration data from API:",
+      error
+    );
     // Return template with error message
     return templateContent.replace(
       /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
@@ -3068,78 +3257,113 @@ async function injectStaticReportRegistrationDataFromAPI(templateContent, compan
 }
 
 // Helper function to inject static document checklist data into HTML
-async function injectStaticDocumentChecklistData(templateContent, companyId, projectId, professionSubjectMatterId) {
+async function injectStaticDocumentChecklistData(
+  templateContent,
+  companyId,
+  projectId,
+  professionSubjectMatterId
+) {
   try {
     // Fetch the data using the same logic as the API
-    const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+    const project = await db
+      .collection("projects")
+      .findOne({ _id: new ObjectId(projectId) });
     if (!project) {
-      throw new Error('Project not found');
+      throw new Error("Project not found");
     }
 
     const professionKey = professionSubjectMatterId;
-    const staticDocumentCheckList = project.professionAssociatedData?.[professionKey]?.staticDocumentCheckList || [];
-    
+    const staticDocumentCheckList =
+      project.professionAssociatedData?.[professionKey]
+        ?.staticDocumentCheckList || [];
+
     // Get submitted entries - use the exact same logic as the working API
     let submittedEntries = [];
-    
+
     // Try multiple query variations like in the working API
     try {
       // Try with profession._id as ObjectId and staticDocumentCheckListId as ObjectId
-      submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
-        projectId: new ObjectId(projectId),
-        companyId: new ObjectId(companyId),
-        'profession._id': new ObjectId(project.professionAssociatedData?.[professionKey]?._id)
-      }).toArray();
-      console.log(`Query 1 (ObjectId/ObjectId): Found ${submittedEntries.length} entries`);
+      submittedEntries = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
+        .find({
+          projectId: new ObjectId(projectId),
+          companyId: new ObjectId(companyId),
+          "profession._id": new ObjectId(
+            project.professionAssociatedData?.[professionKey]?._id
+          ),
+        })
+        .toArray();
+      console.log(
+        `Query 1 (ObjectId/ObjectId): Found ${submittedEntries.length} entries`
+      );
     } catch (error) {
-      console.log('Query 1 failed:', error.message);
+      console.log("Query 1 failed:", error.message);
     }
-    
+
     if (submittedEntries.length === 0) {
       try {
         // Try with profession._id as ObjectId and staticDocumentCheckListId as string
-        submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
-          projectId: new ObjectId(projectId),
-          companyId: new ObjectId(companyId),
-          'profession._id': new ObjectId(project.professionAssociatedData?.[professionKey]?._id)
-        }).toArray();
-        console.log(`Query 2 (ObjectId/String): Found ${submittedEntries.length} entries`);
+        submittedEntries = await db
+          .collection("staticDocumentChecklistProjectAndProfessionWise")
+          .find({
+            projectId: new ObjectId(projectId),
+            companyId: new ObjectId(companyId),
+            "profession._id": new ObjectId(
+              project.professionAssociatedData?.[professionKey]?._id
+            ),
+          })
+          .toArray();
+        console.log(
+          `Query 2 (ObjectId/String): Found ${submittedEntries.length} entries`
+        );
       } catch (error) {
-        console.log('Query 2 failed:', error.message);
+        console.log("Query 2 failed:", error.message);
       }
     }
-    
+
     if (submittedEntries.length === 0) {
       try {
         // Try without profession._id filter and staticDocumentCheckListId as ObjectId
-        submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
-          projectId: new ObjectId(projectId),
-          companyId: new ObjectId(companyId)
-        }).toArray();
-        console.log(`Query 3 (No profession filter): Found ${submittedEntries.length} entries`);
+        submittedEntries = await db
+          .collection("staticDocumentChecklistProjectAndProfessionWise")
+          .find({
+            projectId: new ObjectId(projectId),
+            companyId: new ObjectId(companyId),
+          })
+          .toArray();
+        console.log(
+          `Query 3 (No profession filter): Found ${submittedEntries.length} entries`
+        );
       } catch (error) {
-        console.log('Query 3 failed:', error.message);
+        console.log("Query 3 failed:", error.message);
       }
     }
-    
+
     if (submittedEntries.length === 0) {
       try {
         // Try without profession._id filter and staticDocumentCheckListId as string
-        submittedEntries = await db.collection('staticDocumentChecklistProjectAndProfessionWise').find({
-          projectId: new ObjectId(projectId),
-          companyId: new ObjectId(companyId)
-        }).toArray();
-        console.log(`Query 4 (No profession filter, string): Found ${submittedEntries.length} entries`);
+        submittedEntries = await db
+          .collection("staticDocumentChecklistProjectAndProfessionWise")
+          .find({
+            projectId: new ObjectId(projectId),
+            companyId: new ObjectId(companyId),
+          })
+          .toArray();
+        console.log(
+          `Query 4 (No profession filter, string): Found ${submittedEntries.length} entries`
+        );
       } catch (error) {
-        console.log('Query 4 failed:', error.message);
+        console.log("Query 4 failed:", error.message);
       }
     }
 
-    console.log(`Final result: Found ${submittedEntries.length} submitted entries for complete report`);
+    console.log(
+      `Final result: Found ${submittedEntries.length} submitted entries for complete report`
+    );
 
     // Create approval status map
     const approvalStatus = {};
-    submittedEntries.forEach(entry => {
+    submittedEntries.forEach((entry) => {
       const key = entry.staticDocumentCheckListId?.toString();
       if (key) {
         approvalStatus[key] = {
@@ -3152,14 +3376,14 @@ async function injectStaticDocumentChecklistData(templateContent, companyId, pro
           comment: entry.comment,
           projectManager: entry.projectManager,
           independentController: entry.independentController,
-          status: entry.approvedDate ? 'Approved' : 'Submitted',
-          controlPlan: entry.controlPlan
+          status: entry.approvedDate ? "Approved" : "Submitted",
+          controlPlan: entry.controlPlan,
         };
       }
     });
 
     // Enhance checklist items with status
-    const enhancedChecklistItems = staticDocumentCheckList.map(item => {
+    const enhancedChecklistItems = staticDocumentCheckList.map((item) => {
       const status = approvalStatus[item._id.toString()] || {
         isSubmitted: false,
         selectedDate: null,
@@ -3171,46 +3395,55 @@ async function injectStaticDocumentChecklistData(templateContent, companyId, pro
         projectManager: null,
         independentController: null,
         status: null,
-        controlPlan: null
+        controlPlan: null,
       };
 
       return {
         ...item,
-        ...status
+        ...status,
       };
     });
 
     // Group items by DS_GroupId
-    const b1Items = enhancedChecklistItems.filter(item => item.DS_GroupId === 'B1');
-    const b2Items = enhancedChecklistItems.filter(item => item.DS_GroupId === 'B2');
-    const b3Items = enhancedChecklistItems.filter(item => item.DS_GroupId === 'B3');
+    const b1Items = enhancedChecklistItems.filter(
+      (item) => item.DS_GroupId === "B1"
+    );
+    const b2Items = enhancedChecklistItems.filter(
+      (item) => item.DS_GroupId === "B2"
+    );
+    const b3Items = enhancedChecklistItems.filter(
+      (item) => item.DS_GroupId === "B3"
+    );
 
     // Helper functions
     const formatDate = (dateString) => {
-      if (!dateString) return '[Select Date]';
+      if (!dateString) return "[Select Date]";
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
       });
     };
 
     const getStatus = (item) => {
       if (item.approvedDate) {
-        return 'Approved';
+        return "Approved";
       } else if (item.submittedDate) {
-        return 'Submitted';
+        return "Submitted";
       } else {
-        return 'Pending';
+        return "Pending";
       }
     };
 
     const getStatusClass = (status) => {
       switch (status) {
-        case 'Approved': return 'status-approved';
-        case 'Submitted': return 'status-submitted';
-        default: return 'status-pending';
+        case "Approved":
+          return "status-approved";
+        case "Submitted":
+          return "status-submitted";
+        default:
+          return "status-pending";
       }
     };
 
@@ -3218,7 +3451,7 @@ async function injectStaticDocumentChecklistData(templateContent, companyId, pro
       if (item.independentController && item.independentController.name) {
         return item.independentController.name;
       }
-      return 'Independent control of self-monitoring.';
+      return "Independent control of self-monitoring.";
     };
 
     const getDisplayDate = (item) => {
@@ -3227,7 +3460,7 @@ async function injectStaticDocumentChecklistData(templateContent, companyId, pro
       } else if (item.submittedDate) {
         return formatDate(item.submittedDate);
       } else {
-        return '[Select Date]';
+        return "[Select Date]";
       }
     };
 
@@ -3236,23 +3469,25 @@ async function injectStaticDocumentChecklistData(templateContent, companyId, pro
         return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
       }
 
-      return items.map(item => {
-        const status = getStatus(item);
-        const statusClass = getStatusClass(status);
-        const displayDate = getDisplayDate(item);
-        const controllerName = getIndependentControllerName(item);
-        
-        return `
+      return items
+        .map((item) => {
+          const status = getStatus(item);
+          const statusClass = getStatusClass(status);
+          const displayDate = getDisplayDate(item);
+          const controllerName = getIndependentControllerName(item);
+
+          return `
           <tr>
-            <td>${item.ItemId || 'N/A'}</td>
+            <td>${item.ItemId || "N/A"}</td>
             <td class="date-field">${displayDate}</td>
-            <td>${item.Basis || 'N/A'}</td>
+            <td>${item.Basis || "N/A"}</td>
             <td class="${statusClass}">${status}</td>
-            <td>${item.comment || 'No comments'}</td>
+            <td>${item.comment || "No comments"}</td>
             <td>${controllerName}</td>
           </tr>
         `;
-      }).join('');
+        })
+        .join("");
     };
 
     // Replace the loading content with actual data
@@ -3272,12 +3507,14 @@ async function injectStaticDocumentChecklistData(templateContent, companyId, pro
     );
 
     // Remove the JavaScript that tries to fetch data
-    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+    templateContent = templateContent.replace(
+      /<script>[\s\S]*?<\/script>/g,
+      ""
+    );
 
     return templateContent;
-
   } catch (error) {
-    console.error('Error injecting static document checklist data:', error);
+    console.error("Error injecting static document checklist data:", error);
     // Return template with error message
     return templateContent.replace(
       /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
@@ -3287,49 +3524,67 @@ async function injectStaticDocumentChecklistData(templateContent, companyId, pro
 }
 
 // Helper function to inject static report registration data into HTML
-async function injectStaticReportRegistrationData(templateContent, companyId, projectId, professionSubjectMatterId) {
+async function injectStaticReportRegistrationData(
+  templateContent,
+  companyId,
+  projectId,
+  professionSubjectMatterId
+) {
   try {
     // Fetch special text
-    const specialTextResponse = await fetch(`http://localhost:3000/get-project-special-text?projectId=${projectId}`);
+    const specialTextResponse = await fetch(
+      `http://localhost:3000/get-project-special-text?projectId=${projectId}`
+    );
     const specialTextData = await specialTextResponse.json();
-    const specialText = specialTextData.success ? specialTextData.data.specialText : '';
+    const specialText = specialTextData.success
+      ? specialTextData.data.specialText
+      : "";
 
     // Fetch registration entries
-    const entries = await db.collection('StaticReportRegistrationEntries').find({
-      companyId: new ObjectId(companyId),
-      projectId: new ObjectId(projectId)
-    }).toArray();
+    const entries = await db
+      .collection("StaticReportRegistrationEntries")
+      .find({
+        companyId: new ObjectId(companyId),
+        projectId: new ObjectId(projectId),
+      })
+      .toArray();
 
     // Process entries
     const processedEntries = [];
     for (const entry of entries) {
-      const registrationId = `${entry.pos}_${Math.random().toString(36).substr(2, 9)}`;
+      const registrationId = `${entry.pos}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
       const controlType = `${entry.constructionPart} ${specialText}`.trim();
-      
+
       // Determine DS Group based on pos
-      let dsGroup = '';
-      if (entry.pos.startsWith('7.4')) dsGroup = 'B4';
-      else if (entry.pos.startsWith('7.5')) dsGroup = 'B5';
-      else if (entry.pos.startsWith('7.6')) dsGroup = 'B6';
+      let dsGroup = "";
+      if (entry.pos.startsWith("7.4")) dsGroup = "B4";
+      else if (entry.pos.startsWith("7.5")) dsGroup = "B5";
+      else if (entry.pos.startsWith("7.6")) dsGroup = "B6";
 
       // Get user info
       let user = null;
       if (entry.independentController) {
-        const userDoc = await db.collection('users').findOne({ _id: new ObjectId(entry.independentController) });
+        const userDoc = await db
+          .collection("users")
+          .findOne({ _id: new ObjectId(entry.independentController) });
         if (userDoc) {
           user = {
             name: userDoc.name,
             role: userDoc.role,
-            type: 'independent_controller'
+            type: "independent_controller",
           };
         }
       } else if (entry.selectedWorkers && entry.selectedWorkers.length > 0) {
-        const userDoc = await db.collection('users').findOne({ _id: new ObjectId(entry.selectedWorkers[0]) });
+        const userDoc = await db
+          .collection("users")
+          .findOne({ _id: new ObjectId(entry.selectedWorkers[0]) });
         if (userDoc) {
           user = {
             name: userDoc.name,
             role: userDoc.role,
-            type: 'worker'
+            type: "worker",
           };
         }
       }
@@ -3340,23 +3595,29 @@ async function injectStaticReportRegistrationData(templateContent, companyId, pr
         controlType,
         dsGroup,
         user,
-        registrationDate: entry.submissionCreatedDate
+        registrationDate: entry.submissionCreatedDate,
       });
     }
 
     // Group entries by DS Group
-    const b4Entries = processedEntries.filter(entry => entry.dsGroup === 'B4');
-    const b5Entries = processedEntries.filter(entry => entry.dsGroup === 'B5');
-    const b6Entries = processedEntries.filter(entry => entry.dsGroup === 'B6');
+    const b4Entries = processedEntries.filter(
+      (entry) => entry.dsGroup === "B4"
+    );
+    const b5Entries = processedEntries.filter(
+      (entry) => entry.dsGroup === "B5"
+    );
+    const b6Entries = processedEntries.filter(
+      (entry) => entry.dsGroup === "B6"
+    );
 
     // Helper functions
     const formatDate = (dateString) => {
-      if (!dateString) return 'N/A';
+      if (!dateString) return "N/A";
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
       });
     };
 
@@ -3369,70 +3630,87 @@ async function injectStaticReportRegistrationData(templateContent, companyId, pr
           </div>
         `;
       }
-      return 'No user assigned';
+      return "No user assigned";
     };
 
     const createMediaFilesHTML = (entry) => {
-      let mediaHTML = '';
-      
+      let mediaHTML = "";
+
       if (entry.annotatedPdfImages && entry.annotatedPdfImages.length > 0) {
-        mediaHTML += '<div class="media-section"><strong>Annotated PDF Images:</strong>';
+        mediaHTML +=
+          '<div class="media-section"><strong>Annotated PDF Images:</strong>';
         mediaHTML += '<div class="media-preview-container">';
-        entry.annotatedPdfImages.forEach(img => {
+        entry.annotatedPdfImages.forEach((img) => {
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
                 <img src="http://localhost:3000/uploads/${img.filename}" 
                      alt="${img.originalName}" 
-                     onclick="window.open('http://localhost:3000/uploads/${img.filename}', '_blank')">
+                     onclick="window.open('http://localhost:3000/uploads/${
+                       img.filename
+                     }', '_blank')">
               </div>
               <div class="filename-text">${img.originalName}</div>
-              <div class="description-text">${img.description || 'No description'}</div>
+              <div class="description-text">${
+                img.description || "No description"
+              }</div>
             </div>
           `;
         });
-        mediaHTML += '</div></div>';
+        mediaHTML += "</div></div>";
       }
 
       if (entry.mainPictures && entry.mainPictures.length > 0) {
-        mediaHTML += '<div class="media-section"><strong>Main Pictures:</strong>';
+        mediaHTML +=
+          '<div class="media-section"><strong>Main Pictures:</strong>';
         mediaHTML += '<div class="media-preview-container">';
-        entry.mainPictures.forEach(pic => {
+        entry.mainPictures.forEach((pic) => {
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
                 <img src="http://localhost:3000/uploads/${pic.filename}" 
                      alt="${pic.originalName}" 
-                     onclick="window.open('http://localhost:3000/uploads/${pic.filename}', '_blank')">
+                     onclick="window.open('http://localhost:3000/uploads/${
+                       pic.filename
+                     }', '_blank')">
               </div>
               <div class="filename-text">${pic.originalName}</div>
-              <div class="description-text">${pic.description || 'No description'}</div>
+              <div class="description-text">${
+                pic.description || "No description"
+              }</div>
             </div>
           `;
         });
-        mediaHTML += '</div></div>';
+        mediaHTML += "</div></div>";
       }
 
       if (entry.markPictures && entry.markPictures.length > 0) {
-        mediaHTML += '<div class="media-section"><strong>Mark Pictures:</strong>';
+        mediaHTML +=
+          '<div class="media-section"><strong>Mark Pictures:</strong>';
         mediaHTML += '<div class="media-preview-container">';
-        entry.markPictures.forEach(mark => {
+        entry.markPictures.forEach((mark) => {
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
                 <img src="http://localhost:3000/uploads/${mark.filename}" 
                      alt="${mark.originalName} (Mark #${mark.markNumber})" 
-                     onclick="window.open('http://localhost:3000/uploads/${mark.filename}', '_blank')">
+                     onclick="window.open('http://localhost:3000/uploads/${
+                       mark.filename
+                     }', '_blank')">
               </div>
-              <div class="filename-text">${mark.originalName} (Mark #${mark.markNumber})</div>
-              <div class="description-text">${mark.description || 'No description'}</div>
+              <div class="filename-text">${mark.originalName} (Mark #${
+            mark.markNumber
+          })</div>
+              <div class="description-text">${
+                mark.description || "No description"
+              }</div>
             </div>
           `;
         });
-        mediaHTML += '</div></div>';
+        mediaHTML += "</div></div>";
       }
 
-      return mediaHTML || 'No media files';
+      return mediaHTML || "No media files";
     };
 
     const createTableRows = (entries) => {
@@ -3440,8 +3718,9 @@ async function injectStaticReportRegistrationData(templateContent, companyId, pr
         return '<tr><td colspan="6" class="no-data">No data available</td></tr>';
       }
 
-      return entries.map(entry => {
-        return `
+      return entries
+        .map((entry) => {
+          return `
           <tr>
             <td class="date-field">${formatDate(entry.registrationDate)}</td>
             <td class="registration-id">${entry.registrationId}</td>
@@ -3451,7 +3730,8 @@ async function injectStaticReportRegistrationData(templateContent, companyId, pr
             <td>${createMediaFilesHTML(entry)}</td>
           </tr>
         `;
-      }).join('');
+        })
+        .join("");
     };
 
     // Replace the loading content with actual data
@@ -3471,12 +3751,14 @@ async function injectStaticReportRegistrationData(templateContent, companyId, pr
     );
 
     // Remove the JavaScript that tries to fetch data
-    templateContent = templateContent.replace(/<script>[\s\S]*?<\/script>/g, '');
+    templateContent = templateContent.replace(
+      /<script>[\s\S]*?<\/script>/g,
+      ""
+    );
 
     return templateContent;
-
   } catch (error) {
-    console.error('Error injecting static report registration data:', error);
+    console.error("Error injecting static report registration data:", error);
     // Return template with error message
     return templateContent.replace(
       /<tbody id="section-\w+-tbody">[\s\S]*?<\/tbody>/g,
@@ -3491,32 +3773,33 @@ app.get("/generate-complete-static-report", async (req, res) => {
     const { projectId, companyId, professionSubjectMatterId } = req.query;
 
     if (!projectId || !companyId || !professionSubjectMatterId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required parameters: projectId, companyId, professionSubjectMatterId" 
+      return res.status(400).json({
+        success: false,
+        message:
+          "Missing required parameters: projectId, companyId, professionSubjectMatterId",
       });
     }
 
-    const fs = require('fs');
-    const path = require('path');
+    const fs = require("fs");
+    const path = require("path");
 
     // Read all HTML templates
-    const templatesDir = path.join(__dirname, 'static-report-templates');
-    
+    const templatesDir = path.join(__dirname, "static-report-templates");
+
     // List of all template files in order
     const templateFiles = [
-      'static-control-report-cover.html',
-      'static-inspection-report.html', 
-      'document-completion-status.html',
-      'generally-section.html',
-      'general-controls-documentation.html',
-      'construction-execution-classes.html',
-      'control-points-selected.html',
-      'static-document-checklist-report.html',
-      'static-report-registration-entries.html'
+      "static-control-report-cover.html",
+      "static-inspection-report.html",
+      "document-completion-status.html",
+      "generally-section.html",
+      "general-controls-documentation.html",
+      "construction-execution-classes.html",
+      "control-points-selected.html",
+      "static-document-checklist-report.html",
+      "static-report-registration-entries.html",
     ];
 
-    let completeReport = '';
+    let completeReport = "";
     let pageNumber = 1;
 
     // Add table of contents
@@ -3525,10 +3808,10 @@ app.get("/generate-complete-static-report", async (req, res) => {
     // Process each template
     for (const templateFile of templateFiles) {
       const templatePath = path.join(templatesDir, templateFile);
-      
+
       if (fs.existsSync(templatePath)) {
-        let templateContent = fs.readFileSync(templatePath, 'utf8');
-        
+        let templateContent = fs.readFileSync(templatePath, "utf8");
+
         // Add page number
         templateContent = templateContent.replace(
           '<div class="page">',
@@ -3541,32 +3824,53 @@ app.get("/generate-complete-static-report", async (req, res) => {
         }
 
         // Handle dynamic templates that need data injection
-        if (templateFile === 'static-document-checklist-report.html') {
-          templateContent = await injectStaticDocumentChecklistDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId);
-        } else if (templateFile === 'static-report-registration-entries.html') {
-          templateContent = await injectStaticReportRegistrationDataFromAPI(templateContent, companyId, projectId, professionSubjectMatterId);
+        if (templateFile === "static-document-checklist-report.html") {
+          templateContent = await injectStaticDocumentChecklistDataFromAPI(
+            templateContent,
+            companyId,
+            projectId,
+            professionSubjectMatterId
+          );
+        } else if (templateFile === "static-report-registration-entries.html") {
+          templateContent = await injectStaticReportRegistrationDataFromAPI(
+            templateContent,
+            companyId,
+            projectId,
+            professionSubjectMatterId
+          );
         }
 
         // Replace dynamic content with actual data
-        if (templateFile === 'static-inspection-report.html') {
+        if (templateFile === "static-inspection-report.html") {
           // Use the working static-report-api.js function for signature handling
-          const { getStaticInspectionReportTemplate } = require('./static-report-api');
+          const {
+            getStaticInspectionReportTemplate,
+          } = require("./static-report-api");
           const mockReq = {
             query: { projectId, companyId, professionSubjectMatterId },
-            db: db
+            db: db,
           };
           const mockRes = {
             setHeader: () => {},
-            status: () => ({ send: (html) => { templateContent = html; } })
+            status: () => ({
+              send: (html) => {
+                templateContent = html;
+              },
+            }),
           };
           await getStaticInspectionReportTemplate(mockReq, mockRes);
         } else {
           // Use the original function for other templates
-          templateContent = await replaceDynamicContent(templateContent, {
-            projectId,
-            companyId,
-            professionSubjectMatterId
-          }, db, templateFile);
+          templateContent = await replaceDynamicContent(
+            templateContent,
+            {
+              projectId,
+              companyId,
+              professionSubjectMatterId,
+            },
+            db,
+            templateFile
+          );
         }
 
         completeReport += templateContent;
@@ -3578,15 +3882,17 @@ app.get("/generate-complete-static-report", async (req, res) => {
     const reportWithCSS = addReportCSS(completeReport);
 
     // Set response headers for HTML
-    res.setHeader('Content-Type', 'text/html');
-    res.setHeader('Content-Disposition', `inline; filename="static-report-${projectId}.html"`);
+    res.setHeader("Content-Type", "text/html");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="static-report-${projectId}.html"`
+    );
     res.status(200).send(reportWithCSS);
-
   } catch (error) {
     console.error("Error generating complete static report:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 });
@@ -3725,28 +4031,33 @@ function generateTableOfContents(templateFiles) {
     </div>
 </body>
 </html>`;
-  
+
   return toc;
 }
 
 // Helper function to replace dynamic content
-async function replaceDynamicContent(templateContent, params, db, templateName) {
+async function replaceDynamicContent(
+  templateContent,
+  params,
+  db,
+  templateName
+) {
   const { projectId, companyId, professionSubjectMatterId } = params;
 
   try {
-    
     // Fetch company details
     const company = await db.collection("companies").findOne({
-      _id: new ObjectId(companyId)
+      _id: new ObjectId(companyId),
     });
 
     // Fetch the most recent static control plan from gammas collection
     // First try with professionSubjectMatterId filter
-    let mostRecentControlPlan = await db.collection("gammas")
+    let mostRecentControlPlan = await db
+      .collection("gammas")
       .find({
         companyId: companyId,
         projectsId: { $in: [projectId] },
-        "profession.SubjectMatterId": professionSubjectMatterId
+        "profession.SubjectMatterId": professionSubjectMatterId,
       })
       .sort({ createdAt: -1 })
       .limit(1)
@@ -3754,10 +4065,11 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
 
     // If no results found, try without professionSubjectMatterId filter
     if (mostRecentControlPlan.length === 0) {
-      mostRecentControlPlan = await db.collection("gammas")
+      mostRecentControlPlan = await db
+        .collection("gammas")
         .find({
           companyId: companyId,
-          projectsId: { $in: [projectId] }
+          projectsId: { $in: [projectId] },
         })
         .sort({ createdAt: -1 })
         .limit(1)
@@ -3768,39 +4080,41 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
     const totalControlPlans = await db.collection("gammas").countDocuments({
       companyId: companyId,
       projectsId: { $in: [projectId] },
-      "profession.SubjectMatterId": professionSubjectMatterId
+      "profession.SubjectMatterId": professionSubjectMatterId,
     });
 
     // Get project special text
-    const projectSpecialText = await db.collection("projectspecialtext").findOne({
-      projectId: projectId
-    });
+    const projectSpecialText = await db
+      .collection("projectspecialtext")
+      .findOne({
+        projectId: projectId,
+      });
 
     // Only apply cover page replacements to static-control-report-cover.html
-    if (templateName === 'static-control-report-cover.html') {
+    if (templateName === "static-control-report-cover.html") {
       // Replace company name in executing party
       if (company && company.name) {
         templateContent = templateContent.replace(
-          'Executing party: _________________________',
+          "Executing party: _________________________",
           `Executing party: ${company.name}`
         );
       }
-      
+
       // Replace Document ID B3 with the x value from special control plan
-      let documentId = 'B3.1'; // Default fallback
+      let documentId = "B3.1"; // Default fallback
       if (mostRecentControlPlan.length > 0 && mostRecentControlPlan[0].x) {
         documentId = `B3.${mostRecentControlPlan[0].x}`;
       }
       templateContent = templateContent.replace(
-        'Document ID: B3.',
+        "Document ID: B3.",
         `Document ID: ${documentId}`
       );
-      
+
       // Replace company logo placeholder with actual logo if available
       if (company && (company.logo || company.picture)) {
         const logoPath = company.logo || company.picture;
         const logoHtml = `<img src="http://localhost:3000/uploads/${logoPath}" alt="Company Logo" style="width: 80px; height: 60px; object-fit: contain; border-radius: 4px;" />`;
-        
+
         // Replace the entire company-logo-placeholder div with the image
         templateContent = templateContent.replace(
           /<div class="company-logo-placeholder">[\s\S]*?<\/div>/,
@@ -3813,10 +4127,10 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
     }
 
     // Only apply inspection report replacements to static-inspection-report.html
-    if (templateName === 'static-inspection-report.html') {
+    if (templateName === "static-inspection-report.html") {
       // Fetch project details
       const project = await db.collection("projects").findOne({
-        _id: new ObjectId(projectId)
+        _id: new ObjectId(projectId),
       });
 
       // Replace project and company details in static inspection report
@@ -3824,37 +4138,49 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
         // Project Details
         templateContent = templateContent.replace(
           '<div class="field-value" id="project-name">_________________________</div>',
-          `<div class="field-value" id="project-name">${project.name || 'N/A'}</div>`
+          `<div class="field-value" id="project-name">${
+            project.name || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="project-id">_________________________</div>',
           `<div class="field-value" id="project-id">${projectId}</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="project-full-name">_________________________</div>',
-          `<div class="field-value" id="project-full-name">${project.name || 'N/A'}</div>`
+          `<div class="field-value" id="project-full-name">${
+            project.name || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="project-address">_________________________</div>',
-          `<div class="field-value" id="project-address">${project.address || 'N/A'}</div>`
+          `<div class="field-value" id="project-address">${
+            project.address || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="project-postal">_________________________</div>',
-          `<div class="field-value" id="project-postal">${project.postalCode || 'N/A'}</div>`
+          `<div class="field-value" id="project-postal">${
+            project.postalCode || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="project-contact">_________________________</div>',
-          `<div class="field-value" id="project-contact">${project.contactPerson || 'N/A'}</div>`
+          `<div class="field-value" id="project-contact">${
+            project.contactPerson || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="project-startup">_________________________</div>',
-          `<div class="field-value" id="project-startup">${project.startDate || 'N/A'}</div>`
+          `<div class="field-value" id="project-startup">${
+            project.startDate || "N/A"
+          }</div>`
         );
       }
 
@@ -3862,122 +4188,153 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
         // Company Details
         templateContent = templateContent.replace(
           '<div class="field-value" id="company-name">_________________________</div>',
-          `<div class="field-value" id="company-name">${company.name || 'N/A'}</div>`
+          `<div class="field-value" id="company-name">${
+            company.name || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="company-full-name">_________________________</div>',
-          `<div class="field-value" id="company-full-name">${company.name || 'N/A'}</div>`
+          `<div class="field-value" id="company-full-name">${
+            company.name || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="company-address">_________________________</div>',
-          `<div class="field-value" id="company-address">${company.address || 'N/A'}</div>`
+          `<div class="field-value" id="company-address">${
+            company.address || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="company-postal">_________________________</div>',
-          `<div class="field-value" id="company-postal">${company.postalCode || 'N/A'}</div>`
+          `<div class="field-value" id="company-postal">${
+            company.postalCode || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="company-cvr">_________________________</div>',
-          `<div class="field-value" id="company-cvr">${company.cvrNumber || 'N/A'}</div>`
+          `<div class="field-value" id="company-cvr">${
+            company.cvrNumber || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="company-email">_________________________</div>',
-          `<div class="field-value" id="company-email">${company.email || 'N/A'}</div>`
+          `<div class="field-value" id="company-email">${
+            company.email || "N/A"
+          }</div>`
         );
-        
+
         templateContent = templateContent.replace(
           '<div class="field-value" id="company-contact">_________________________</div>',
-          `<div class="field-value" id="company-contact">${company.contactPerson || 'N/A'}</div>`
+          `<div class="field-value" id="company-contact">${
+            company.contactPerson || "N/A"
+          }</div>`
         );
       }
     }
 
     // Only apply special control points replacements to construction-execution-classes.html
-    if (templateName === 'construction-execution-classes.html') {
+    if (templateName === "construction-execution-classes.html") {
       // First, populate Table 1: Control Sections and Classes with correct data
       if (mostRecentControlPlan.length > 0) {
         const controlPlan = mostRecentControlPlan[0];
-        
+
         // Get the correct X value for B3.X
         const xValue = controlPlan.x || 1;
         const controlSection = `B3.${xValue}`;
-        
+
         // Get construction and execution classes
-        const constructionClass = controlPlan.cc || 'KK3';
-        const executionClass = controlPlan.exc || 'EXC3';
-        
+        const constructionClass = controlPlan.cc || "KK3";
+        const executionClass = controlPlan.exc || "EXC3";
+
         // Create control plan text
-        let controlPlanText = 'Static Control Plan';
+        let controlPlanText = "Static Control Plan";
         if (projectSpecialText && projectSpecialText.specialText) {
-          controlPlanText += ': ' + projectSpecialText.specialText;
+          controlPlanText += ": " + projectSpecialText.specialText;
         }
-        
+
         // Replace Table 1 data
         templateContent = templateContent.replace(
           '<td class="control-section" id="control-section">Loading...</td>',
           `<td class="control-section" id="control-section">${controlSection}</td>`
         );
-        
+
         templateContent = templateContent.replace(
           '<td class="control-plan" id="control-plan">Loading...</td>',
           `<td class="control-plan" id="control-plan">${controlPlanText}</td>`
         );
-        
+
         templateContent = templateContent.replace(
           '<td class="construction-class" id="construction-class">Loading...</td>',
           `<td class="construction-class" id="construction-class">${constructionClass.toUpperCase()}</td>`
         );
-        
+
         templateContent = templateContent.replace(
           '<td class="execution-class" id="execution-class">Loading...</td>',
           `<td class="execution-class" id="execution-class">${executionClass.toUpperCase()}</td>`
         );
       }
-      
+
       // Then, fetch and replace special control points table data (Table 2)
-      const specialControlPoints = await db.collection("specialcontrol").find({
-        companyId: companyId,
-        projectsId: { $in: [projectId] }
-      }).sort({ createdAt: -1 }).toArray();
+      const specialControlPoints = await db
+        .collection("specialcontrol")
+        .find({
+          companyId: companyId,
+          projectsId: { $in: [projectId] },
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
 
       if (specialControlPoints.length > 0) {
-        let tableRows = '';
-        specialControlPoints.forEach(point => {
+        let tableRows = "";
+        specialControlPoints.forEach((point) => {
           // Get the person name based on selectedType
-          let personName = '';
-          if (point.selectedType === 'projectManager' && point.projectManager) {
-            personName = point.projectManager.name || point.projectManager.firstName + ' ' + point.projectManager.lastName;
-          } else if (point.selectedType === 'independentController' && point.independentController) {
-            personName = point.independentController.name || point.independentController.firstName + ' ' + point.independentController.lastName;
-          } else if (point.selectedType === 'worker' && point.worker) {
-            personName = point.worker.name || point.worker.firstName + ' ' + point.worker.lastName;
+          let personName = "";
+          if (point.selectedType === "projectManager" && point.projectManager) {
+            personName =
+              point.projectManager.name ||
+              point.projectManager.firstName +
+                " " +
+                point.projectManager.lastName;
+          } else if (
+            point.selectedType === "independentController" &&
+            point.independentController
+          ) {
+            personName =
+              point.independentController.name ||
+              point.independentController.firstName +
+                " " +
+                point.independentController.lastName;
+          } else if (point.selectedType === "worker" && point.worker) {
+            personName =
+              point.worker.name ||
+              point.worker.firstName + " " + point.worker.lastName;
           }
 
           // Create special control text
-          let specialControlText = '';
+          let specialControlText = "";
           if (point.profession && point.profession.GroupName) {
             specialControlText = point.profession.GroupName;
           }
-          
+
           if (projectSpecialText && projectSpecialText.specialText) {
-            specialControlText += ' - ' + projectSpecialText.specialText;
+            specialControlText += " - " + projectSpecialText.specialText;
           }
 
           tableRows += `
             <tr>
               <td>${point._id.toString()}</td>
               <td>${specialControlText}</td>
-              <td>${point.comment || ''}</td>
+              <td>${point.comment || ""}</td>
               <td>${personName}</td>
             </tr>
           `;
         });
-        
+
         // Replace empty rows in special control points table (Table 2 only)
         templateContent = templateContent.replace(
           /<tbody id="special-control-points-table-body">[\s\S]*?<\/tbody>/,
@@ -3986,25 +4343,35 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
       }
 
       // Finally, fetch and replace deviations table data (Table 3)
-      console.log('DEBUG: Fetching deviations for construction-execution-classes.html');
-      console.log('DEBUG: Query params:', { companyId, projectId, professionSubjectMatterId });
-      
-      const deviations = await db.collection("deviations").find({
-        companyId: companyId,
-        "projectsId.0": projectId,  // First index of projectsId array
-        "profession.SubjectMatterId": professionSubjectMatterId,
-        type: "Static Report"
-      }).sort({ submittedDate: -1 }).toArray();
-      
-      console.log('DEBUG: Found deviations:', deviations.length);
+      console.log(
+        "DEBUG: Fetching deviations for construction-execution-classes.html"
+      );
+      console.log("DEBUG: Query params:", {
+        companyId,
+        projectId,
+        professionSubjectMatterId,
+      });
+
+      const deviations = await db
+        .collection("deviations")
+        .find({
+          companyId: companyId,
+          "projectsId.0": projectId, // First index of projectsId array
+          "profession.SubjectMatterId": professionSubjectMatterId,
+          type: "Static Report",
+        })
+        .sort({ submittedDate: -1 })
+        .toArray();
+
+      console.log("DEBUG: Found deviations:", deviations.length);
 
       if (deviations.length > 0) {
-        let deviationRows = '';
-        deviations.forEach(deviation => {
+        let deviationRows = "";
+        deviations.forEach((deviation) => {
           deviationRows += `
             <tr>
               <td class="deviation-id">${deviation._id.toString()}</td>
-              <td>${deviation.comment || 'No description'}</td>
+              <td>${deviation.comment || "No description"}</td>
               <td></td>
             </tr>
           `;
@@ -4023,40 +4390,50 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
         }
 
         // Replace the deviations table body (Table 3) - simple string replacement
-        console.log('DEBUG: Replacing deviations table with', deviations.length, 'deviations');
+        console.log(
+          "DEBUG: Replacing deviations table with",
+          deviations.length,
+          "deviations"
+        );
         templateContent = templateContent.replace(
           '<td class="deviation-id">AFV_01</td>',
           `<td class="deviation-id">${deviations[0]._id.toString()}</td>`
         );
         templateContent = templateContent.replace(
           '<td class="select-date">(Select Date)</td>',
-          `<td>${deviations[0].comment || 'No description'}</td>`
+          `<td>${deviations[0].comment || "No description"}</td>`
         );
       }
     }
 
     // Only apply control points replacements to control-points-selected.html
-    if (templateName === 'control-points-selected.html') {
-      console.log('DEBUG: Processing control-points-selected.html template');
-      
-      // Fetch project drawings
-      const drawings = await db.collection("drawings").find({
-        companyId: companyId,
-        projectsId: projectId
-      }).sort({ createdAt: -1 }).toArray();
+    if (templateName === "control-points-selected.html") {
+      console.log("DEBUG: Processing control-points-selected.html template");
 
-      console.log('DEBUG: Found drawings for control points:', drawings.length);
+      // Fetch project drawings
+      const drawings = await db
+        .collection("drawings")
+        .find({
+          companyId: companyId,
+          projectsId: projectId,
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      console.log("DEBUG: Found drawings for control points:", drawings.length);
 
       if (drawings.length > 0) {
-        let drawingsHtml = '';
-        
+        let drawingsHtml = "";
+
         for (const drawing of drawings) {
           if (drawing.mainDrawings && drawing.mainDrawings.length > 0) {
             for (const mainDrawing of drawing.mainDrawings) {
               // Check if it's a PDF file
-              const isPdf = mainDrawing.original.toLowerCase().endsWith('.pdf') || mainDrawing.stored.toLowerCase().endsWith('.pdf');
-              
-              let drawingContent = '';
+              const isPdf =
+                mainDrawing.original.toLowerCase().endsWith(".pdf") ||
+                mainDrawing.stored.toLowerCase().endsWith(".pdf");
+
+              let drawingContent = "";
               if (isPdf) {
                 // For PDF files, show a placeholder with link to view
                 drawingContent = `
@@ -4074,16 +4451,20 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
                   <img src="http://localhost:3000/uploads/${mainDrawing.stored}" alt="${mainDrawing.original}" style="max-width: 100%; max-height: 400px; object-fit: contain;" />
                 `;
               }
-              
+
               drawingsHtml += `
                 <div class="drawing-container">
-                  <div class="drawing-title">DRAWING NAME: ${mainDrawing.original}</div>
+                  <div class="drawing-title">DRAWING NAME: ${
+                    mainDrawing.original
+                  }</div>
                   <div class="drawing-placeholder">
                     ${drawingContent}
                   </div>
                   <div class="drawing-info">
                     <span class="drawing-name">${mainDrawing.original}</span>
-                    <span class="upload-date">Uploaded: ${new Date(mainDrawing.uploadedAt).toLocaleDateString()}</span>
+                    <span class="upload-date">Uploaded: ${new Date(
+                      mainDrawing.uploadedAt
+                    ).toLocaleDateString()}</span>
                   </div>
                 </div>
               `;
@@ -4096,77 +4477,97 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
           '<div id="drawings-container">',
           `<div id="drawings-container">${drawingsHtml}`
         );
-        
+
         // Hide the no drawings message
-        templateContent = templateContent.replace(
-          'Loading drawings...',
-          ''
-        );
+        templateContent = templateContent.replace("Loading drawings...", "");
       } else {
         // Show no drawings message
         templateContent = templateContent.replace(
-          'Loading drawings...',
-          'No drawings found for this project.'
+          "Loading drawings...",
+          "No drawings found for this project."
         );
       }
     }
 
     // Only apply signature replacements to static-inspection-report.html
-    console.log('DEBUG: Template name:', templateName);
-    if (templateName === 'static-inspection-report.html') {
-      console.log('DEBUG: Processing static-inspection-report.html template');
-      console.log('DEBUG: Query parameters:', { companyId, projectId, professionSubjectMatterId });
-      
+    console.log("DEBUG: Template name:", templateName);
+    if (templateName === "static-inspection-report.html") {
+      console.log("DEBUG: Processing static-inspection-report.html template");
+      console.log("DEBUG: Query parameters:", {
+        companyId,
+        projectId,
+        professionSubjectMatterId,
+      });
+
       // Add a visible debug marker to confirm this code is running
       templateContent = templateContent.replace(
         '<div class="banner">SIGNING:</div>',
         '<div class="banner">SIGNING: [DEBUG: TEMPLATE PROCESSING]</div>'
       );
-      
+
       // Fetch signatures data - try simpler query first
-      console.log('DEBUG: Testing simple query first...');
+      console.log("DEBUG: Testing simple query first...");
       const simpleQuery = { companyId: companyId };
-      const simpleSignatures = await db.collection("signatures").find(simpleQuery).toArray();
-      console.log('DEBUG: Simple query found:', simpleSignatures.length, 'signatures');
-      
+      const simpleSignatures = await db
+        .collection("signatures")
+        .find(simpleQuery)
+        .toArray();
+      console.log(
+        "DEBUG: Simple query found:",
+        simpleSignatures.length,
+        "signatures"
+      );
+
       if (simpleSignatures.length > 0) {
-        console.log('DEBUG: First simple signature:', JSON.stringify(simpleSignatures[0], null, 2));
+        console.log(
+          "DEBUG: First simple signature:",
+          JSON.stringify(simpleSignatures[0], null, 2)
+        );
       }
-      
+
       // Now try the complex query
       const query = {
         companyId: companyId,
         projectsId: { $in: [projectId] },
-        professionSubjectMatterId: professionSubjectMatterId
+        professionSubjectMatterId: professionSubjectMatterId,
       };
-      console.log('DEBUG: Complex database query:', JSON.stringify(query, null, 2));
-      
+      console.log(
+        "DEBUG: Complex database query:",
+        JSON.stringify(query, null, 2)
+      );
+
       let signatures = [];
       try {
         signatures = await db.collection("signatures").find(query).toArray();
-        console.log('DEBUG: Found signatures count:', signatures.length);
+        console.log("DEBUG: Found signatures count:", signatures.length);
         if (signatures.length > 0) {
-          console.log('DEBUG: First signature:', JSON.stringify(signatures[0], null, 2));
+          console.log(
+            "DEBUG: First signature:",
+            JSON.stringify(signatures[0], null, 2)
+          );
         }
       } catch (error) {
-        console.log('DEBUG: Error in signature query:', error.message);
+        console.log("DEBUG: Error in signature query:", error.message);
         signatures = [];
       }
 
       // Get current date
-      const currentDate = new Date().toLocaleDateString('en-GB');
+      const currentDate = new Date().toLocaleDateString("en-GB");
 
       // Replace signature data
       if (signatures.length > 0) {
         const signature = signatures[0]; // Get the first signature document
-        console.log('DEBUG: Processing signature data:', JSON.stringify(signature, null, 2));
-        
+        console.log(
+          "DEBUG: Processing signature data:",
+          JSON.stringify(signature, null, 2)
+        );
+
         // Test replacement by adding a visible marker
         templateContent = templateContent.replace(
           '<div class="banner">SIGNING: [DEBUG: TEMPLATE PROCESSING]</div>',
           '<div class="banner">SIGNING: [DEBUG: SIGNATURES FOUND]</div>'
         );
-        
+
         // Replace person names (person1Name, person2Name, person3Name)
         for (let i = 1; i <= 3; i++) {
           const personName = signature[`person${i}Name`];
@@ -4177,18 +4578,24 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
               `<div class="role-text" id="person${i}-name">${personName}</div>`
             );
           }
-          
+
           // Replace signature images (signature1, signature2, signature3)
           const signatureImage = signature[`signature${i}`];
           if (signatureImage) {
-            console.log(`DEBUG: Replacing signature${i} image: ${signatureImage}`);
+            console.log(
+              `DEBUG: Replacing signature${i} image: ${signatureImage}`
+            );
             // Use regex to match the img tag even if it's split across lines
-            const imgRegex = new RegExp(`<img id="signature${i}-image"[^>]*style="display: none;"[^>]*>`, 'g');
-            templateContent = templateContent.replace(imgRegex, 
+            const imgRegex = new RegExp(
+              `<img id="signature${i}-image"[^>]*style="display: none;"[^>]*>`,
+              "g"
+            );
+            templateContent = templateContent.replace(
+              imgRegex,
               `<img id="signature${i}-image" class="signature-image" src="http://localhost:3000/uploads/${signatureImage}" alt="Signature ${i}" style="display: block; max-width: 100%; max-height: 60px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background-color: white;">`
             );
           }
-          
+
           // Replace date
           templateContent = templateContent.replace(
             `data-date="" id="date${i}"`,
@@ -4196,7 +4603,7 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
           );
         }
       } else {
-        console.log('DEBUG: No signatures found, setting dates only');
+        console.log("DEBUG: No signatures found, setting dates only");
         // If no signatures, just set the current date
         for (let i = 1; i <= 3; i++) {
           templateContent = templateContent.replace(
@@ -4204,7 +4611,7 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
             `data-date="${currentDate}" id="date${i}"`
           );
         }
-        
+
         // Add debug marker for no signatures
         templateContent = templateContent.replace(
           '<div class="banner">SIGNING: [DEBUG: TEMPLATE PROCESSING]</div>',
@@ -4214,9 +4621,8 @@ async function replaceDynamicContent(templateContent, params, db, templateName) 
     }
 
     return templateContent;
-
   } catch (error) {
-    console.error('Error replacing dynamic content:', error);
+    console.error("Error replacing dynamic content:", error);
     return templateContent;
   }
 }
@@ -4249,10 +4655,9 @@ function addReportCSS(htmlContent) {
       }
     </style>
   `;
-  
-  return htmlContent.replace('</head>', `${css}</head>`);
-}
 
+  return htmlContent.replace("</head>", `${css}</head>`);
+}
 
 // API to get signatures data for testing
 app.get("/get-signatures", async (req, res) => {
@@ -4260,29 +4665,33 @@ app.get("/get-signatures", async (req, res) => {
     const { projectId, companyId, professionSubjectMatterId } = req.query;
 
     if (!projectId || !companyId || !professionSubjectMatterId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required query parameters: projectId, companyId, professionSubjectMatterId" 
+      return res.status(400).json({
+        success: false,
+        message:
+          "Missing required query parameters: projectId, companyId, professionSubjectMatterId",
       });
     }
 
-    const signatures = await db.collection("signatures").find({
-      companyId: companyId,
-      projectsId: { $in: [projectId] },
-      "profession.SubjectMatterId": professionSubjectMatterId
-    }).toArray();
+    const signatures = await db
+      .collection("signatures")
+      .find({
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+        "profession.SubjectMatterId": professionSubjectMatterId,
+      })
+      .toArray();
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       data: signatures,
-      count: signatures.length 
+      count: signatures.length,
     });
   } catch (error) {
     console.error("Error fetching signatures:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to fetch signatures", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch signatures",
+      error: error.message,
     });
   }
 });
@@ -4291,33 +4700,40 @@ app.get("/get-signatures", async (req, res) => {
 app.get("/debug-signature-replacement", async (req, res) => {
   try {
     const { projectId, companyId, professionSubjectMatterId } = req.query;
-    
-    // Read the static inspection report template
-    const templatePath = path.join(__dirname, 'static-report-templates', 'static-inspection-report.html');
-    let templateContent = fs.readFileSync(templatePath, 'utf8');
-    
-    // Fetch signatures data
-    const signatures = await db.collection("signatures").find({
-      companyId: companyId,
-      projectsId: { $in: [projectId] },
-      "profession.SubjectMatterId": professionSubjectMatterId
-    }).toArray();
 
-    const currentDate = new Date().toLocaleDateString('en-GB');
+    // Read the static inspection report template
+    const templatePath = path.join(
+      __dirname,
+      "static-report-templates",
+      "static-inspection-report.html"
+    );
+    let templateContent = fs.readFileSync(templatePath, "utf8");
+
+    // Fetch signatures data
+    const signatures = await db
+      .collection("signatures")
+      .find({
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+        "profession.SubjectMatterId": professionSubjectMatterId,
+      })
+      .toArray();
+
+    const currentDate = new Date().toLocaleDateString("en-GB");
 
     // Apply signature replacements
-    console.log('Debug: Found signatures:', signatures.length);
+    console.log("Debug: Found signatures:", signatures.length);
     if (signatures.length > 0) {
       const signature = signatures[0];
-      console.log('Debug: Signature data:', {
+      console.log("Debug: Signature data:", {
         person1Name: signature.person1Name,
         person2Name: signature.person2Name,
         person3Name: signature.person3Name,
         signature1: signature.signature1,
         signature2: signature.signature2,
-        signature3: signature.signature3
+        signature3: signature.signature3,
       });
-      
+
       for (let i = 1; i <= 3; i++) {
         const personName = signature[`person${i}Name`];
         console.log(`Debug: Processing person${i}Name:`, personName);
@@ -4327,7 +4743,7 @@ app.get("/debug-signature-replacement", async (req, res) => {
           console.log(`Debug: Replacing "${oldText}" with "${newText}"`);
           templateContent = templateContent.replace(oldText, newText);
         }
-        
+
         const signatureImage = signature[`signature${i}`];
         console.log(`Debug: Processing signature${i}:`, signatureImage);
         if (signatureImage) {
@@ -4336,20 +4752,20 @@ app.get("/debug-signature-replacement", async (req, res) => {
           console.log(`Debug: Replacing image "${oldImg}" with "${newImg}"`);
           templateContent = templateContent.replace(oldImg, newImg);
         }
-        
+
         const oldDate = `data-date="" id="date${i}"`;
         const newDate = `data-date="${currentDate}" id="date${i}"`;
         console.log(`Debug: Replacing date "${oldDate}" with "${newDate}"`);
         templateContent = templateContent.replace(oldDate, newDate);
       }
     } else {
-      console.log('Debug: No signatures found');
+      console.log("Debug: No signatures found");
     }
 
-    res.setHeader('Content-Type', 'text/html');
+    res.setHeader("Content-Type", "text/html");
     res.send(templateContent);
   } catch (error) {
-    console.error('Debug signature replacement error:', error);
+    console.error("Debug signature replacement error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -4362,11 +4778,11 @@ app.get("/test-replacement", async (req, res) => {
       '<div class="role-text" id="person1-name">Enterprise</div>',
       '<div class="role-text" id="person1-name">person 1</div>'
     );
-    
+
     res.json({
       original: testHtml,
       replaced: replacement,
-      success: replacement !== testHtml
+      success: replacement !== testHtml,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4377,7 +4793,7 @@ app.get("/get-parts", async (req, res) => {
   try {
     const { SubjectMatterId } = req.query;
     const query = {};
-    
+
     if (SubjectMatterId && SubjectMatterId !== "null")
       query.SubjectMatterId = SubjectMatterId;
 
@@ -4533,30 +4949,31 @@ app.post("/users/login", async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = await db.collection("users").findOne({ username, password });
-    
+
     if (!user) {
       return res.status(404).json({ error: "Invalid username or password" });
     }
-    
+
     // Check if user account is active
     if (user.status === "inactive" || user.status === "deactivated") {
       return res.status(403).json({ error: "Your account is deactivated" });
     }
-    
+
     // Check if email is verified (for new users)
     if (user.isVerified === false) {
-      return res.status(403).json({ 
-        error: "Please verify your email address before logging in. Check your inbox for the verification code.",
+      return res.status(403).json({
+        error:
+          "Please verify your email address before logging in. Check your inbox for the verification code.",
         requiresVerification: true,
-        email: user.username
+        email: user.username,
       });
     }
-    
+
     // Check if company is deactivated (for admin users)
     if (user.role === "Admin" && user.companyId) {
       try {
-        const company = await db.collection("companies").findOne({ 
-          _id: new ObjectId(user.companyId) 
+        const company = await db.collection("companies").findOne({
+          _id: new ObjectId(user.companyId),
         });
 
         if (company?.status === "deactivate") {
@@ -4566,20 +4983,20 @@ app.post("/users/login", async (req, res) => {
         console.error("Error checking company status:", error);
       }
     }
-    
+
     // Generate JWT token
     const token = jwt.sign(
-      { 
-        id: user._id, 
-        username: user.username, 
+      {
+        id: user._id,
+        username: user.username,
         role: user.role,
         companyId: user.companyId,
-        name: user.name
+        name: user.name,
       },
       JWT_SECRET,
       { expiresIn: "24h" }
     );
-    
+
     // Return simple user object
     const userResponse = {
       id: user._id,
@@ -4591,13 +5008,13 @@ app.post("/users/login", async (req, res) => {
       companyId: user.companyId,
       projectsId: user.projectsId || [],
       status: user.status,
-      isVerified: user.isVerified
+      isVerified: user.isVerified,
     };
-    
-    res.status(200).json({ 
-      token, 
+
+    res.status(200).json({
+      token,
       user: userResponse,
-      message: "Login successful"
+      message: "Login successful",
     });
   } catch (error) {
     console.error("User login error:", error);
@@ -4609,33 +5026,34 @@ app.post("/users/login", async (req, res) => {
 app.post("/get-worker-user-data", async (req, res) => {
   try {
     const { email, companyId, role, projectId } = req.body;
-    
-    console.log('=== GET WORKER USER DATA ===');
-    console.log('Email:', email);
-    console.log('Company ID:', companyId);
-    console.log('Role:', role);
-    console.log('Project ID:', projectId);
+
+    console.log("=== GET WORKER USER DATA ===");
+    console.log("Email:", email);
+    console.log("Company ID:", companyId);
+    console.log("Role:", role);
+    console.log("Project ID:", projectId);
 
     if (!email || !companyId || !role) {
       return res.status(400).json({
-        error: "Email, companyId, and role are required"
+        error: "Email, companyId, and role are required",
       });
     }
 
     // Find user with email, companyId, and role
-    const user = await db.collection('users').findOne({
+    const user = await db.collection("users").findOne({
       username: email,
       companyId: companyId,
-      role: role
+      role: role,
     });
 
     if (!user) {
       return res.status(404).json({
-        error: "Worker user not found with the specified email, company, and role"
+        error:
+          "Worker user not found with the specified email, company, and role",
       });
     }
 
-    console.log('Found user:', user._id);
+    console.log("Found user:", user._id);
 
     // Get user professions if they exist
     let professions = [];
@@ -4643,15 +5061,15 @@ app.post("/get-worker-user-data", async (req, res) => {
 
     if (user.userProfession && Array.isArray(user.userProfession)) {
       professions = user.userProfession;
-      
-          // Extract subjectMatterIds from professions
-    subjectMatterIds = professions
-      .filter(prof => prof.SubjectMatterId)
-      .map(prof => prof.SubjectMatterId);
+
+      // Extract subjectMatterIds from professions
+      subjectMatterIds = professions
+        .filter((prof) => prof.SubjectMatterId)
+        .map((prof) => prof.SubjectMatterId);
     }
 
-    console.log('User professions:', professions);
-    console.log('Subject matter IDs:', subjectMatterIds);
+    console.log("User professions:", professions);
+    console.log("Subject matter IDs:", subjectMatterIds);
 
     res.status(200).json({
       success: true,
@@ -4677,18 +5095,17 @@ app.post("/get-worker-user-data", async (req, res) => {
         mainId: user.mainId,
         userProfession: user.userProfession,
         isVerified: user.isVerified,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
       },
       professions: professions,
       subjectMatterIds: subjectMatterIds,
-      projectId: projectId
+      projectId: projectId,
     });
-
   } catch (error) {
-    console.error('Error fetching worker user data:', error);
+    console.error("Error fetching worker user data:", error);
     res.status(500).json({
       error: "Failed to fetch worker user data",
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -4697,42 +5114,51 @@ app.post("/get-worker-user-data", async (req, res) => {
 app.post("/get-project-users", async (req, res) => {
   try {
     const { email, companyId, projectId, roles } = req.body;
-    
-    console.log('=== GET PROJECT USERS ===');
-    console.log('Email:', email);
-    console.log('Company ID:', companyId);
-    console.log('Project ID:', projectId);
-    console.log('Roles:', roles);
+
+    console.log("=== GET PROJECT USERS ===");
+    console.log("Email:", email);
+    console.log("Company ID:", companyId);
+    console.log("Project ID:", projectId);
+    console.log("Roles:", roles);
 
     if (!email || !companyId || !projectId || !roles) {
       return res.status(400).json({
-        error: "Email, companyId, projectId, and roles are required"
+        error: "Email, companyId, projectId, and roles are required",
       });
     }
 
     // Find users for the logged-in user's email with specified roles and assigned to this project
-    const users = await db.collection('users').find({
-      username: email,  // Filter by logged-in user's email
-      companyId: companyId,
-      projectsId: { $in: [projectId] },
-      role: { $in: roles }
-    }).toArray();
+    const users = await db
+      .collection("users")
+      .find({
+        username: email, // Filter by logged-in user's email
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+        role: { $in: roles },
+      })
+      .toArray();
 
-    console.log('Found users for logged-in user:', users.length);
-    console.log('Users:', users.map(u => ({ username: u.username, role: u.role, projectsId: u.projectsId })));
+    console.log("Found users for logged-in user:", users.length);
+    console.log(
+      "Users:",
+      users.map((u) => ({
+        username: u.username,
+        role: u.role,
+        projectsId: u.projectsId,
+      }))
+    );
 
     res.status(200).json({
       success: true,
       users: users,
       projectId: projectId,
-      companyId: companyId
+      companyId: companyId,
     });
-
   } catch (error) {
-    console.error('Error fetching project users:', error);
+    console.error("Error fetching project users:", error);
     res.status(500).json({
       error: "Failed to fetch project users",
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -4741,38 +5167,38 @@ app.post("/get-project-users", async (req, res) => {
 app.post("/determine-user-roles", async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({
         success: false,
-        error: 'Email is required'
+        error: "Email is required",
       });
     }
 
-    console.log('Determining roles for email:', email);
+    console.log("Determining roles for email:", email);
 
     // Query all collections where email might appear
     const [users, companies] = await Promise.all([
       // Check users collection
-      db.collection('users').find({ 
-        $or: [
-          { email: email },
-          { username: email }
-        ]
-      }).toArray(),
-      
+      db
+        .collection("users")
+        .find({
+          $or: [{ email: email }, { username: email }],
+        })
+        .toArray(),
+
       // Check companies collection for admin
-      db.collection('companies').find({
-        $or: [
-          { 'admin.email': email },
-          { 'admin.username': email }
-        ]
-      }).toArray()
+      db
+        .collection("companies")
+        .find({
+          $or: [{ "admin.email": email }, { "admin.username": email }],
+        })
+        .toArray(),
     ]);
 
-    console.log('Query results:', {
+    console.log("Query results:", {
       users: users.length,
-      companies: companies.length
+      companies: companies.length,
     });
 
     // Determine roles based on results
@@ -4780,80 +5206,99 @@ app.post("/determine-user-roles", async (req, res) => {
     const roleDetails = {};
 
     // Check for Admin role - check all user records
-    const adminUsers = users.filter(user => user.role === 'Admin');
-    const adminCompany = companies.find(company => 
-      company.admin && (company.admin.email === email || company.admin.username === email)
+    const adminUsers = users.filter((user) => user.role === "Admin");
+    const adminCompany = companies.find(
+      (company) =>
+        company.admin &&
+        (company.admin.email === email || company.admin.username === email)
     );
 
     if (adminUsers.length > 0 || adminCompany) {
-      roles.push('Admin');
-      roleDetails['Admin'] = {
-        title: 'Admin',
-        description: 'Manage company and projects',
-        icon: 'admin_panel_settings',
-        color: '#001F54',
-        source: adminUsers.length > 0 ? 'user_record' : 'company_admin'
+      roles.push("Admin");
+      roleDetails["Admin"] = {
+        title: "Admin",
+        description: "Manage company and projects",
+        icon: "admin_panel_settings",
+        color: "#001F54",
+        source: adminUsers.length > 0 ? "user_record" : "company_admin",
       };
     }
 
     // Check for Project Manager role - user must be assigned to at least one project
-    const projectManagerUser = users.find(user => {
+    const projectManagerUser = users.find((user) => {
       // Check if user has projectsId array with valid project IDs
-      const hasValidProjects = user.projectsId && 
-        Array.isArray(user.projectsId) && 
-        user.projectsId.some(projectId => projectId && projectId !== 'undefined' && projectId !== 'null');
-      
+      const hasValidProjects =
+        user.projectsId &&
+        Array.isArray(user.projectsId) &&
+        user.projectsId.some(
+          (projectId) =>
+            projectId && projectId !== "undefined" && projectId !== "null"
+        );
+
       // User must be a project manager AND assigned to projects
-      return (user.isProjectManager === 'yes' || user.role === 'Project Manager' || user.userRole === 'Project Manager') && hasValidProjects;
+      return (
+        (user.isProjectManager === "yes" ||
+          user.role === "Project Manager" ||
+          user.userRole === "Project Manager") &&
+        hasValidProjects
+      );
     });
 
     if (projectManagerUser) {
-      roles.push('Project Manager');
-      const validProjects = projectManagerUser.projectsId?.filter(p => p && p !== 'undefined' && p !== 'null') || [];
-      roleDetails['Project Manager'] = {
-        title: 'Project Manager',
-        description: 'Manage projects and teams',
-        icon: 'manage_accounts',
-        color: '#1976D2',
-        source: 'project_assignment',
-        projectCount: validProjects.length
+      roles.push("Project Manager");
+      const validProjects =
+        projectManagerUser.projectsId?.filter(
+          (p) => p && p !== "undefined" && p !== "null"
+        ) || [];
+      roleDetails["Project Manager"] = {
+        title: "Project Manager",
+        description: "Manage projects and teams",
+        icon: "manage_accounts",
+        color: "#1976D2",
+        source: "project_assignment",
+        projectCount: validProjects.length,
       };
     }
 
     // Check for Worker role - check all user records
-    const workerUsers = users.filter(user => user.role === 'Worker');
-    const subcontractorUsers = users.filter(user => user.role === 'Subcontractor');
+    const workerUsers = users.filter((user) => user.role === "Worker");
+    const subcontractorUsers = users.filter(
+      (user) => user.role === "Subcontractor"
+    );
 
     // Worker gets Worker role (even if they're also a project manager)
     if (workerUsers.length > 0) {
-      roles.push('Worker');
-      roleDetails['Worker'] = {
-        title: 'Worker',
-        description: 'Access your assigned projects',
-        icon: 'work',
-        color: '#388E3C',
-        source: 'user_record'
+      roles.push("Worker");
+      roleDetails["Worker"] = {
+        title: "Worker",
+        description: "Access your assigned projects",
+        icon: "work",
+        color: "#388E3C",
+        source: "user_record",
       };
     }
 
     // Subcontractor assigned to projects gets Project Manager role
     if (subcontractorUsers.length > 0 && projectManagerUser) {
-      if (!roles.includes('Project Manager')) {
-        roles.push('Project Manager');
-        const validProjects = projectManagerUser.projectsId?.filter(p => p && p !== 'undefined' && p !== 'null') || [];
-        roleDetails['Project Manager'] = {
-          title: 'Project Manager',
-          description: 'Manage projects and teams',
-          icon: 'manage_accounts',
-          color: '#1976D2',
-          source: 'subcontractor_assignment',
-          projectCount: validProjects.length
+      if (!roles.includes("Project Manager")) {
+        roles.push("Project Manager");
+        const validProjects =
+          projectManagerUser.projectsId?.filter(
+            (p) => p && p !== "undefined" && p !== "null"
+          ) || [];
+        roleDetails["Project Manager"] = {
+          title: "Project Manager",
+          description: "Manage projects and teams",
+          icon: "manage_accounts",
+          color: "#1976D2",
+          source: "subcontractor_assignment",
+          projectCount: validProjects.length,
         };
       }
     }
 
-    console.log('Determined roles:', roles);
-    console.log('Role details:', roleDetails);
+    console.log("Determined roles:", roles);
+    console.log("Role details:", roleDetails);
 
     res.status(200).json({
       success: true,
@@ -4865,16 +5310,18 @@ app.post("/determine-user-roles", async (req, res) => {
         foundInUsers: users.length > 0,
         foundInCompanies: companies.length > 0,
         isProjectManager: projectManagerUser ? true : false,
-        assignedProjects: projectManagerUser?.projectsId?.filter(p => p && p !== 'undefined' && p !== 'null').length || 0
-      }
+        assignedProjects:
+          projectManagerUser?.projectsId?.filter(
+            (p) => p && p !== "undefined" && p !== "null"
+          ).length || 0,
+      },
     });
-
   } catch (error) {
-    console.error('Error determining user roles:', error);
+    console.error("Error determining user roles:", error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error',
-      details: error.message
+      error: "Internal server error",
+      details: error.message,
     });
   }
 });
@@ -4883,45 +5330,47 @@ app.post("/determine-user-roles", async (req, res) => {
 app.post("/check-admin", async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
     }
-    
-    const user = await db.collection("users").findOne({ 
-      _id: new ObjectId(userId) 
+
+    const user = await db.collection("users").findOne({
+      _id: new ObjectId(userId),
     });
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    
+
     // Check if user is admin of any company
     const isAdmin = user.role === "Admin";
-    
+
     // Get company details if admin
     let companyInfo = null;
     if (isAdmin && user.companyId) {
       try {
-        const company = await db.collection("companies").findOne({ 
-          _id: new ObjectId(user.companyId) 
+        const company = await db.collection("companies").findOne({
+          _id: new ObjectId(user.companyId),
         });
         if (company) {
           companyInfo = {
             companyId: company._id,
             companyName: company.name,
-            companyStatus: company.status
+            companyStatus: company.status,
           };
         }
       } catch (error) {
         console.error("Error fetching company:", error);
       }
     }
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       isAdmin: isAdmin,
       companyInfo: companyInfo,
-      message: isAdmin ? "User is admin of a company" : "User is not admin of any company"
+      message: isAdmin
+        ? "User is admin of a company"
+        : "User is not admin of any company",
     });
   } catch (error) {
     console.error("Check admin error:", error);
@@ -4933,59 +5382,66 @@ app.post("/check-admin", async (req, res) => {
 app.post("/check-project-manager", async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
     }
-    
-    const user = await db.collection("users").findOne({ 
-      _id: new ObjectId(userId) 
+
+    const user = await db.collection("users").findOne({
+      _id: new ObjectId(userId),
     });
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    
+
     // Check if user is project manager in any project - handle both string and array formats
     let isProjectManager = false;
     if (user.isProjectManager === "yes" || user.isProjectManager === true) {
       isProjectManager = true;
     } else if (user.isProjectManager && Array.isArray(user.isProjectManager)) {
       // Check if any item in the array has _id: "yes" or name: "Yes"
-      isProjectManager = user.isProjectManager.some(item => 
-        item && typeof item === 'object' && 
-        (item._id === "yes" || item.name === "Yes")
+      isProjectManager = user.isProjectManager.some(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          (item._id === "yes" || item.name === "Yes")
       );
     }
-    
+
     // Get project details if project manager
     let projectInfo = [];
     if (isProjectManager && user.projectsId && user.projectsId.length > 0) {
       try {
         const validProjectIds = user.projectsId
-          .filter(id => id && typeof id === 'string' && id.length === 24)
-          .map(id => new ObjectId(id));
-        
+          .filter((id) => id && typeof id === "string" && id.length === 24)
+          .map((id) => new ObjectId(id));
+
         if (validProjectIds.length > 0) {
-          const projects = await db.collection("projects").find({
-            _id: { $in: validProjectIds }
-          }).toArray();
-          
-          projectInfo = projects.map(project => ({
+          const projects = await db
+            .collection("projects")
+            .find({
+              _id: { $in: validProjectIds },
+            })
+            .toArray();
+
+          projectInfo = projects.map((project) => ({
             projectId: project._id,
             projectName: project.name,
-            projectStatus: project.status
+            projectStatus: project.status,
           }));
         }
       } catch (error) {
         console.error("Error fetching projects:", error);
       }
     }
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       isProjectManager: isProjectManager,
       projectInfo: projectInfo,
-      message: isProjectManager ? "User is project manager in projects" : "User is not project manager in any project"
+      message: isProjectManager
+        ? "User is project manager in projects"
+        : "User is not project manager in any project",
     });
   } catch (error) {
     console.error("Check project manager error:", error);
@@ -4997,79 +5453,87 @@ app.post("/check-project-manager", async (req, res) => {
 app.post("/check-worker", async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
     }
-    
-    const user = await db.collection("users").findOne({ 
-      _id: new ObjectId(userId) 
+
+    const user = await db.collection("users").findOne({
+      _id: new ObjectId(userId),
     });
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    
+
     // Check if user is worker in any project
     const isWorker = user.role === "Worker";
-    
+
     // Get project and profession details if worker
     let projectInfo = [];
     let professionInfo = [];
-    
+
     if (isWorker) {
       // Get project details
       if (user.projectsId && user.projectsId.length > 0) {
         try {
           const validProjectIds = user.projectsId
-            .filter(id => id && typeof id === 'string' && id.length === 24)
-            .map(id => new ObjectId(id));
-          
+            .filter((id) => id && typeof id === "string" && id.length === 24)
+            .map((id) => new ObjectId(id));
+
           if (validProjectIds.length > 0) {
-            const projects = await db.collection("projects").find({
-              _id: { $in: validProjectIds }
-            }).toArray();
-            
-            projectInfo = projects.map(project => ({
+            const projects = await db
+              .collection("projects")
+              .find({
+                _id: { $in: validProjectIds },
+              })
+              .toArray();
+
+            projectInfo = projects.map((project) => ({
               projectId: project._id,
               projectName: project.name,
-              projectStatus: project.status
+              projectStatus: project.status,
             }));
           }
         } catch (error) {
           console.error("Error fetching projects:", error);
         }
       }
-      
+
       // Get profession details
       if (user.userProfession) {
         try {
           let professionIds = [];
-          
+
           if (Array.isArray(user.userProfession)) {
-            professionIds = user.userProfession.map(prof => 
-              typeof prof === 'object' ? prof._id : prof
-            ).filter(id => id);
-          } else if (typeof user.userProfession === 'object') {
-            professionIds = user.userProfession._id ? [user.userProfession._id] : [];
+            professionIds = user.userProfession
+              .map((prof) => (typeof prof === "object" ? prof._id : prof))
+              .filter((id) => id);
+          } else if (typeof user.userProfession === "object") {
+            professionIds = user.userProfession._id
+              ? [user.userProfession._id]
+              : [];
           } else {
             professionIds = user.userProfession ? [user.userProfession] : [];
           }
-          
+
           if (professionIds.length > 0) {
             const validProfessionIds = professionIds
-              .filter(id => id && typeof id === 'string' && id.length === 24)
-              .map(id => new ObjectId(id));
-            
+              .filter((id) => id && typeof id === "string" && id.length === 24)
+              .map((id) => new ObjectId(id));
+
             if (validProfessionIds.length > 0) {
-              const professions = await db.collection("professions").find({
-                _id: { $in: validProfessionIds }
-              }).toArray();
-              
-              professionInfo = professions.map(profession => ({
+              const professions = await db
+                .collection("professions")
+                .find({
+                  _id: { $in: validProfessionIds },
+                })
+                .toArray();
+
+              professionInfo = professions.map((profession) => ({
                 professionId: profession._id,
                 professionName: profession.name,
-                professionDescription: profession.description
+                professionDescription: profession.description,
               }));
             }
           }
@@ -5078,12 +5542,14 @@ app.post("/check-worker", async (req, res) => {
         }
       }
     }
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       isWorker: isWorker,
       projectInfo: projectInfo,
       professionInfo: professionInfo,
-      message: isWorker ? "User is worker in projects" : "User is not worker in any project"
+      message: isWorker
+        ? "User is worker in projects"
+        : "User is not worker in any project",
     });
   } catch (error) {
     console.error("Check worker error:", error);
@@ -5095,34 +5561,37 @@ app.post("/check-worker", async (req, res) => {
 app.post("/get-user-projects", async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
     }
-    
-    const user = await db.collection("users").findOne({ 
-      _id: new ObjectId(userId) 
+
+    const user = await db.collection("users").findOne({
+      _id: new ObjectId(userId),
     });
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    
+
     let projects = [];
-    
+
     // Get projects if user has project IDs
     if (user.projectsId && user.projectsId.length > 0) {
       try {
         const validProjectIds = user.projectsId
-          .filter(id => id && typeof id === 'string' && id.length === 24)
-          .map(id => new ObjectId(id));
-        
+          .filter((id) => id && typeof id === "string" && id.length === 24)
+          .map((id) => new ObjectId(id));
+
         if (validProjectIds.length > 0) {
-          const projectList = await db.collection("projects").find({
-            _id: { $in: validProjectIds }
-          }).toArray();
-          
-          projects = projectList.map(project => ({
+          const projectList = await db
+            .collection("projects")
+            .find({
+              _id: { $in: validProjectIds },
+            })
+            .toArray();
+
+          projects = projectList.map((project) => ({
             projectId: project._id,
             projectName: project.name,
             address: project.address,
@@ -5132,17 +5601,17 @@ app.post("/get-user-projects", async (req, res) => {
             endDate: project.endDate,
             status: project.status,
             companyId: project.companyId,
-            description: project.description
+            description: project.description,
           }));
         }
       } catch (error) {
         console.error("Error fetching projects:", error);
       }
     }
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       userId: user._id,
-      projects: projects
+      projects: projects,
     });
   } catch (error) {
     console.error("Get user projects error:", error);
@@ -5154,92 +5623,98 @@ app.post("/get-user-projects", async (req, res) => {
 app.post("/get-user-companies-projects", async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
     }
-    
+
     console.log(`Fetching companies and projects for email: ${email}`);
-    
+
     // Find all users with this email
-    const users = await db.collection("users").find({ 
-      username: email 
-    }).toArray();
-    
+    const users = await db
+      .collection("users")
+      .find({
+        username: email,
+      })
+      .toArray();
+
     if (!users || users.length === 0) {
       return res.status(404).json({ error: "No users found with this email" });
     }
-    
+
     console.log(`Found ${users.length} users with email: ${email}`);
-    
+
     // Group users by company and collect project IDs
     const companyMap = new Map();
-    
+
     for (const user of users) {
       const companyId = user.companyId;
-      
+
       if (!companyId) {
         console.log(`User ${user._id} has no companyId, skipping`);
         continue;
       }
-      
+
       if (!companyMap.has(companyId)) {
         companyMap.set(companyId, {
           companyId: companyId,
           users: [],
-          projectIds: new Set()
+          projectIds: new Set(),
         });
       }
-      
+
       const companyData = companyMap.get(companyId);
       companyData.users.push({
         userId: user._id,
         name: user.name,
         role: user.role,
-        isProjectManager: user.isProjectManager
+        isProjectManager: user.isProjectManager,
       });
-      
+
       // Add project IDs from this user
       if (user.projectsId && Array.isArray(user.projectsId)) {
-        user.projectsId.forEach(projectId => {
+        user.projectsId.forEach((projectId) => {
           if (projectId) {
             companyData.projectIds.add(projectId.toString());
           }
         });
       }
     }
-    
+
     // Convert to array and fetch company details and projects
     const result = [];
-    
+
     for (const [companyId, companyData] of companyMap) {
       try {
         // Get company details
-        const company = await db.collection("companies").findOne({ 
-          _id: new ObjectId(companyId) 
+        const company = await db.collection("companies").findOne({
+          _id: new ObjectId(companyId),
         });
-        
+
         if (!company) {
           console.log(`Company not found for ID: ${companyId}`);
           continue;
         }
-        
+
         // Get projects for this company
         const projectIds = Array.from(companyData.projectIds);
         let projects = [];
-        
+
         if (projectIds.length > 0) {
           try {
             const validProjectIds = projectIds
-              .filter(id => id && typeof id === 'string' && id.length === 24)
-              .map(id => new ObjectId(id));
-            
+              .filter((id) => id && typeof id === "string" && id.length === 24)
+              .map((id) => new ObjectId(id));
+
             if (validProjectIds.length > 0) {
-              const projectList = await db.collection("projects").find({
-                _id: { $in: validProjectIds }
-              }).toArray();
-              
-              projects = projectList.map(project => ({
+              const projectList = await db
+                .collection("projects")
+                .find({
+                  _id: { $in: validProjectIds },
+                })
+                .toArray();
+
+              projects = projectList.map((project) => ({
                 projectId: project._id,
                 projectName: project.name,
                 address: project.address,
@@ -5248,14 +5723,17 @@ app.post("/get-user-companies-projects", async (req, res) => {
                 startDate: project.startDate,
                 endDate: project.endDate,
                 status: project.status,
-                description: project.description
+                description: project.description,
               }));
             }
           } catch (error) {
-            console.error(`Error fetching projects for company ${companyId}:`, error);
+            console.error(
+              `Error fetching projects for company ${companyId}:`,
+              error
+            );
           }
         }
-        
+
         result.push({
           company: {
             companyId: company._id,
@@ -5263,24 +5741,22 @@ app.post("/get-user-companies-projects", async (req, res) => {
             address: company.address,
             city: company.city,
             postalCode: company.postalCode,
-            cvr: company.cvr
+            cvr: company.cvr,
           },
           users: companyData.users,
-          projects: projects
+          projects: projects,
         });
-        
       } catch (error) {
         console.error(`Error processing company ${companyId}:`, error);
       }
     }
-    
+
     console.log(`Returning ${result.length} companies with their projects`);
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       email: email,
-      companies: result
+      companies: result,
     });
-    
   } catch (error) {
     console.error("Get user companies projects error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -5291,67 +5767,78 @@ app.post("/get-user-companies-projects", async (req, res) => {
 app.post("/check-user-project-role", async (req, res) => {
   try {
     const { userId, projectId } = req.body;
-    
+
     if (!userId) {
       return res.status(400).json({ error: "User ID is required" });
     }
-    
+
     if (!projectId) {
       return res.status(400).json({ error: "Project ID is required" });
     }
-    
-    const user = await db.collection("users").findOne({ 
-      _id: new ObjectId(userId) 
+
+    const user = await db.collection("users").findOne({
+      _id: new ObjectId(userId),
     });
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    
+
     // Check if user has access to this specific project
-    console.log('Debug - User projectsId:', user.projectsId);
-    console.log('Debug - Checking projectId:', projectId);
-    const hasProjectAccess = user.projectsId && user.projectsId.some(id => {
-      console.log('Debug - Checking project ID:', id, 'against:', projectId, 'result:', id && id.toString() === projectId);
-      return id && id.toString() === projectId;
-    });
-    console.log('Debug - Has project access:', hasProjectAccess);
-    
+    console.log("Debug - User projectsId:", user.projectsId);
+    console.log("Debug - Checking projectId:", projectId);
+    const hasProjectAccess =
+      user.projectsId &&
+      user.projectsId.some((id) => {
+        console.log(
+          "Debug - Checking project ID:",
+          id,
+          "against:",
+          projectId,
+          "result:",
+          id && id.toString() === projectId
+        );
+        return id && id.toString() === projectId;
+      });
+    console.log("Debug - Has project access:", hasProjectAccess);
+
     if (!hasProjectAccess) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         error: "User does not have access to this project",
         userRole: "none",
         isWorker: false,
         isProjectManager: false,
-        isIndependentController: false
+        isIndependentController: false,
       });
     }
-    
+
     // Check user roles in this specific project
     const isWorker = user.role === "Worker";
-    
+
     // Check isProjectManager - handle both string and array formats
     let isProjectManager = false;
     if (user.isProjectManager === "yes" || user.isProjectManager === true) {
       isProjectManager = true;
     } else if (user.isProjectManager && Array.isArray(user.isProjectManager)) {
       // Check if any item in the array has _id: "yes" or name: "Yes"
-      isProjectManager = user.isProjectManager.some(item => 
-        item && typeof item === 'object' && 
-        (item._id === "yes" || item.name === "Yes")
+      isProjectManager = user.isProjectManager.some(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          (item._id === "yes" || item.name === "Yes")
       );
     }
-    
+
     const isIndependentController = user.role === "Independent Controller";
-    
-    console.log('Debug - User role:', user.role);
-    console.log('Debug - User isProjectManager field:', user.isProjectManager);
-    console.log('Debug - isWorker:', isWorker);
-    console.log('Debug - isProjectManager:', isProjectManager);
-    console.log('Debug - isIndependentController:', isIndependentController);
-    
+
+    console.log("Debug - User role:", user.role);
+    console.log("Debug - User isProjectManager field:", user.isProjectManager);
+    console.log("Debug - isWorker:", isWorker);
+    console.log("Debug - isProjectManager:", isProjectManager);
+    console.log("Debug - isIndependentController:", isIndependentController);
+
     let userRole = "none";
-    
+
     if (isIndependentController) {
       userRole = "independent controller";
     } else if (isWorker && isProjectManager) {
@@ -5361,16 +5848,16 @@ app.post("/check-user-project-role", async (req, res) => {
     } else if (isProjectManager) {
       userRole = "project manager";
     }
-    
-    console.log('Debug - Final userRole:', userRole);
-    
-    res.status(200).json({ 
+
+    console.log("Debug - Final userRole:", userRole);
+
+    res.status(200).json({
       userId: user._id,
       projectId: projectId,
       userRole: userRole,
       isWorker: isWorker,
       isProjectManager: isProjectManager,
-      isIndependentController: isIndependentController
+      isIndependentController: isIndependentController,
     });
   } catch (error) {
     console.error("Check user project role error:", error);
@@ -5427,17 +5914,17 @@ app.post("/users/forgot-password", async (req, res) => {
 });
 
 async function sendPasswordResetEmail(email, resetUrl) {
-      const transporter = nodemailer.createTransport({
-      host: "email-smtp.eu-north-1.amazonaws.com",
-      port: 587,
-      secure: false, // use TLS
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      logger: true,
-      debug: true,
-    });
+  const transporter = nodemailer.createTransport({
+    host: "email-smtp.eu-north-1.amazonaws.com",
+    port: 587,
+    secure: false, // use TLS
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+    logger: true,
+    debug: true,
+  });
 
   const mailOptions = {
     from: "info@assurement.dk",
@@ -6244,56 +6731,58 @@ app.post(
   async (req, res) => {
     try {
       const { professionId, companyId } = req.body;
-      
+
       // Validate required fields
       if (!professionId || !companyId) {
         return res.status(400).json({
-          error: "Both professionId and companyId are required"
+          error: "Both professionId and companyId are required",
         });
       }
 
-      console.log(`Removing profession ${professionId} from company ${companyId}`);
+      console.log(
+        `Removing profession ${professionId} from company ${companyId}`
+      );
 
       // Update the profession document to remove the companyId association
-      const result = await db
-        .collection("professions")
-        .updateOne(
-          { 
-            _id: new ObjectId(professionId),
-            companyId: companyId // Only update if it's currently associated with this company
-          },
-          { 
-            $unset: { companyId: "" } // Remove the companyId field
-          }
-        );
+      const result = await db.collection("professions").updateOne(
+        {
+          _id: new ObjectId(professionId),
+          companyId: companyId, // Only update if it's currently associated with this company
+        },
+        {
+          $unset: { companyId: "" }, // Remove the companyId field
+        }
+      );
 
       if (result.matchedCount === 0) {
-        return res.status(404).json({ 
-          error: "Profession not found or not associated with this company" 
+        return res.status(404).json({
+          error: "Profession not found or not associated with this company",
         });
       }
 
       if (result.modifiedCount === 0) {
-        return res.status(400).json({ 
-          error: "Profession was not associated with this company" 
+        return res.status(400).json({
+          error: "Profession was not associated with this company",
         });
       }
 
-      console.log(`Successfully removed profession ${professionId} from company ${companyId}`);
-      
+      console.log(
+        `Successfully removed profession ${professionId} from company ${companyId}`
+      );
+
       res.status(200).json({
         message: "Profession removed from company successfully",
         result: {
           professionId,
           companyId,
-          modifiedCount: result.modifiedCount
-        }
+          modifiedCount: result.modifiedCount,
+        },
       });
     } catch (error) {
       console.error("Error removing profession from company:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to remove profession from company",
-        details: error.message 
+        details: error.message,
       });
     }
   }
@@ -6307,56 +6796,58 @@ app.post(
   async (req, res) => {
     try {
       const { professionId, companyId } = req.body;
-      
+
       // Validate required fields
       if (!professionId || !companyId) {
         return res.status(400).json({
-          error: "Both professionId and companyId are required"
+          error: "Both professionId and companyId are required",
         });
       }
 
-      console.log(`Unlinking profession ${professionId} from company ${companyId}`);
+      console.log(
+        `Unlinking profession ${professionId} from company ${companyId}`
+      );
 
       // Update the profession document to remove the companyId association
-      const result = await db
-        .collection("professions")
-        .updateOne(
-          { 
-            _id: new ObjectId(professionId),
-            companyId: companyId // Only update if it's currently associated with this company
-          },
-          { 
-            $unset: { companyId: "" } // Remove the companyId field
-          }
-        );
+      const result = await db.collection("professions").updateOne(
+        {
+          _id: new ObjectId(professionId),
+          companyId: companyId, // Only update if it's currently associated with this company
+        },
+        {
+          $unset: { companyId: "" }, // Remove the companyId field
+        }
+      );
 
       if (result.matchedCount === 0) {
-        return res.status(404).json({ 
-          error: "Profession not found or not associated with this company" 
+        return res.status(404).json({
+          error: "Profession not found or not associated with this company",
         });
       }
 
       if (result.modifiedCount === 0) {
-        return res.status(400).json({ 
-          error: "Profession was not associated with this company" 
+        return res.status(400).json({
+          error: "Profession was not associated with this company",
         });
       }
 
-      console.log(`Successfully unlinked profession ${professionId} from company ${companyId}`);
-      
+      console.log(
+        `Successfully unlinked profession ${professionId} from company ${companyId}`
+      );
+
       res.status(200).json({
         message: "Profession unlinked from company successfully",
         result: {
           professionId,
           companyId,
-          modifiedCount: result.modifiedCount
-        }
+          modifiedCount: result.modifiedCount,
+        },
       });
     } catch (error) {
       console.error("Error unlinking profession from company:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to unlink profession from company",
-        details: error.message 
+        details: error.message,
       });
     }
   }
@@ -6646,7 +7137,7 @@ app.post(
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
       const parsedUser = user ? JSON.parse(user) : null;
-      
+
       // Only parse independentController if it exists
       let parsedIndependentController = null;
       if (independentController) {
@@ -6686,11 +7177,11 @@ app.post(
         const descriptions = Array.isArray(markPictureDescriptions)
           ? markPictureDescriptions
           : [markPictureDescriptions];
-        
+
         const createdDates = Array.isArray(markPictureCreatedDates)
           ? markPictureCreatedDates
           : [markPictureCreatedDates];
-        
+
         const markNums = Array.isArray(markNumbers)
           ? markNumbers
           : [markNumbers];
@@ -6715,7 +7206,10 @@ app.post(
 
       // Handle annotated PDF images (PNG versions)
       let annotatedPdfImages = [];
-      if (req.files["annotatedPdfImages"] && req.files["annotatedPdfImages"].length > 0) {
+      if (
+        req.files["annotatedPdfImages"] &&
+        req.files["annotatedPdfImages"].length > 0
+      ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           filename: file.filename,
           originalName: file.originalname,
@@ -6736,8 +7230,9 @@ app.post(
         annotatedPdfImages: annotatedPdfImages, // Add PNG images for annotated PDFs
         user: parsedUser,
         submittedAt: new Date(),
-        submissionCreatedDate: submissionCreatedDate || new Date().toISOString(), // New: submission created date
-        entryNumber: 1 // Will be updated below
+        submissionCreatedDate:
+          submissionCreatedDate || new Date().toISOString(), // New: submission created date
+        entryNumber: 1, // Will be updated below
       };
 
       // Only add independentController if it exists
@@ -6746,19 +7241,19 @@ app.post(
       }
 
       // First, get the current task to determine entry number
-      const currentProject = await db.collection("projects").findOne(
-        {
-          _id: new ObjectId(projectId),
-          "tasks._id": new ObjectId(taskId),
-        }
-      );
+      const currentProject = await db.collection("projects").findOne({
+        _id: new ObjectId(projectId),
+        "tasks._id": new ObjectId(taskId),
+      });
 
       if (!currentProject) {
         return res.status(404).json({ error: "Project or task not found" });
       }
 
-      const currentTask = currentProject.tasks.find(t => t._id.toString() === taskId);
-      
+      const currentTask = currentProject.tasks.find(
+        (t) => t._id.toString() === taskId
+      );
+
       // Initialize taskEntries array if it doesn't exist
       if (!currentTask.taskEntries) {
         currentTask.taskEntries = [];
@@ -6775,7 +7270,7 @@ app.post(
         },
         {
           $push: {
-            "tasks.$.taskEntries": taskEntry
+            "tasks.$.taskEntries": taskEntry,
           },
           $set: {
             "tasks.$.isSubmitted": true,
@@ -6807,58 +7302,62 @@ app.post(
   checkDatabaseConnection,
   async (req, res) => {
     try {
-      console.log('=== EXCEL UPLOAD API CALLED ===');
-      
+      console.log("=== EXCEL UPLOAD API CALLED ===");
+
       const { subjectMatterId, euroCode, language } = req.body;
       const excelFile = req.file;
 
-      console.log('Received data:', { subjectMatterId, euroCode, language });
-      console.log('Excel file:', excelFile ? excelFile.filename : 'No file');
+      console.log("Received data:", { subjectMatterId, euroCode, language });
+      console.log("Excel file:", excelFile ? excelFile.filename : "No file");
 
       // Validate input
       if (!subjectMatterId || !language || !excelFile) {
-        return res.status(400).json({ 
-          error: "Subject Matter ID, language, and Excel file are required" 
+        return res.status(400).json({
+          error: "Subject Matter ID, language, and Excel file are required",
         });
       }
 
       // Validate euroCode format (optional but if provided, should be valid)
       if (euroCode && !euroCode.trim()) {
-        return res.status(400).json({ 
-          error: "Euro Code cannot be empty if provided" 
+        return res.status(400).json({
+          error: "Euro Code cannot be empty if provided",
         });
       }
 
-      if (!['DK', 'GB'].includes(language)) {
-        return res.status(400).json({ 
-          error: "Language must be either 'DK' (Danish) or 'GB' (English)" 
+      if (!["DK", "GB"].includes(language)) {
+        return res.status(400).json({
+          error: "Language must be either 'DK' (Danish) or 'GB' (English)",
         });
       }
 
       // Check if collection exists, if not create it
-      const collections = await db.listCollections({ name: "controls of static report" }).toArray();
+      const collections = await db
+        .listCollections({ name: "controls of static report" })
+        .toArray();
       let collection;
-      
+
       if (collections.length === 0) {
-        console.log('Collection "controls of static report" does not exist, creating it...');
+        console.log(
+          'Collection "controls of static report" does not exist, creating it...'
+        );
         collection = await db.createCollection("controls of static report");
-        console.log('Collection created successfully');
+        console.log("Collection created successfully");
       } else {
         console.log('Collection "controls of static report" exists, using it');
         collection = db.collection("controls of static report");
       }
 
       // Parse Excel file
-      const XLSX = require('xlsx');
+      const XLSX = require("xlsx");
       const workbook = XLSX.readFile(excelFile.path);
-      
+
       // Get the appropriate sheet based on language
-      const sheetName = language === 'DK' ? 'DK' : 'GB';
+      const sheetName = language === "DK" ? "DK" : "GB";
       const worksheet = workbook.Sheets[sheetName];
-      
+
       if (!worksheet) {
-        return res.status(400).json({ 
-          error: `Sheet '${sheetName}' not found in Excel file. Please ensure the file has a sheet named '${sheetName}'` 
+        return res.status(400).json({
+          error: `Sheet '${sheetName}' not found in Excel file. Please ensure the file has a sheet named '${sheetName}'`,
         });
       }
 
@@ -6867,41 +7366,43 @@ app.post(
       console.log(`Found ${jsonData.length} rows in ${sheetName} sheet`);
 
       if (jsonData.length === 0) {
-        return res.status(400).json({ 
-          error: "No data found in Excel file" 
+        return res.status(400).json({
+          error: "No data found in Excel file",
         });
       }
 
       // Process data based on language
       let processedData = [];
-      
-      if (language === 'DK') {
+
+      if (language === "DK") {
         // Danish data structure
         processedData = jsonData.map((row, index) => ({
           pos: row.pos || row.Pos || `Row ${index + 1}`,
-          kontrolAf: row['Kontrol af'] || row['kontrol af'] || '',
-          emne: row.Emne || row.emne || '',
-          konstruktionsdel: row.Konstruktionsdel || row.konstruktionsdel || '',
-          grundlag: row.Grundlag || row.grundlag || '',
-          kontrolMetode: row['kontrol metode'] || row['Kontrol metode'] || '',
+          kontrolAf: row["Kontrol af"] || row["kontrol af"] || "",
+          emne: row.Emne || row.emne || "",
+          konstruktionsdel: row.Konstruktionsdel || row.konstruktionsdel || "",
+          grundlag: row.Grundlag || row.grundlag || "",
+          kontrolMetode: row["kontrol metode"] || row["Kontrol metode"] || "",
           omfang: parseFloat(row.omfang) || 0,
-          acceptkriterie: row.Acceptkriterie || row.acceptkriterie || '',
-          tid: row.Tid || row.tid || '',
-          rowIndex: index + 1
+          acceptkriterie: row.Acceptkriterie || row.acceptkriterie || "",
+          tid: row.Tid || row.tid || "",
+          rowIndex: index + 1,
         }));
       } else {
         // English data structure
         processedData = jsonData.map((row, index) => ({
           pos: row.Pos || row.pos || `Row ${index + 1}`,
-          checkingThe: row['Checking the'] || row['checking the'] || '',
-          subject: row.Subject || row.subject || '',
-          constructionPart: row['Construction part'] || row['construction part'] || '',
-          basis: row.Basis || row.basis || '',
-          controlMethod: row['Control method'] || row['control method'] || '',
+          checkingThe: row["Checking the"] || row["checking the"] || "",
+          subject: row.Subject || row.subject || "",
+          constructionPart:
+            row["Construction part"] || row["construction part"] || "",
+          basis: row.Basis || row.basis || "",
+          controlMethod: row["Control method"] || row["control method"] || "",
           circumference: parseFloat(row.circumference) || 0,
-          acceptanceCriteria: row['Acceptance criteria'] || row['acceptance criteria'] || '',
-          time: row.Time || row.time || '',
-          rowIndex: index + 1
+          acceptanceCriteria:
+            row["Acceptance criteria"] || row["acceptance criteria"] || "",
+          time: row.Time || row.time || "",
+          rowIndex: index + 1,
         }));
       }
 
@@ -6913,27 +7414,27 @@ app.post(
         entries: processedData,
         uploadedAt: new Date(),
         fileName: excelFile.filename,
-        totalEntries: processedData.length
+        totalEntries: processedData.length,
       };
 
-      console.log('Document to insert:', {
+      console.log("Document to insert:", {
         subjectMatterId: documentToInsert.subjectMatterId,
         euroCode: documentToInsert.euroCode,
         language: documentToInsert.language,
         totalEntries: documentToInsert.totalEntries,
-        fileName: documentToInsert.fileName
+        fileName: documentToInsert.fileName,
       });
 
       // Insert into database
       const result = await collection.insertOne(documentToInsert);
-      
-      console.log('Data inserted successfully with ID:', result.insertedId);
+
+      console.log("Data inserted successfully with ID:", result.insertedId);
 
       // Clean up uploaded file
-      const fs = require('fs');
+      const fs = require("fs");
       if (fs.existsSync(excelFile.path)) {
         fs.unlinkSync(excelFile.path);
-        console.log('Temporary file cleaned up');
+        console.log("Temporary file cleaned up");
       }
 
       res.status(200).json({
@@ -6944,24 +7445,23 @@ app.post(
           euroCode: euroCode || null,
           language: language,
           totalEntries: processedData.length,
-          fileName: excelFile.filename
-        }
+          fileName: excelFile.filename,
+        },
       });
-
     } catch (error) {
-      console.error('Excel upload error:', error);
-      
+      console.error("Excel upload error:", error);
+
       // Clean up file on error
       if (req.file && req.file.path) {
-        const fs = require('fs');
+        const fs = require("fs");
         if (fs.existsSync(req.file.path)) {
           fs.unlinkSync(req.file.path);
         }
       }
-      
-      res.status(500).json({ 
+
+      res.status(500).json({
         error: "Failed to upload Excel data",
-        details: error.message 
+        details: error.message,
       });
     }
   }
@@ -6971,41 +7471,43 @@ app.get("/get-user-professions", async (req, res) => {
   try {
     const { userId } = req.query;
 
-    console.log('=== GET USER PROFESSIONS API ===');
-    console.log('Requested userId:', userId);
+    console.log("=== GET USER PROFESSIONS API ===");
+    console.log("Requested userId:", userId);
 
     if (!userId) {
-      console.log('Error: User ID is required');
+      console.log("Error: User ID is required");
       return res.status(400).json({ error: "User ID is required" });
     }
 
     // Get user's professions from the database
-    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
-    
-    console.log('Found user:', user ? 'Yes' : 'No');
+    const user = await db
+      .collection("users")
+      .findOne({ _id: new ObjectId(userId) });
+
+    console.log("Found user:", user ? "Yes" : "No");
     if (user) {
-      console.log('User data:', {
+      console.log("User data:", {
         _id: user._id,
         name: user.name,
         email: user.email,
-        professions: user.professions
+        professions: user.professions,
       });
     }
-    
+
     if (!user) {
-      console.log('Error: User not found');
+      console.log("Error: User not found");
       return res.status(404).json({ error: "User not found" });
     }
 
     // Get user's professions (check both 'professions' and 'userProfession' fields)
     const userProfessions = user.professions || user.userProfession || [];
-    
-    console.log('User professions:', userProfessions);
-    console.log('=== END GET USER PROFESSIONS API ===');
-    
+
+    console.log("User professions:", userProfessions);
+    console.log("=== END GET USER PROFESSIONS API ===");
+
     res.status(200).json({
       success: true,
-      professions: userProfessions
+      professions: userProfessions,
     });
   } catch (error) {
     console.error("Error getting user professions:", error);
@@ -7019,14 +7521,18 @@ app.post("/assign-user-professions", async (req, res) => {
     const { userId, professions } = req.body;
 
     if (!userId || !professions) {
-      return res.status(400).json({ error: "User ID and professions are required" });
+      return res
+        .status(400)
+        .json({ error: "User ID and professions are required" });
     }
 
     // Update user with professions
-    const result = await db.collection("users").updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { professions: professions } }
-    );
+    const result = await db
+      .collection("users")
+      .updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { professions: professions } }
+      );
 
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: "User not found" });
@@ -7035,7 +7541,7 @@ app.post("/assign-user-professions", async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Professions assigned successfully",
-      updatedCount: result.modifiedCount
+      updatedCount: result.modifiedCount,
     });
   } catch (error) {
     console.error("Error assigning professions:", error);
@@ -7140,274 +7646,308 @@ app.post("/approv-task", async (req, res) => {
 });
 
 // API endpoint to get task submission analytics
-app.get("/get-task-submission-analytics", checkDatabaseConnection, async (req, res) => {
-  try {
-    const { 
-      profession, 
-      type, 
-      users, 
-      independentControllers,
-      companyId,
-      projectId 
-    } = req.query;
+app.get(
+  "/get-task-submission-analytics",
+  checkDatabaseConnection,
+  async (req, res) => {
+    try {
+      const {
+        profession,
+        type,
+        users,
+        independentControllers,
+        companyId,
+        projectId,
+      } = req.query;
 
-    // Build the base query for projects
-    const projectQuery = {};
-    
-    if (companyId && companyId !== "null") {
-      projectQuery.companyId = companyId;
-    }
-    
-    if (projectId && projectId !== "null") {
-      projectQuery._id = new ObjectId(projectId);
-    }
+      // Build the base query for projects
+      const projectQuery = {};
 
-    // Get all projects that match the base criteria
-    const projects = await db.collection("projects").find(projectQuery).toArray();
-
-    // Structure to store analytics data
-    const analyticsData = {
-      totalTasks: 0,
-      submittedTasks: 0,
-      editedTasks: 0,
-      users: new Map(),
-      independentControllers: new Map(),
-      tasksByProfession: new Map(),
-      tasksByType: {
-        Worker: 0,
-        "Independent Controller": 0
+      if (companyId && companyId !== "null") {
+        projectQuery.companyId = companyId;
       }
-    };
 
-    // Process each project
-    for (const project of projects) {
-      if (!project.tasks || !Array.isArray(project.tasks)) continue;
+      if (projectId && projectId !== "null") {
+        projectQuery._id = new ObjectId(projectId);
+      }
 
-      for (const task of project.tasks) {
-        // Skip if task doesn't have user information
-        if (!task.user) continue;
+      // Get all projects that match the base criteria
+      const projects = await db
+        .collection("projects")
+        .find(projectQuery)
+        .toArray();
 
-        // Filter by profession if specified
-        if (profession && profession !== "null") {
-          if (!task.profession || task.profession.name !== profession) {
-            continue;
+      // Structure to store analytics data
+      const analyticsData = {
+        totalTasks: 0,
+        submittedTasks: 0,
+        editedTasks: 0,
+        users: new Map(),
+        independentControllers: new Map(),
+        tasksByProfession: new Map(),
+        tasksByType: {
+          Worker: 0,
+          "Independent Controller": 0,
+        },
+      };
+
+      // Process each project
+      for (const project of projects) {
+        if (!project.tasks || !Array.isArray(project.tasks)) continue;
+
+        for (const task of project.tasks) {
+          // Skip if task doesn't have user information
+          if (!task.user) continue;
+
+          // Filter by profession if specified
+          if (profession && profession !== "null") {
+            if (!task.profession || task.profession.name !== profession) {
+              continue;
+            }
           }
-        }
 
-        // Filter by type if specified
-        if (type && type !== "null") {
-          const userType = task.user.role === "Independent Controller" ? "Independent Controller" : "Worker";
-          if (userType !== type) {
-            continue;
+          // Filter by type if specified
+          if (type && type !== "null") {
+            const userType =
+              task.user.role === "Independent Controller"
+                ? "Independent Controller"
+                : "Worker";
+            if (userType !== type) {
+              continue;
+            }
           }
-        }
 
-        // Filter by specific users if specified
-        if (users && users !== "null") {
-          const userIds = Array.isArray(users) ? users : [users];
-          if (!userIds.includes(task.user._id)) {
-            continue;
+          // Filter by specific users if specified
+          if (users && users !== "null") {
+            const userIds = Array.isArray(users) ? users : [users];
+            if (!userIds.includes(task.user._id)) {
+              continue;
+            }
           }
-        }
 
-        // Filter by specific independent controllers if specified
-        if (independentControllers && independentControllers !== "null") {
-          const controllerIds = Array.isArray(independentControllers) ? independentControllers : [independentControllers];
-          if (task.user.role !== "Independent Controller" || !controllerIds.includes(task.user._id)) {
-            continue;
+          // Filter by specific independent controllers if specified
+          if (independentControllers && independentControllers !== "null") {
+            const controllerIds = Array.isArray(independentControllers)
+              ? independentControllers
+              : [independentControllers];
+            if (
+              task.user.role !== "Independent Controller" ||
+              !controllerIds.includes(task.user._id)
+            ) {
+              continue;
+            }
           }
-        }
 
-        // Count total tasks
-        analyticsData.totalTasks++;
+          // Count total tasks
+          analyticsData.totalTasks++;
 
-        // Count submitted tasks
-        if (task.isSubmitted) {
-          analyticsData.submittedTasks++;
-        }
+          // Count submitted tasks
+          if (task.isSubmitted) {
+            analyticsData.submittedTasks++;
+          }
 
-        // Count edited tasks (has updatedAt and isSubmitted)
-        if (task.updatedAt && task.isSubmitted) {
-          analyticsData.editedTasks++;
-        }
+          // Count edited tasks (has updatedAt and isSubmitted)
+          if (task.updatedAt && task.isSubmitted) {
+            analyticsData.editedTasks++;
+          }
 
-        // Track by user type
-        const userType = task.user.role === "Independent Controller" ? "Independent Controller" : "Worker";
-        analyticsData.tasksByType[userType]++;
+          // Track by user type
+          const userType =
+            task.user.role === "Independent Controller"
+              ? "Independent Controller"
+              : "Worker";
+          analyticsData.tasksByType[userType]++;
 
-        // Track by profession
-        if (task.profession && task.profession.name) {
-          const professionName = task.profession.name;
-          if (!analyticsData.tasksByProfession.has(professionName)) {
-            analyticsData.tasksByProfession.set(professionName, {
-              name: professionName,
-              totalTasks: 0,
-              submittedTasks: 0,
-              editedTasks: 0
+          // Track by profession
+          if (task.profession && task.profession.name) {
+            const professionName = task.profession.name;
+            if (!analyticsData.tasksByProfession.has(professionName)) {
+              analyticsData.tasksByProfession.set(professionName, {
+                name: professionName,
+                totalTasks: 0,
+                submittedTasks: 0,
+                editedTasks: 0,
+              });
+            }
+            const professionData =
+              analyticsData.tasksByProfession.get(professionName);
+            professionData.totalTasks++;
+            if (task.isSubmitted) professionData.submittedTasks++;
+            if (task.updatedAt && task.isSubmitted)
+              professionData.editedTasks++;
+          }
+
+          // Track by individual users
+          if (task.user.role === "Independent Controller") {
+            const controllerId = task.user._id;
+            if (!analyticsData.independentControllers.has(controllerId)) {
+              analyticsData.independentControllers.set(controllerId, {
+                id: controllerId,
+                name: task.user.name || "Independent Controller",
+                role: "Independent Controller",
+                totalTasks: 0,
+                submittedTasks: 0,
+                editedTasks: 0,
+                tasks: [],
+              });
+            }
+            const controllerData =
+              analyticsData.independentControllers.get(controllerId);
+            controllerData.totalTasks++;
+            if (task.isSubmitted) controllerData.submittedTasks++;
+            if (task.updatedAt && task.isSubmitted)
+              controllerData.editedTasks++;
+
+            // Add task details
+            controllerData.tasks.push({
+              taskId: task._id,
+              projectId: project._id,
+              projectName: project.name,
+              profession: task.profession?.name,
+              comment: task.comment,
+              isSubmitted: task.isSubmitted,
+              updatedAt: task.updatedAt,
+              submittedAt: task.updatedAt, // Assuming updatedAt is when it was submitted
+            });
+          } else {
+            const userId = task.user._id;
+            if (!analyticsData.users.has(userId)) {
+              analyticsData.users.set(userId, {
+                id: userId,
+                name: task.user.name || task.user.username,
+                role: task.user.role,
+                totalTasks: 0,
+                submittedTasks: 0,
+                editedTasks: 0,
+                tasks: [],
+              });
+            }
+            const userData = analyticsData.users.get(userId);
+            userData.totalTasks++;
+            if (task.isSubmitted) userData.submittedTasks++;
+            if (task.updatedAt && task.isSubmitted) userData.editedTasks++;
+
+            // Add task details
+            userData.tasks.push({
+              taskId: task._id,
+              projectId: project._id,
+              projectName: project.name,
+              profession: task.profession?.name,
+              comment: task.comment,
+              isSubmitted: task.isSubmitted,
+              updatedAt: task.updatedAt,
+              submittedAt: task.updatedAt,
             });
           }
-          const professionData = analyticsData.tasksByProfession.get(professionName);
-          professionData.totalTasks++;
-          if (task.isSubmitted) professionData.submittedTasks++;
-          if (task.updatedAt && task.isSubmitted) professionData.editedTasks++;
-        }
-
-        // Track by individual users
-        if (task.user.role === "Independent Controller") {
-          const controllerId = task.user._id;
-          if (!analyticsData.independentControllers.has(controllerId)) {
-            analyticsData.independentControllers.set(controllerId, {
-              id: controllerId,
-              name: task.user.name || "Independent Controller",
-              role: "Independent Controller",
-              totalTasks: 0,
-              submittedTasks: 0,
-              editedTasks: 0,
-              tasks: []
-            });
-          }
-          const controllerData = analyticsData.independentControllers.get(controllerId);
-          controllerData.totalTasks++;
-          if (task.isSubmitted) controllerData.submittedTasks++;
-          if (task.updatedAt && task.isSubmitted) controllerData.editedTasks++;
-          
-          // Add task details
-          controllerData.tasks.push({
-            taskId: task._id,
-            projectId: project._id,
-            projectName: project.name,
-            profession: task.profession?.name,
-            comment: task.comment,
-            isSubmitted: task.isSubmitted,
-            updatedAt: task.updatedAt,
-            submittedAt: task.updatedAt // Assuming updatedAt is when it was submitted
-          });
-        } else {
-          const userId = task.user._id;
-          if (!analyticsData.users.has(userId)) {
-            analyticsData.users.set(userId, {
-              id: userId,
-              name: task.user.name || task.user.username,
-              role: task.user.role,
-              totalTasks: 0,
-              submittedTasks: 0,
-              editedTasks: 0,
-              tasks: []
-            });
-          }
-          const userData = analyticsData.users.get(userId);
-          userData.totalTasks++;
-          if (task.isSubmitted) userData.submittedTasks++;
-          if (task.updatedAt && task.isSubmitted) userData.editedTasks++;
-          
-          // Add task details
-          userData.tasks.push({
-            taskId: task._id,
-            projectId: project._id,
-            projectName: project.name,
-            profession: task.profession?.name,
-            comment: task.comment,
-            isSubmitted: task.isSubmitted,
-            updatedAt: task.updatedAt,
-            submittedAt: task.updatedAt
-          });
         }
       }
+
+      // Convert Maps to arrays for JSON response
+      const response = {
+        success: true,
+        summary: {
+          totalTasks: analyticsData.totalTasks,
+          submittedTasks: analyticsData.submittedTasks,
+          editedTasks: analyticsData.editedTasks,
+          submissionRate:
+            analyticsData.totalTasks > 0
+              ? (
+                  (analyticsData.submittedTasks / analyticsData.totalTasks) *
+                  100
+                ).toFixed(2)
+              : 0,
+          tasksByType: analyticsData.tasksByType,
+        },
+        byProfession: Array.from(analyticsData.tasksByProfession.values()),
+        byUsers: Array.from(analyticsData.users.values()),
+        byIndependentControllers: Array.from(
+          analyticsData.independentControllers.values()
+        ),
+        filters: {
+          profession: profession || null,
+          type: type || null,
+          users: users || null,
+          independentControllers: independentControllers || null,
+          companyId: companyId || null,
+          projectId: projectId || null,
+        },
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      console.error("Error fetching task submission analytics:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch task submission analytics",
+      });
     }
-
-    // Convert Maps to arrays for JSON response
-    const response = {
-      success: true,
-      summary: {
-        totalTasks: analyticsData.totalTasks,
-        submittedTasks: analyticsData.submittedTasks,
-        editedTasks: analyticsData.editedTasks,
-        submissionRate: analyticsData.totalTasks > 0 ? (analyticsData.submittedTasks / analyticsData.totalTasks * 100).toFixed(2) : 0,
-        tasksByType: analyticsData.tasksByType
-      },
-      byProfession: Array.from(analyticsData.tasksByProfession.values()),
-      byUsers: Array.from(analyticsData.users.values()),
-      byIndependentControllers: Array.from(analyticsData.independentControllers.values()),
-      filters: {
-        profession: profession || null,
-        type: type || null,
-        users: users || null,
-        independentControllers: independentControllers || null,
-        companyId: companyId || null,
-        projectId: projectId || null
-      }
-    };
-
-    res.status(200).json(response);
-  } catch (error) {
-    console.error("Error fetching task submission analytics:", error);
-    res.status(500).json({ 
-      success: false,
-      error: "Failed to fetch task submission analytics" 
-    });
   }
-});
+);
 
 // API endpoint to get task entries count for a specific project
-app.get("/get-task-entries-count", checkDatabaseConnection, async (req, res) => {
-  try {
-    const { projectId } = req.query;
+app.get(
+  "/get-task-entries-count",
+  checkDatabaseConnection,
+  async (req, res) => {
+    try {
+      const { projectId } = req.query;
 
-    if (!projectId) {
-      return res.status(400).json({ error: "Project ID is required" });
-    }
-
-    // Get the project with tasks
-    const project = await db.collection("projects").findOne(
-      { _id: new ObjectId(projectId) }
-    );
-
-    if (!project || !project.tasks) {
-      return res.status(200).json({ tasks: [] });
-    }
-
-    // Process each task to count entries
-    const tasksWithEntries = project.tasks.map(task => {
-      let entryCount = 0;
-      let isSubmitted = false;
-
-      // Count entries from taskEntries array
-      if (task.taskEntries && Array.isArray(task.taskEntries)) {
-        entryCount = task.taskEntries.length;
-        isSubmitted = entryCount > 0;
-      } else {
-        // Fallback: Check if task has been submitted (for backward compatibility)
-        if (task.isSubmitted) {
-          entryCount = 1;
-          isSubmitted = true;
-        }
-
-        // Also check if task has user data (indicating it's been submitted)
-        if (task.user) {
-          entryCount = 1;
-          isSubmitted = true;
-        }
+      if (!projectId) {
+        return res.status(400).json({ error: "Project ID is required" });
       }
 
-      return {
-        ...task,
-        entryCount,
-        isSubmitted
-      };
-    });
+      // Get the project with tasks
+      const project = await db
+        .collection("projects")
+        .findOne({ _id: new ObjectId(projectId) });
 
-    res.status(200).json({
-      success: true,
-      tasks: tasksWithEntries
-    });
-  } catch (error) {
-    console.error("Error fetching task entries count:", error);
-    res.status(500).json({ 
-      success: false,
-      error: "Failed to fetch task entries count" 
-    });
+      if (!project || !project.tasks) {
+        return res.status(200).json({ tasks: [] });
+      }
+
+      // Process each task to count entries
+      const tasksWithEntries = project.tasks.map((task) => {
+        let entryCount = 0;
+        let isSubmitted = false;
+
+        // Count entries from taskEntries array
+        if (task.taskEntries && Array.isArray(task.taskEntries)) {
+          entryCount = task.taskEntries.length;
+          isSubmitted = entryCount > 0;
+        } else {
+          // Fallback: Check if task has been submitted (for backward compatibility)
+          if (task.isSubmitted) {
+            entryCount = 1;
+            isSubmitted = true;
+          }
+
+          // Also check if task has user data (indicating it's been submitted)
+          if (task.user) {
+            entryCount = 1;
+            isSubmitted = true;
+          }
+        }
+
+        return {
+          ...task,
+          entryCount,
+          isSubmitted,
+        };
+      });
+
+      res.status(200).json({
+        success: true,
+        tasks: tasksWithEntries,
+      });
+    } catch (error) {
+      console.error("Error fetching task entries count:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch task entries count",
+      });
+    }
   }
-});
+);
 
 app.post("/submit-static-document-checklist", async (req, res) => {
   try {
@@ -7420,7 +7960,7 @@ app.post("/submit-static-document-checklist", async (req, res) => {
       date,
       projectManager,
       approvedDate,
-      independentControl // allow for future use
+      independentControl, // allow for future use
     } = req.body;
 
     // Parse objects if sent as JSON strings
@@ -7428,13 +7968,16 @@ app.post("/submit-static-document-checklist", async (req, res) => {
     let parsedProjectManager = projectManager;
     let parsedIndependentControl = independentControl;
     try {
-      if (typeof profession === 'string') parsedProfession = JSON.parse(profession);
+      if (typeof profession === "string")
+        parsedProfession = JSON.parse(profession);
     } catch {}
     try {
-      if (typeof projectManager === 'string') parsedProjectManager = JSON.parse(projectManager);
+      if (typeof projectManager === "string")
+        parsedProjectManager = JSON.parse(projectManager);
     } catch {}
     try {
-      if (typeof independentControl === 'string') parsedIndependentControl = JSON.parse(independentControl);
+      if (typeof independentControl === "string")
+        parsedIndependentControl = JSON.parse(independentControl);
     } catch {}
 
     const professionKey = parsedProfession.SubjectMatterId;
@@ -7463,11 +8006,22 @@ app.post("/submit-static-document-checklist", async (req, res) => {
     // Fetch the full checklist item object
     let checklistItem = null;
     try {
-      const project = await db.collection("projects").findOne({ _id: new ObjectId(projectId) });
-      if (project && project.professionAssociatedData && project.professionAssociatedData[professionKey]) {
-        const checklistArray = project.professionAssociatedData[professionKey].staticDocumentCheckList;
+      const project = await db
+        .collection("projects")
+        .findOne({ _id: new ObjectId(projectId) });
+      if (
+        project &&
+        project.professionAssociatedData &&
+        project.professionAssociatedData[professionKey]
+      ) {
+        const checklistArray =
+          project.professionAssociatedData[professionKey]
+            .staticDocumentCheckList;
         if (Array.isArray(checklistArray)) {
-          checklistItem = checklistArray.find(item => item._id && item._id.toString() === staticDocumentCheckListId);
+          checklistItem = checklistArray.find(
+            (item) =>
+              item._id && item._id.toString() === staticDocumentCheckListId
+          );
         }
       }
     } catch (err) {
@@ -7488,16 +8042,24 @@ app.post("/submit-static-document-checklist", async (req, res) => {
       independentControl: parsedIndependentControl || null, // default value
       checklistItem: checklistItem, // full checklist item object
     };
-    
-    console.log("Inserting into staticDocumentChecklistProjectAndProfessionWise collection:", {
-      projectId,
-      staticDocumentCheckListId,
-      submittedDate: checklistEntry.submittedDate,
-      status: checklistEntry.status
-    });
-    
-    const insertResult = await db.collection("staticDocumentChecklistProjectAndProfessionWise").insertOne(checklistEntry);
-    console.log("Successfully inserted document with ID:", insertResult.insertedId);
+
+    console.log(
+      "Inserting into staticDocumentChecklistProjectAndProfessionWise collection:",
+      {
+        projectId,
+        staticDocumentCheckListId,
+        submittedDate: checklistEntry.submittedDate,
+        status: checklistEntry.status,
+      }
+    );
+
+    const insertResult = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
+      .insertOne(checklistEntry);
+    console.log(
+      "Successfully inserted document with ID:",
+      insertResult.insertedId
+    );
 
     if (!result) {
       return res
@@ -7519,20 +8081,25 @@ app.post("/submit-static-document-checklist", async (req, res) => {
 app.get("/check-static-document-checklist-status", async (req, res) => {
   try {
     const { projectId, professionId, checklistIds } = req.query;
-    
-    console.log("API called with params:", { projectId, professionId, checklistIds });
-    console.log('professionId type:', typeof professionId);
-    console.log('professionId value:', professionId);
-    
+
+    console.log("API called with params:", {
+      projectId,
+      professionId,
+      checklistIds,
+    });
+    console.log("professionId type:", typeof professionId);
+    console.log("professionId value:", professionId);
+
     if (!projectId || !professionId || !checklistIds) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: projectId, professionId, checklistIds" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: projectId, professionId, checklistIds",
       });
     }
 
     // Parse checklistIds if it's a string
     let parsedChecklistIds = checklistIds;
-    if (typeof checklistIds === 'string') {
+    if (typeof checklistIds === "string") {
       try {
         parsedChecklistIds = JSON.parse(checklistIds);
       } catch (e) {
@@ -7541,81 +8108,114 @@ app.get("/check-static-document-checklist-status", async (req, res) => {
     }
 
     // Convert string IDs to ObjectIds
-    const checklistObjectIds = parsedChecklistIds.map(id => new ObjectId(id));
+    const checklistObjectIds = parsedChecklistIds.map((id) => new ObjectId(id));
 
     // Search for entries matching projectId AND profession
-    console.log('Searching for entries with projectId:', projectId, 'and professionId:', professionId);
-    
+    console.log(
+      "Searching for entries with projectId:",
+      projectId,
+      "and professionId:",
+      professionId
+    );
+
     // Try multiple profession matching approaches
     const queries = [
       // Query 1: Match by profession.SubjectMatterId
       {
         projectId: projectId,
-        "profession.SubjectMatterId": professionId
+        "profession.SubjectMatterId": professionId,
       },
       // Query 2: Match by profession._id (fallback)
       {
         projectId: projectId,
-        "profession._id": professionId
+        "profession._id": professionId,
       },
       // Query 3: Match by profession._id as ObjectId (fallback) - only if professionId looks like ObjectId
-      ...(professionId && professionId.length === 24 && /^[0-9a-fA-F]{24}$/.test(professionId) ? [{
-        projectId: projectId,
-        "profession._id": new ObjectId(professionId)
-      }] : [])
+      ...(professionId &&
+      professionId.length === 24 &&
+      /^[0-9a-fA-F]{24}$/.test(professionId)
+        ? [
+            {
+              projectId: projectId,
+              "profession._id": new ObjectId(professionId),
+            },
+          ]
+        : []),
     ];
-    
+
     let submittedEntries = [];
-    
+
     for (let i = 0; i < queries.length; i++) {
       try {
         console.log(`Trying profession query ${i + 1}...`);
-        const result = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find(queries[i]).toArray();
+        const result = await db
+          .collection("staticDocumentChecklistProjectAndProfessionWise")
+          .find(queries[i])
+          .toArray();
         console.log(`Profession query ${i + 1} found ${result.length} entries`);
-        
+
         if (result.length > 0) {
           submittedEntries = result;
-          console.log(`✅ Found matching profession entries with query ${i + 1}`);
+          console.log(
+            `✅ Found matching profession entries with query ${i + 1}`
+          );
           break;
         }
       } catch (error) {
         console.log(`Profession query ${i + 1} failed:`, error.message);
       }
     }
-    
-    console.log(`Final result: Found ${submittedEntries.length} entries for profession ${professionId}`);
+
+    console.log(
+      `Final result: Found ${submittedEntries.length} entries for profession ${professionId}`
+    );
 
     console.log("Final result - Found entries:", submittedEntries.length);
     console.log("Entries:", JSON.stringify(submittedEntries, null, 2));
-    
+
     // Debug: Check what's actually in the collection
     console.log("=== DEBUG: Checking what's in the collection ===");
-    const allEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find({}).limit(5).toArray();
+    const allEntries = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
+      .find({})
+      .limit(5)
+      .toArray();
     console.log("Total entries in collection:", allEntries.length);
     if (allEntries.length > 0) {
-      console.log("Sample entry structure:", JSON.stringify(allEntries[0], null, 2));
+      console.log(
+        "Sample entry structure:",
+        JSON.stringify(allEntries[0], null, 2)
+      );
     }
-    
+
     // Check if there are any entries for this project
-    const projectEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find({
-      projectId: projectId
-    }).toArray();
+    const projectEntries = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
+      .find({
+        projectId: projectId,
+      })
+      .toArray();
     console.log("Entries for this project:", projectEntries.length);
-    
+
     // Check if there are any entries for this profession
-    const professionEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find({
-      "profession.SubjectMatterId": professionId
-    }).toArray();
+    const professionEntries = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
+      .find({
+        "profession.SubjectMatterId": professionId,
+      })
+      .toArray();
     console.log("Entries for this profession:", professionEntries.length);
 
     // Create a map of submitted checklist IDs and approval status
-    const submittedChecklistIds = submittedEntries.map(entry => entry.staticDocumentCheckListId.toString());
+    const submittedChecklistIds = submittedEntries.map((entry) =>
+      entry.staticDocumentCheckListId.toString()
+    );
     const approvalStatus = {};
-    
-    submittedEntries.forEach(entry => {
+
+    submittedEntries.forEach((entry) => {
       approvalStatus[entry.staticDocumentCheckListId.toString()] = {
         approvedBy: entry.approvedBy || false,
-        approvedDate: entry.approvedDate || null
+        approvedDate: entry.approvedDate || null,
       };
     });
 
@@ -7626,7 +8226,7 @@ app.get("/check-static-document-checklist-status", async (req, res) => {
       success: true,
       submittedChecklistIds: submittedChecklistIds,
       approvalStatus: approvalStatus,
-      count: submittedEntries.length
+      count: submittedEntries.length,
     });
   } catch (error) {
     console.error("Error checking static document checklist status:", error);
@@ -7637,21 +8237,34 @@ app.get("/check-static-document-checklist-status", async (req, res) => {
 // API endpoint to approve static document checklist items
 app.post("/approve-static-document-checklist", async (req, res) => {
   try {
-    const { projectId, staticDocumentCheckListId, professionId, independentControllerId } = req.body;
-    
-    if (!projectId || !staticDocumentCheckListId || !professionId || !independentControllerId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: projectId, staticDocumentCheckListId, professionId, independentControllerId" 
+    const {
+      projectId,
+      staticDocumentCheckListId,
+      professionId,
+      independentControllerId,
+    } = req.body;
+
+    if (
+      !projectId ||
+      !staticDocumentCheckListId ||
+      !professionId ||
+      !independentControllerId
+    ) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: projectId, staticDocumentCheckListId, professionId, independentControllerId",
       });
     }
 
     // Get the independent controller details
     const independentController = await db.collection("users").findOne({
-      _id: new ObjectId(independentControllerId)
+      _id: new ObjectId(independentControllerId),
     });
 
     if (!independentController) {
-      return res.status(404).json({ error: "Independent controller not found" });
+      return res
+        .status(404)
+        .json({ error: "Independent controller not found" });
     }
 
     // Update the approval status in the collection
@@ -7659,68 +8272,77 @@ app.post("/approve-static-document-checklist", async (req, res) => {
       projectId,
       professionId,
       staticDocumentCheckListId,
-      staticDocumentCheckListIdType: typeof staticDocumentCheckListId
+      staticDocumentCheckListIdType: typeof staticDocumentCheckListId,
     });
 
     // First, let's see what documents exist in the collection
-    const existingDocs = await db.collection("staticDocumentChecklistProjectAndProfessionWise").find({
-      projectId: projectId
-    }).toArray();
-    
+    const existingDocs = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
+      .find({
+        projectId: projectId,
+      })
+      .toArray();
+
     console.log("Existing documents in collection:", existingDocs.length);
     console.log("Sample document structure:", existingDocs[0]);
 
     // Try different query variations
-    let result = await db.collection("staticDocumentChecklistProjectAndProfessionWise").updateOne(
-      {
-        projectId: projectId,
-        "profession._id": professionId,
-        staticDocumentCheckListId: staticDocumentCheckListId.toString()
-      },
-      {
-        $set: {
-          approvedBy: true,
-          approvedDate: new Date(),
-          independentController: independentController
-        }
-      }
-    );
-
-    // If not found, try with ObjectId comparison
-    if (result.matchedCount === 0) {
-      console.log("Trying with ObjectId comparison...");
-      result = await db.collection("staticDocumentChecklistProjectAndProfessionWise").updateOne(
+    let result = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
+      .updateOne(
         {
           projectId: projectId,
           "profession._id": professionId,
-          staticDocumentCheckListId: new ObjectId(staticDocumentCheckListId)
+          staticDocumentCheckListId: staticDocumentCheckListId.toString(),
         },
         {
           $set: {
             approvedBy: true,
             approvedDate: new Date(),
-            independentController: independentController
-          }
+            independentController: independentController,
+          },
         }
       );
+
+    // If not found, try with ObjectId comparison
+    if (result.matchedCount === 0) {
+      console.log("Trying with ObjectId comparison...");
+      result = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
+        .updateOne(
+          {
+            projectId: projectId,
+            "profession._id": professionId,
+            staticDocumentCheckListId: new ObjectId(staticDocumentCheckListId),
+          },
+          {
+            $set: {
+              approvedBy: true,
+              approvedDate: new Date(),
+              independentController: independentController,
+            },
+          }
+        );
     }
 
     // If still not found, try without profession._id constraint
     if (result.matchedCount === 0) {
       console.log("Trying without profession constraint...");
-      result = await db.collection("staticDocumentChecklistProjectAndProfessionWise").updateOne(
-        {
-          projectId: projectId,
-          staticDocumentCheckListId: staticDocumentCheckListId.toString()
-        },
-        {
-          $set: {
-            approvedBy: true,
-            approvedDate: new Date(),
-            independentController: independentController
+      result = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
+        .updateOne(
+          {
+            projectId: projectId,
+            staticDocumentCheckListId: staticDocumentCheckListId.toString(),
+          },
+          {
+            $set: {
+              approvedBy: true,
+              approvedDate: new Date(),
+              independentController: independentController,
+            },
           }
-        }
-      );
+        );
     }
 
     console.log("Update result:", result);
@@ -7733,7 +8355,7 @@ app.post("/approve-static-document-checklist", async (req, res) => {
       success: true,
       message: "Checklist item approved successfully",
       approvedDate: new Date(),
-      independentController: independentController
+      independentController: independentController,
     });
   } catch (error) {
     console.error("Error approving checklist item:", error);
@@ -7744,21 +8366,25 @@ app.post("/approve-static-document-checklist", async (req, res) => {
 // API endpoint to get static document checklist with status for a specific profession
 app.get("/get-static-document-checklist-with-status", async (req, res) => {
   // Add CORS headers
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+
   try {
     const { projectId, professionSubjectMatterId, companyId } = req.query;
-    
+
     console.log("=== GET STATIC DOCUMENT CHECKLIST WITH STATUS ===");
     console.log("Project ID:", projectId);
     console.log("Profession Subject Matter ID:", professionSubjectMatterId);
     console.log("Company ID:", companyId);
-    
+
     if (!projectId || !professionSubjectMatterId || !companyId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: projectId, professionSubjectMatterId, companyId" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: projectId, professionSubjectMatterId, companyId",
       });
     }
 
@@ -7766,21 +8392,22 @@ app.get("/get-static-document-checklist-with-status", async (req, res) => {
 
     // Fetch project details
     const project = await db.collection("projects").findOne({
-      _id: new ObjectId(projectId)
+      _id: new ObjectId(projectId),
     });
 
     if (!project) {
-      return res.status(404).json({ 
-        error: "Project not found" 
+      return res.status(404).json({
+        error: "Project not found",
       });
     }
 
     // Get the profession-specific static document checklist
-    const professionData = project.professionAssociatedData?.[professionSubjectMatterId];
-    
+    const professionData =
+      project.professionAssociatedData?.[professionSubjectMatterId];
+
     if (!professionData || !professionData.staticDocumentCheckList) {
-      return res.status(404).json({ 
-        error: "No static document checklist found for this profession" 
+      return res.status(404).json({
+        error: "No static document checklist found for this profession",
       });
     }
 
@@ -7788,14 +8415,15 @@ app.get("/get-static-document-checklist-with-status", async (req, res) => {
     console.log("Found checklist items:", checklistItems.length);
 
     // Get checklist IDs for status checking
-    const checklistIds = checklistItems.map(item => item._id.toString());
+    const checklistIds = checklistItems.map((item) => item._id.toString());
     console.log("Checklist IDs:", checklistIds);
 
     // Check submission and approval status for each item
     // First, let's see what entries exist for this project
-    const allProjectEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+    const allProjectEntries = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
       .find({
-        projectId: projectId
+        projectId: projectId,
       })
       .toArray();
 
@@ -7804,77 +8432,107 @@ app.get("/get-static-document-checklist-with-status", async (req, res) => {
 
     // Try different query variations to find submitted entries
     // First try with profession filter and ObjectId comparison
-    let submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+    let submittedEntries = await db
+      .collection("staticDocumentChecklistProjectAndProfessionWise")
       .find({
         projectId: projectId,
         "profession._id": professionSubjectMatterId,
-        staticDocumentCheckListId: { $in: checklistIds }
+        staticDocumentCheckListId: { $in: checklistIds },
       })
       .toArray();
 
-    console.log("Found submitted entries with profession filter and ObjectId:", submittedEntries.length);
+    console.log(
+      "Found submitted entries with profession filter and ObjectId:",
+      submittedEntries.length
+    );
 
     // If no results, try with profession filter and string comparison
     if (submittedEntries.length === 0) {
       console.log("Trying with profession filter and string comparison...");
-      const stringChecklistIds = checklistIds.map(id => id.toString());
-      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+      const stringChecklistIds = checklistIds.map((id) => id.toString());
+      submittedEntries = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
         .find({
           projectId: projectId,
           "profession._id": professionSubjectMatterId,
-          staticDocumentCheckListId: { $in: stringChecklistIds }
+          staticDocumentCheckListId: { $in: stringChecklistIds },
         })
         .toArray();
-      console.log("Found submitted entries with profession filter and string:", submittedEntries.length);
+      console.log(
+        "Found submitted entries with profession filter and string:",
+        submittedEntries.length
+      );
     }
 
     // If no results, try without profession filter but with ObjectId
     if (submittedEntries.length === 0) {
       console.log("Trying without profession filter but with ObjectId...");
-      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+      submittedEntries = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
         .find({
           projectId: projectId,
-          staticDocumentCheckListId: { $in: checklistIds }
+          staticDocumentCheckListId: { $in: checklistIds },
         })
         .toArray();
-      console.log("Found submitted entries without profession filter and ObjectId:", submittedEntries.length);
+      console.log(
+        "Found submitted entries without profession filter and ObjectId:",
+        submittedEntries.length
+      );
     }
 
     // If still no results, try without profession filter and with string comparison
     if (submittedEntries.length === 0) {
-      console.log("Trying without profession filter and with string comparison...");
-      const stringChecklistIds = checklistIds.map(id => id.toString());
-      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+      console.log(
+        "Trying without profession filter and with string comparison..."
+      );
+      const stringChecklistIds = checklistIds.map((id) => id.toString());
+      submittedEntries = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
         .find({
           projectId: projectId,
-          staticDocumentCheckListId: { $in: stringChecklistIds }
+          staticDocumentCheckListId: { $in: stringChecklistIds },
         })
         .toArray();
-      console.log("Found submitted entries without profession filter and string:", submittedEntries.length);
+      console.log(
+        "Found submitted entries without profession filter and string:",
+        submittedEntries.length
+      );
     }
 
     // If still no results, try with just projectId to see what's available
     if (submittedEntries.length === 0) {
       console.log("Trying with just projectId to see available entries...");
-      submittedEntries = await db.collection("staticDocumentChecklistProjectAndProfessionWise")
+      submittedEntries = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
         .find({
-          projectId: projectId
+          projectId: projectId,
         })
         .toArray();
       console.log("Found all entries for project:", submittedEntries.length);
-      
+
       if (submittedEntries.length > 0) {
-        console.log("Sample entry profession structure:", submittedEntries[0].profession);
-        console.log("Sample entry staticDocumentCheckListId:", submittedEntries[0].staticDocumentCheckListId);
-        console.log("Sample entry staticDocumentCheckListId type:", typeof submittedEntries[0].staticDocumentCheckListId);
+        console.log(
+          "Sample entry profession structure:",
+          submittedEntries[0].profession
+        );
+        console.log(
+          "Sample entry staticDocumentCheckListId:",
+          submittedEntries[0].staticDocumentCheckListId
+        );
+        console.log(
+          "Sample entry staticDocumentCheckListId type:",
+          typeof submittedEntries[0].staticDocumentCheckListId
+        );
       }
     }
 
     // Create status maps
-    const submittedChecklistIds = submittedEntries.map(entry => entry.staticDocumentCheckListId.toString());
+    const submittedChecklistIds = submittedEntries.map((entry) =>
+      entry.staticDocumentCheckListId.toString()
+    );
     const approvalStatus = {};
-    
-    submittedEntries.forEach(entry => {
+
+    submittedEntries.forEach((entry) => {
       approvalStatus[entry.staticDocumentCheckListId.toString()] = {
         approvedBy: entry.approvedBy || false,
         approvedDate: entry.approvedDate || null,
@@ -7884,16 +8542,16 @@ app.get("/get-static-document-checklist-with-status", async (req, res) => {
         projectManager: entry.projectManager || null,
         independentController: entry.independentController || null,
         status: entry.status || null,
-        controlPlan: entry.controlPlan || null
+        controlPlan: entry.controlPlan || null,
       };
     });
 
     // Enhance checklist items with status information
-    const enhancedChecklistItems = checklistItems.map(item => {
+    const enhancedChecklistItems = checklistItems.map((item) => {
       const itemId = item._id.toString();
       const isSubmitted = submittedChecklistIds.includes(itemId);
       const status = approvalStatus[itemId] || {};
-      
+
       return {
         ...item,
         isSubmitted: isSubmitted,
@@ -7906,16 +8564,19 @@ app.get("/get-static-document-checklist-with-status", async (req, res) => {
         projectManager: status.projectManager || null,
         independentController: status.independentController || null,
         status: status.status || null,
-        controlPlan: status.controlPlan || null
+        controlPlan: status.controlPlan || null,
       };
     });
 
     // Calculate summary
     const summary = {
       totalItems: enhancedChecklistItems.length,
-      submittedItems: enhancedChecklistItems.filter(item => item.isSubmitted).length,
-      approvedItems: enhancedChecklistItems.filter(item => item.isApproved).length,
-      pendingItems: enhancedChecklistItems.filter(item => !item.isSubmitted).length
+      submittedItems: enhancedChecklistItems.filter((item) => item.isSubmitted)
+        .length,
+      approvedItems: enhancedChecklistItems.filter((item) => item.isApproved)
+        .length,
+      pendingItems: enhancedChecklistItems.filter((item) => !item.isSubmitted)
+        .length,
     };
 
     console.log("Summary:", summary);
@@ -7927,15 +8588,17 @@ app.get("/get-static-document-checklist-with-status", async (req, res) => {
         professionSubjectMatterId: professionSubjectMatterId,
         companyId: companyId,
         checklistItems: enhancedChecklistItems,
-        summary: summary
-      }
+        summary: summary,
+      },
     });
-
   } catch (error) {
-    console.error("Error fetching static document checklist with status:", error);
-    res.status(500).json({ 
+    console.error(
+      "Error fetching static document checklist with status:",
+      error
+    );
+    res.status(500).json({
       error: "Failed to fetch static document checklist with status",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -7943,139 +8606,158 @@ app.get("/get-static-document-checklist-with-status", async (req, res) => {
 // API endpoint to get static report registration entries with details
 app.get("/get-static-report-registration-entries", async (req, res) => {
   // Add CORS headers
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+
   try {
     const { companyId, projectId, subjectMatterId } = req.query;
-    
+
     console.log("=== GET STATIC REPORT REGISTRATION ENTRIES ===");
     console.log("Company ID:", companyId);
     console.log("Project ID:", projectId);
     console.log("Subject Matter ID:", subjectMatterId);
-    
+
     if (!companyId || !projectId || !subjectMatterId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId, subjectMatterId" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: companyId, projectId, subjectMatterId",
       });
     }
 
     // Use global database connection
     // Fetch project details
     const project = await db.collection("projects").findOne({
-      _id: new ObjectId(projectId)
+      _id: new ObjectId(projectId),
     });
 
     if (!project) {
-      return res.status(404).json({ 
-        error: "Project not found" 
+      return res.status(404).json({
+        error: "Project not found",
       });
     }
 
     // Get special text from the separate API endpoint
-    let specialText = '';
+    let specialText = "";
     try {
-      const specialTextResponse = await fetch(`http://localhost:3000/get-project-special-text?projectId=${projectId}`);
+      const specialTextResponse = await fetch(
+        `http://localhost:3000/get-project-special-text?projectId=${projectId}`
+      );
       const specialTextData = await specialTextResponse.json();
-      
-      if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
+
+      if (
+        specialTextData.success &&
+        specialTextData.data &&
+        specialTextData.data.specialText
+      ) {
         specialText = specialTextData.data.specialText;
       }
     } catch (error) {
-      console.log('Error fetching special text:', error);
+      console.log("Error fetching special text:", error);
       // Continue without special text if API fails
     }
 
     // Fetch static report registration entries
-    const entries = await db.collection("StaticReportRegistrationEntries")
+    const entries = await db
+      .collection("StaticReportRegistrationEntries")
       .find({
         companyId: companyId,
-        projectId: new ObjectId(projectId)
+        projectId: new ObjectId(projectId),
       })
       .toArray();
 
     console.log("Found entries:", entries.length);
 
     // Process entries to include required fields
-    const processedEntries = await Promise.all(entries.map(async (entry) => {
-      const pos = entry.staticReportItem?.pos || '';
-      const constructionPart = entry.staticReportItem?.constructionPart || '';
-      
-      // Determine DS Group based on pos
-      let dsGroup = '';
-      if (pos.startsWith('7.4')) {
-        dsGroup = 'B4';
-      } else if (pos.startsWith('7.5')) {
-        dsGroup = 'B5';
-      } else if (pos.startsWith('7.6')) {
-        dsGroup = 'B6';
-      }
+    const processedEntries = await Promise.all(
+      entries.map(async (entry) => {
+        const pos = entry.staticReportItem?.pos || "";
+        const constructionPart = entry.staticReportItem?.constructionPart || "";
 
-      // Get user object (independent controller or worker)
-      let userObject = null;
-      if (entry.independentController && entry.independentController !== 'null') {
-        const controller = await db.collection("users").findOne({
-          _id: new ObjectId(entry.independentController)
-        });
-        if (controller) {
-          userObject = {
-            _id: controller._id,
-            name: controller.name,
-            role: controller.role,
-            type: 'independent_controller'
-          };
+        // Determine DS Group based on pos
+        let dsGroup = "";
+        if (pos.startsWith("7.4")) {
+          dsGroup = "B4";
+        } else if (pos.startsWith("7.5")) {
+          dsGroup = "B5";
+        } else if (pos.startsWith("7.6")) {
+          dsGroup = "B6";
         }
-      } else if (entry.selectedWorkers && entry.selectedWorkers.length > 0) {
-        const worker = await db.collection("users").findOne({
-          _id: new ObjectId(entry.selectedWorkers[0])
-        });
-        if (worker) {
-          userObject = {
-            _id: worker._id,
-            name: worker.name,
-            role: worker.role,
-            type: 'worker'
-          };
-        }
-      }
 
-      return {
-        _id: entry._id,
-        registrationDate: entry.submissionCreatedDate,
-        registrationId: `${pos}_${Math.random().toString(36).substr(2, 9)}`,
-        controlType: `${constructionPart} ${specialText}`.trim(),
-        dsGroup: dsGroup,
-        pos: pos,
-        subject: entry.staticReportItem?.subject || '',
-        constructionPart: constructionPart,
-        basis: entry.staticReportItem?.basis || '',
-        controlMethod: entry.staticReportItem?.controlMethod || '',
-        acceptanceCriteria: entry.staticReportItem?.acceptanceCriteria || '',
-        time: entry.staticReportItem?.time || '',
-        comment: entry.comment || '',
-        controlPlan: entry.controlPlan || '',
-        date: entry.date || '',
-        user: userObject,
-        // Media files
-        annotatedPdfImages: entry.annotatedPdfImages?.map(img => ({
-          filename: img.filename,
-          originalName: img.originalName,
-          description: img.description || ''
-        })) || [],
-        mainPictures: entry.mainPictures?.map(pic => ({
-          filename: pic.filename,
-          originalName: pic.originalName,
-          description: pic.description || ''
-        })) || [],
-        markPictures: entry.markPictures?.map(mark => ({
-          filename: mark.filename,
-          originalName: mark.originalName,
-          description: mark.description || '',
-          markNumber: mark.markNumber || ''
-        })) || []
-      };
-    }));
+        // Get user object (independent controller or worker)
+        let userObject = null;
+        if (
+          entry.independentController &&
+          entry.independentController !== "null"
+        ) {
+          const controller = await db.collection("users").findOne({
+            _id: new ObjectId(entry.independentController),
+          });
+          if (controller) {
+            userObject = {
+              _id: controller._id,
+              name: controller.name,
+              role: controller.role,
+              type: "independent_controller",
+            };
+          }
+        } else if (entry.selectedWorkers && entry.selectedWorkers.length > 0) {
+          const worker = await db.collection("users").findOne({
+            _id: new ObjectId(entry.selectedWorkers[0]),
+          });
+          if (worker) {
+            userObject = {
+              _id: worker._id,
+              name: worker.name,
+              role: worker.role,
+              type: "worker",
+            };
+          }
+        }
+
+        return {
+          _id: entry._id,
+          registrationDate: entry.submissionCreatedDate,
+          registrationId: `${pos}_${Math.random().toString(36).substr(2, 9)}`,
+          controlType: `${constructionPart} ${specialText}`.trim(),
+          dsGroup: dsGroup,
+          pos: pos,
+          subject: entry.staticReportItem?.subject || "",
+          constructionPart: constructionPart,
+          basis: entry.staticReportItem?.basis || "",
+          controlMethod: entry.staticReportItem?.controlMethod || "",
+          acceptanceCriteria: entry.staticReportItem?.acceptanceCriteria || "",
+          time: entry.staticReportItem?.time || "",
+          comment: entry.comment || "",
+          controlPlan: entry.controlPlan || "",
+          date: entry.date || "",
+          user: userObject,
+          // Media files
+          annotatedPdfImages:
+            entry.annotatedPdfImages?.map((img) => ({
+              filename: img.filename,
+              originalName: img.originalName,
+              description: img.description || "",
+            })) || [],
+          mainPictures:
+            entry.mainPictures?.map((pic) => ({
+              filename: pic.filename,
+              originalName: pic.originalName,
+              description: pic.description || "",
+            })) || [],
+          markPictures:
+            entry.markPictures?.map((mark) => ({
+              filename: mark.filename,
+              originalName: mark.originalName,
+              description: mark.description || "",
+              markNumber: mark.markNumber || "",
+            })) || [],
+        };
+      })
+    );
 
     res.status(200).json({
       success: true,
@@ -8085,15 +8767,14 @@ app.get("/get-static-report-registration-entries", async (req, res) => {
         subjectMatterId: subjectMatterId,
         specialText: specialText,
         entries: processedEntries,
-        totalEntries: processedEntries.length
-      }
+        totalEntries: processedEntries.length,
+      },
     });
-
   } catch (error) {
     console.error("Error fetching static report registration entries:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch static report registration entries",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -8104,14 +8785,17 @@ app.post(
     { name: "annotatedPdfs", maxCount: 10 },
     { name: "annotatedPdfImages", maxCount: 10 },
     { name: "mainPictures", maxCount: 50 },
-    { name: "markPictures", maxCount: 50 }
+    { name: "markPictures", maxCount: 50 },
   ]),
   async (req, res) => {
     try {
-      console.log('=== SUBMIT STATIC REPORT ===');
-      console.log('Request body fields:', Object.keys(req.body));
-      console.log('Request files:', req.files ? Object.keys(req.files) : 'No files');
-    
+      console.log("=== SUBMIT STATIC REPORT ===");
+      console.log("Request body fields:", Object.keys(req.body));
+      console.log(
+        "Request files:",
+        req.files ? Object.keys(req.files) : "No files"
+      );
+
       const {
         projectId,
         staticReportId,
@@ -8119,25 +8803,38 @@ app.post(
         date,
         independentController,
       } = req.body;
-      
-      // Safely parse JSON fields with null checks
-      const profession = req.body.profession ? JSON.parse(req.body.profession) : null;
-      const selectedWorkers = req.body.selectedWorkers ? JSON.parse(req.body.selectedWorkers) : [];
-      const controlPlan = req.body.controlPlan ? JSON.parse(req.body.controlPlan) : null;
-      const drawing = req.body.drawing ? JSON.parse(req.body.drawing) : null;
-      const submittedStaticReportItem = req.body.staticReportItem ? JSON.parse(req.body.staticReportItem) : null;
 
-      console.log('Parsed fields:');
-      console.log('  - profession:', profession ? 'Present' : 'Null');
-      console.log('  - selectedWorkers:', selectedWorkers.length, 'items');
-      console.log('  - controlPlan:', controlPlan ? 'Present' : 'Null');
-      console.log('  - drawing:', drawing ? 'Present' : 'Null');
-      console.log('  - independentController:', independentController ? 'Present' : 'Null');
-      console.log('  - comment:', comment ? 'Present' : 'Null');
-      console.log('  - date:', date ? 'Present' : 'Null');
+      // Safely parse JSON fields with null checks
+      const profession = req.body.profession
+        ? JSON.parse(req.body.profession)
+        : null;
+      const selectedWorkers = req.body.selectedWorkers
+        ? JSON.parse(req.body.selectedWorkers)
+        : [];
+      const controlPlan = req.body.controlPlan
+        ? JSON.parse(req.body.controlPlan)
+        : null;
+      const drawing = req.body.drawing ? JSON.parse(req.body.drawing) : null;
+      const submittedStaticReportItem = req.body.staticReportItem
+        ? JSON.parse(req.body.staticReportItem)
+        : null;
+
+      console.log("Parsed fields:");
+      console.log("  - profession:", profession ? "Present" : "Null");
+      console.log("  - selectedWorkers:", selectedWorkers.length, "items");
+      console.log("  - controlPlan:", controlPlan ? "Present" : "Null");
+      console.log("  - drawing:", drawing ? "Present" : "Null");
+      console.log(
+        "  - independentController:",
+        independentController ? "Present" : "Null"
+      );
+      console.log("  - comment:", comment ? "Present" : "Null");
+      console.log("  - date:", date ? "Present" : "Null");
 
       const professionKey = profession ? profession.SubjectMatterId : null;
-      const updatePath = professionKey ? `professionAssociatedData.${professionKey}.staticReportRegistration` : null;
+      const updatePath = professionKey
+        ? `professionAssociatedData.${professionKey}.staticReportRegistration`
+        : null;
 
       // Handle multiple annotated PDFs and convert to PNG
       let annotatedPdfs = [];
@@ -8145,27 +8842,32 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-          filename: file.filename,
-          originalName: file.originalname,
+            filename: file.filename,
+            originalName: file.originalname,
           };
           annotatedPdfs.push(pdfInfo);
-          
+
           // Convert PDF to PNG
           try {
             const pdfPath = path.join(__dirname, "uploads", file.filename);
             const outputDir = path.join(__dirname, "uploads");
             const pngFilename = await convertPdfToPng(pdfPath, outputDir);
-            
+
             if (pngFilename) {
               annotatedPdfImages.push({
                 filename: pngFilename,
-                originalName: file.originalname.replace('.pdf', '.png'),
-                sourcePdf: file.filename
+                originalName: file.originalname.replace(".pdf", ".png"),
+                sourcePdf: file.filename,
               });
-              console.log(`Converted PDF ${file.filename} to PNG ${pngFilename}`);
+              console.log(
+                `Converted PDF ${file.filename} to PNG ${pngFilename}`
+              );
             }
           } catch (error) {
-            console.error(`Error converting PDF ${file.filename} to PNG:`, error);
+            console.error(
+              `Error converting PDF ${file.filename} to PNG:`,
+              error
+            );
           }
         }
       }
@@ -8173,39 +8875,51 @@ app.post(
       // Handle main pictures with descriptions
       let mainPictures = [];
       if (req.files["mainPictures"] && req.files["mainPictures"].length > 0) {
-        const mainPictureDescriptions = req.body.mainPictureDescriptions ? 
-          (Array.isArray(req.body.mainPictureDescriptions) ? req.body.mainPictureDescriptions : [req.body.mainPictureDescriptions]) : 
-          [];
-        const mainPictureCreatedDates = req.body.mainPictureCreatedDates ? 
-          (Array.isArray(req.body.mainPictureCreatedDates) ? req.body.mainPictureCreatedDates : [req.body.mainPictureCreatedDates]) : 
-          [];
-        
+        const mainPictureDescriptions = req.body.mainPictureDescriptions
+          ? Array.isArray(req.body.mainPictureDescriptions)
+            ? req.body.mainPictureDescriptions
+            : [req.body.mainPictureDescriptions]
+          : [];
+        const mainPictureCreatedDates = req.body.mainPictureCreatedDates
+          ? Array.isArray(req.body.mainPictureCreatedDates)
+            ? req.body.mainPictureCreatedDates
+            : [req.body.mainPictureCreatedDates]
+          : [];
+
         mainPictures = req.files["mainPictures"].map((file, index) => ({
           filename: file.filename,
           originalName: file.originalname,
           description: mainPictureDescriptions[index] || "",
-          createdDate: mainPictureCreatedDates[index] || new Date().toISOString(),
+          createdDate:
+            mainPictureCreatedDates[index] || new Date().toISOString(),
         }));
       }
 
       // Handle mark pictures with descriptions
       let markPictures = [];
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        const markPictureDescriptions = req.body.markPictureDescriptions ? 
-          (Array.isArray(req.body.markPictureDescriptions) ? req.body.markPictureDescriptions : [req.body.markPictureDescriptions]) : 
-          [];
-        const markPictureCreatedDates = req.body.markPictureCreatedDates ? 
-          (Array.isArray(req.body.markPictureCreatedDates) ? req.body.markPictureCreatedDates : [req.body.markPictureCreatedDates]) : 
-          [];
-        const markNumbers = req.body.markNumbers ? 
-          (Array.isArray(req.body.markNumbers) ? req.body.markNumbers : [req.body.markNumbers]) : 
-          [];
-        
+        const markPictureDescriptions = req.body.markPictureDescriptions
+          ? Array.isArray(req.body.markPictureDescriptions)
+            ? req.body.markPictureDescriptions
+            : [req.body.markPictureDescriptions]
+          : [];
+        const markPictureCreatedDates = req.body.markPictureCreatedDates
+          ? Array.isArray(req.body.markPictureCreatedDates)
+            ? req.body.markPictureCreatedDates
+            : [req.body.markPictureCreatedDates]
+          : [];
+        const markNumbers = req.body.markNumbers
+          ? Array.isArray(req.body.markNumbers)
+            ? req.body.markNumbers
+            : [req.body.markNumbers]
+          : [];
+
         markPictures = req.files["markPictures"].map((file, index) => ({
           filename: file.filename,
           originalName: file.originalname,
           description: markPictureDescriptions[index] || "",
-          createdDate: markPictureCreatedDates[index] || new Date().toISOString(),
+          createdDate:
+            markPictureCreatedDates[index] || new Date().toISOString(),
           markNumber: markNumbers[index] || null,
         }));
       }
@@ -8213,7 +8927,7 @@ app.post(
       // Update the existing static report registration
       // First, let's check if the project exists
       const project = await db.collection("projects").findOne({
-        _id: new ObjectId(projectId)
+        _id: new ObjectId(projectId),
       });
 
       if (!project) {
@@ -8222,16 +8936,22 @@ app.post(
 
       // Get the complete static report item object
       let staticReportItem = null;
-      if (professionKey && project.professionAssociatedData && project.professionAssociatedData[professionKey]) {
-        const staticReportRegistration = project.professionAssociatedData[professionKey].staticReportRegistration;
+      if (
+        professionKey &&
+        project.professionAssociatedData &&
+        project.professionAssociatedData[professionKey]
+      ) {
+        const staticReportRegistration =
+          project.professionAssociatedData[professionKey]
+            .staticReportRegistration;
         if (staticReportRegistration) {
-          staticReportItem = staticReportRegistration.find(item => 
-            item._id && item._id.toString() === staticReportId
+          staticReportItem = staticReportRegistration.find(
+            (item) => item._id && item._id.toString() === staticReportId
           );
         }
       }
 
-            // Try to update the existing static report registration (only if we have valid data)
+      // Try to update the existing static report registration (only if we have valid data)
       let result = null;
       if (updatePath && professionKey) {
         const updateFields = {
@@ -8244,13 +8964,18 @@ app.post(
         };
 
         // Only add fields that are not null
-        if (profession !== null) updateFields[`${updatePath}.$.profession`] = profession;
-        if (selectedWorkers !== null) updateFields[`${updatePath}.$.selectedWorkers`] = selectedWorkers;
-        if (controlPlan !== null) updateFields[`${updatePath}.$.controlPlan`] = controlPlan;
+        if (profession !== null)
+          updateFields[`${updatePath}.$.profession`] = profession;
+        if (selectedWorkers !== null)
+          updateFields[`${updatePath}.$.selectedWorkers`] = selectedWorkers;
+        if (controlPlan !== null)
+          updateFields[`${updatePath}.$.controlPlan`] = controlPlan;
         if (comment !== null) updateFields[`${updatePath}.$.comment`] = comment;
         if (date !== null) updateFields[`${updatePath}.$.selectedDate`] = date;
         if (drawing !== null) updateFields[`${updatePath}.$.drawing`] = drawing;
-        if (independentController !== null) updateFields[`${updatePath}.$.independentController`] = independentController;
+        if (independentController !== null)
+          updateFields[`${updatePath}.$.independentController`] =
+            independentController;
 
         // Only try to update if we have a real ObjectId
         if (staticReportId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -8265,21 +8990,28 @@ app.post(
             { returnDocument: "after" }
           );
         } else {
-          console.log("Skipping projects collection update - staticReportId is not a real ObjectId:", staticReportId);
+          console.log(
+            "Skipping projects collection update - staticReportId is not a real ObjectId:",
+            staticReportId
+          );
         }
       }
 
       // If the static report doesn't exist in the original structure, that's okay
       // We'll still create the entry in our new collection
       if (!result || !result.value) {
-        console.log("Static report not found in original structure, but continuing to save to new collection");
+        console.log(
+          "Static report not found in original structure, but continuing to save to new collection"
+        );
       }
 
       // Create complete static report entry for the new collection
       const staticReportEntry = {
         projectId: new ObjectId(projectId),
         // Handle both real ObjectIds and fake IDs like "entry_0"
-        staticReportId: staticReportId.match(/^[0-9a-fA-F]{24}$/) ? new ObjectId(staticReportId) : staticReportId,
+        staticReportId: staticReportId.match(/^[0-9a-fA-F]{24}$/)
+          ? new ObjectId(staticReportId)
+          : staticReportId,
         annotatedPdfs: annotatedPdfs,
         annotatedPdfImages: annotatedPdfImages, // New field for PNG images
         mainPictures: mainPictures,
@@ -8287,13 +9019,14 @@ app.post(
         isSubmitted: true,
         createdAt: new Date(),
         updatedAt: new Date(),
-        submissionCreatedDate: req.body.submissionCreatedDate || new Date().toISOString(),
+        submissionCreatedDate:
+          req.body.submissionCreatedDate || new Date().toISOString(),
         // Additional metadata - use project data we already fetched
         companyId: project.companyId || null,
         projectName: project.name || "Unknown Project",
         // Include the complete static report item object
         staticReportItem: submittedStaticReportItem || staticReportItem,
-        
+
         // NEW: Store the complete entry data from the static report
         entryData: {
           pos: req.body.entryPos || null,
@@ -8307,8 +9040,8 @@ app.post(
           time: req.body.entryTime || null,
           rowIndex: req.body.entryRowIndex || null,
           language: req.body.entryLanguage || null,
-          subjectMatterId: req.body.entrySubjectMatterId || null
-        }
+          subjectMatterId: req.body.entrySubjectMatterId || null,
+        },
       };
 
       // Only add fields that are not null
@@ -8318,25 +9051,30 @@ app.post(
         staticReportEntry.professionKey = professionKey;
         staticReportEntry.professionName = profession.GroupName;
       }
-      if (selectedWorkers !== null) staticReportEntry.selectedWorkers = selectedWorkers;
-      if (independentController !== null) staticReportEntry.independentController = independentController;
+      if (selectedWorkers !== null)
+        staticReportEntry.selectedWorkers = selectedWorkers;
+      if (independentController !== null)
+        staticReportEntry.independentController = independentController;
       if (controlPlan !== null) staticReportEntry.controlPlan = controlPlan;
       if (comment !== null) staticReportEntry.comment = comment;
       if (date !== null) staticReportEntry.date = date;
       if (drawing !== null) staticReportEntry.drawing = drawing;
 
       // Save to the new StaticReportRegistrationEntries collection
-      await db.collection("StaticReportRegistrationEntries").insertOne(staticReportEntry);
+      await db
+        .collection("StaticReportRegistrationEntries")
+        .insertOne(staticReportEntry);
 
       res.status(200).json({
-        message: "Static report updated successfully and entry saved to StaticReportRegistrationEntries",
+        message:
+          "Static report updated successfully and entry saved to StaticReportRegistrationEntries",
         check: result && result.value ? result.value : { success: true },
       });
     } catch (error) {
-      console.error('Error in submit-static-report:', error);
-      res.status(500).json({ 
-        error: "Failed to submit static report", 
-        details: error.message 
+      console.error("Error in submit-static-report:", error);
+      res.status(500).json({
+        error: "Failed to submit static report",
+        details: error.message,
       });
     }
   }
@@ -8346,7 +9084,7 @@ app.post(
 app.get("/get-static-report-entries", async (req, res) => {
   try {
     const { companyId, projectId, professionId } = req.query;
-    
+
     const query = {};
     if (companyId && companyId !== "null") {
       query.companyId = companyId;
@@ -8358,7 +9096,8 @@ app.get("/get-static-report-entries", async (req, res) => {
       query.professionId = professionId;
     }
 
-    const entries = await db.collection("StaticReportRegistrationEntries")
+    const entries = await db
+      .collection("StaticReportRegistrationEntries")
       .find(query)
       .sort({ createdAt: -1 })
       .toArray();
@@ -8373,19 +9112,20 @@ app.get("/get-static-report-entries", async (req, res) => {
 // NEW: API endpoint to get static report entries by position and criteria
 app.post("/get-static-report-entries-by-position", async (req, res) => {
   try {
-    const { 
-      entryDataPos, 
-      projectId, 
-      companyId, 
-      professionKey 
-    } = req.body;
+    const { entryDataPos, projectId, companyId, professionKey } = req.body;
 
-    console.log('=== GETTING ENTRIES BY POSITION ===');
-    console.log('Query criteria:', { entryDataPos, projectId, companyId, professionKey });
+    console.log("=== GETTING ENTRIES BY POSITION ===");
+    console.log("Query criteria:", {
+      entryDataPos,
+      projectId,
+      companyId,
+      professionKey,
+    });
 
     if (!entryDataPos || !projectId || !companyId || !professionKey) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: entryDataPos, projectId, companyId, professionKey" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: entryDataPos, projectId, companyId, professionKey",
       });
     }
 
@@ -8394,13 +9134,14 @@ app.post("/get-static-report-entries-by-position", async (req, res) => {
       "entryData.pos": entryDataPos,
       projectId: new ObjectId(projectId),
       companyId: companyId, // Keep as string if stored as string
-      professionKey: professionKey
+      professionKey: professionKey,
     };
 
-    console.log('MongoDB query:', JSON.stringify(query, null, 2));
+    console.log("MongoDB query:", JSON.stringify(query, null, 2));
 
     // Query the StaticReportRegistrationEntries collection
-    const entries = await db.collection("StaticReportRegistrationEntries")
+    const entries = await db
+      .collection("StaticReportRegistrationEntries")
       .find(query)
       .toArray();
 
@@ -8409,14 +9150,13 @@ app.post("/get-static-report-entries-by-position", async (req, res) => {
     res.status(200).json({
       success: true,
       count: entries.length,
-      entries: entries
+      entries: entries,
     });
-
   } catch (error) {
     console.error("Error fetching static report entries by position:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch static report entries by position",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -8425,20 +9165,22 @@ app.post("/get-static-report-entries-by-position", async (req, res) => {
 app.get("/get-static-report-entries-by-ids", async (req, res) => {
   try {
     const { staticReportId, professionId, projectId } = req.query;
-    
+
     if (!staticReportId || !professionId || !projectId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: staticReportId, professionId, projectId" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: staticReportId, professionId, projectId",
       });
     }
 
     const query = {
       staticReportId: new ObjectId(staticReportId),
       professionId: professionId,
-      projectId: new ObjectId(projectId)
+      projectId: new ObjectId(projectId),
     };
 
-    const entries = await db.collection("StaticReportRegistrationEntries")
+    const entries = await db
+      .collection("StaticReportRegistrationEntries")
       .find(query)
       .sort({ createdAt: -1 })
       .toArray();
@@ -8447,16 +9189,17 @@ app.get("/get-static-report-entries-by-ids", async (req, res) => {
     let staticReportItem = null;
     try {
       const project = await db.collection("projects").findOne({
-        _id: new ObjectId(projectId)
+        _id: new ObjectId(projectId),
       });
 
       if (project && project.professionAssociatedData) {
         for (const professionKey in project.professionAssociatedData) {
-          const professionData = project.professionAssociatedData[professionKey];
-          
+          const professionData =
+            project.professionAssociatedData[professionKey];
+
           if (professionData?.staticReportRegistration) {
             const item = professionData.staticReportRegistration.find(
-              report => report._id && report._id.toString() === staticReportId
+              (report) => report._id && report._id.toString() === staticReportId
             );
             if (item) {
               staticReportItem = item;
@@ -8473,7 +9216,7 @@ app.get("/get-static-report-entries-by-ids", async (req, res) => {
       success: true,
       count: entries.length,
       data: entries,
-      staticReportItem: staticReportItem
+      staticReportItem: staticReportItem,
     });
   } catch (error) {
     console.error("Error fetching static report entries by IDs:", error);
@@ -8662,28 +9405,33 @@ app.get("/get-static-report-hierarchy", async (req, res) => {
 app.get("/get-project-professions", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
-    
+
     if (!companyId || !projectId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId" 
+      return res.status(400).json({
+        error: "Missing required parameters: companyId, projectId",
       });
     }
 
     // Get professions associated with this project from gammas collection
-    const professions = await db.collection("gammas").find({
-      companyId: companyId,
-      projectsId: { $in: [projectId] }
-    }).toArray();
+    const professions = await db
+      .collection("gammas")
+      .find({
+        companyId: companyId,
+        projectsId: { $in: [projectId] },
+      })
+      .toArray();
 
     // Extract profession data
-    const professionData = professions.map(item => item.profession).filter(Boolean);
+    const professionData = professions
+      .map((item) => item.profession)
+      .filter(Boolean);
 
     res.json(professionData);
   } catch (error) {
     console.error("Error fetching project professions:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch project professions",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -8692,18 +9440,20 @@ app.get("/get-project-professions", async (req, res) => {
 app.post("/get-quality-assurance-signature", async (req, res) => {
   try {
     const { companyId, projectId, professionId } = req.body;
-    
+
     if (!companyId || !projectId || !professionId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId, professionId" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: companyId, projectId, professionId",
       });
     }
 
-    const signatures = await db.collection("quality assurance signature")
+    const signatures = await db
+      .collection("quality assurance signature")
       .find({
         companyId: companyId,
         projectId: projectId,
-        professionId: professionId
+        professionId: professionId,
       })
       .sort({ createdAt: -1 })
       .toArray();
@@ -8711,9 +9461,9 @@ app.post("/get-quality-assurance-signature", async (req, res) => {
     res.json(signatures);
   } catch (error) {
     console.error("Error fetching quality assurance signature:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch quality assurance signature",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -8721,34 +9471,38 @@ app.post("/get-quality-assurance-signature", async (req, res) => {
 // Create new quality assurance signature
 app.post("/create-quality-assurance-signature", async (req, res) => {
   try {
-    const { 
-      companyId, 
-      projectId, 
+    const {
+      companyId,
+      projectId,
       professionId,
       professionName,
-      name, 
-      description, 
-      profession, 
-      signature, 
-      signatureDate 
+      name,
+      description,
+      profession,
+      signature,
+      signatureDate,
     } = req.body;
-    
+
     if (!companyId || !projectId || !professionId || !name || !profession) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId, professionId, name, profession" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: companyId, projectId, professionId, name, profession",
       });
     }
 
     // Check if signature already exists for this profession
-    const existingSignature = await db.collection("quality assurance signature").findOne({
-      companyId: companyId,
-      projectId: projectId,
-      professionId: professionId
-    });
+    const existingSignature = await db
+      .collection("quality assurance signature")
+      .findOne({
+        companyId: companyId,
+        projectId: projectId,
+        professionId: professionId,
+      });
 
     if (existingSignature) {
-      return res.status(409).json({ 
-        error: "Signature already exists for this profession. Use update endpoint instead." 
+      return res.status(409).json({
+        error:
+          "Signature already exists for this profession. Use update endpoint instead.",
       });
     }
 
@@ -8756,136 +9510,144 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       companyId,
       projectId,
       professionId,
-      professionName: professionName || '',
+      professionName: professionName || "",
       name,
-      description: description || '',
+      description: description || "",
       profession,
       signature,
       signatureDate: signatureDate || new Date().toISOString(),
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
-    const result = await db.collection("quality assurance signature").insertOne(signatureData);
+    const result = await db
+      .collection("quality assurance signature")
+      .insertOne(signatureData);
 
     res.json({
       success: true,
       signatureId: result.insertedId,
-      message: "Quality assurance signature created successfully"
+      message: "Quality assurance signature created successfully",
     });
   } catch (error) {
     console.error("Error creating quality assurance signature:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to create quality assurance signature",
-      details: error.message 
+      details: error.message,
     });
   }
 });
 
 // Update existing quality assurance signature
-app.put("/update-quality-assurance-signature/:signatureId", async (req, res) => {
-  try {
-    const { signatureId } = req.params;
-    const { 
-      name, 
-      description, 
-      profession, 
-      signature, 
-      signatureDate 
-    } = req.body;
-    
-    if (!signatureId) {
-      return res.status(400).json({ 
-        error: "Missing required parameter: signatureId" 
+app.put(
+  "/update-quality-assurance-signature/:signatureId",
+  async (req, res) => {
+    try {
+      const { signatureId } = req.params;
+      const { name, description, profession, signature, signatureDate } =
+        req.body;
+
+      if (!signatureId) {
+        return res.status(400).json({
+          error: "Missing required parameter: signatureId",
+        });
+      }
+
+      const updateData = {
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Only update fields that are provided
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (profession !== undefined) updateData.profession = profession;
+      if (signature !== undefined) updateData.signature = signature;
+      if (signatureDate !== undefined) updateData.signatureDate = signatureDate;
+
+      const result = await db
+        .collection("quality assurance signature")
+        .updateOne({ _id: new ObjectId(signatureId) }, { $set: updateData });
+
+      if (result.matchedCount === 0) {
+        return res.status(404).json({
+          error: "Signature not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Quality assurance signature updated successfully",
+      });
+    } catch (error) {
+      console.error("Error updating quality assurance signature:", error);
+      res.status(500).json({
+        error: "Failed to update quality assurance signature",
+        details: error.message,
       });
     }
-
-    const updateData = {
-      updatedAt: new Date().toISOString()
-    };
-
-    // Only update fields that are provided
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (profession !== undefined) updateData.profession = profession;
-    if (signature !== undefined) updateData.signature = signature;
-    if (signatureDate !== undefined) updateData.signatureDate = signatureDate;
-
-    const result = await db.collection("quality assurance signature").updateOne(
-      { _id: new ObjectId(signatureId) },
-      { $set: updateData }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ 
-        error: "Signature not found" 
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Quality assurance signature updated successfully"
-    });
-  } catch (error) {
-    console.error("Error updating quality assurance signature:", error);
-    res.status(500).json({ 
-      error: "Failed to update quality assurance signature",
-      details: error.message 
-    });
   }
-});
+);
 
 // Delete quality assurance signature
-app.delete("/delete-quality-assurance-signature/:signatureId", async (req, res) => {
-  try {
-    const { signatureId } = req.params;
-    
-    if (!signatureId) {
-      return res.status(400).json({ 
-        error: "Missing required parameter: signatureId" 
+app.delete(
+  "/delete-quality-assurance-signature/:signatureId",
+  async (req, res) => {
+    try {
+      const { signatureId } = req.params;
+
+      if (!signatureId) {
+        return res.status(400).json({
+          error: "Missing required parameter: signatureId",
+        });
+      }
+
+      const result = await db
+        .collection("quality assurance signature")
+        .deleteOne({
+          _id: new ObjectId(signatureId),
+        });
+
+      if (result.deletedCount === 0) {
+        return res.status(404).json({
+          error: "Signature not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Quality assurance signature deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting quality assurance signature:", error);
+      res.status(500).json({
+        error: "Failed to delete quality assurance signature",
+        details: error.message,
       });
     }
-
-    const result = await db.collection("quality assurance signature").deleteOne({
-      _id: new ObjectId(signatureId)
-    });
-
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ 
-        error: "Signature not found" 
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "Quality assurance signature deleted successfully"
-    });
-  } catch (error) {
-    console.error("Error deleting quality assurance signature:", error);
-    res.status(500).json({ 
-      error: "Failed to delete quality assurance signature",
-      details: error.message 
-    });
   }
-});
+);
 
 // API endpoints for Static Report Signatures
 // Get static report signatures
 app.post("/get-static-report-signatures", async (req, res) => {
   try {
     const { companyId, projectId, subjectMatterId } = req.body;
-    
-    console.log("get-static-report-signatures called with:", { companyId, projectId, subjectMatterId });
-    
+
+    console.log("get-static-report-signatures called with:", {
+      companyId,
+      projectId,
+      subjectMatterId,
+    });
+
     if (!companyId || !projectId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId" 
+      return res.status(400).json({
+        error: "Missing required parameters: companyId, projectId",
       });
     }
 
     const query = {
       companyId: companyId,
-      projectId: projectId
+      projectId: projectId,
     };
 
     // Add subjectMatterId filter if provided
@@ -8895,7 +9657,8 @@ app.post("/get-static-report-signatures", async (req, res) => {
 
     console.log("Query:", query);
 
-    const signatures = await db.collection("static report signatures")
+    const signatures = await db
+      .collection("static report signatures")
       .find(query)
       .sort({ signatureType: 1, createdAt: -1 })
       .toArray();
@@ -8905,9 +9668,9 @@ app.post("/get-static-report-signatures", async (req, res) => {
     res.json(signatures);
   } catch (error) {
     console.error("Error fetching static report signatures:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch static report signatures",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -8915,38 +9678,41 @@ app.post("/get-static-report-signatures", async (req, res) => {
 // Create new static report signature
 app.post("/create-static-report-signature", async (req, res) => {
   try {
-    const { 
-      companyId, 
-      projectId, 
-      subjectMatterId, 
-      signatureType, 
-      name, 
-      description, 
-      profession, 
-      signature, 
-      signatureDate 
+    const {
+      companyId,
+      projectId,
+      subjectMatterId,
+      signatureType,
+      name,
+      description,
+      profession,
+      signature,
+      signatureDate,
     } = req.body;
-    
+
     if (!companyId || !projectId || !signatureType || !name || !profession) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: companyId, projectId, signatureType, name, profession" 
+      return res.status(400).json({
+        error:
+          "Missing required parameters: companyId, projectId, signatureType, name, profession",
       });
     }
 
     // Check if signature already exists for this combination
-    const existingSignature = await db.collection("static report signatures").findOne({
-      companyId: companyId,
-      projectId: projectId,
-      subjectMatterId: subjectMatterId || null,
-      signatureType: parseInt(signatureType)
-    });
+    const existingSignature = await db
+      .collection("static report signatures")
+      .findOne({
+        companyId: companyId,
+        projectId: projectId,
+        subjectMatterId: subjectMatterId || null,
+        signatureType: parseInt(signatureType),
+      });
 
     if (existingSignature) {
-      return res.status(409).json({ 
-        error: "Signature already exists for this combination. Use update endpoint instead." 
+      return res.status(409).json({
+        error:
+          "Signature already exists for this combination. Use update endpoint instead.",
       });
     }
-
 
     const signatureData = {
       companyId,
@@ -8954,26 +9720,28 @@ app.post("/create-static-report-signature", async (req, res) => {
       subjectMatterId: subjectMatterId || null,
       signatureType: parseInt(signatureType),
       name,
-      description: description || '',
+      description: description || "",
       profession,
       signature: signature || null,
       signatureDate: signatureDate || new Date().toISOString(),
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
-    const result = await db.collection("static report signatures").insertOne(signatureData);
+    const result = await db
+      .collection("static report signatures")
+      .insertOne(signatureData);
 
     res.status(201).json({
       success: true,
       message: "Signature created successfully",
-      signatureId: result.insertedId
+      signatureId: result.insertedId,
     });
   } catch (error) {
     console.error("Error creating static report signature:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to create static report signature",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -8982,22 +9750,17 @@ app.post("/create-static-report-signature", async (req, res) => {
 app.put("/update-static-report-signature/:signatureId", async (req, res) => {
   try {
     const { signatureId } = req.params;
-    const { 
-      name, 
-      description, 
-      profession, 
-      signature, 
-      signatureDate 
-    } = req.body;
-    
+    const { name, description, profession, signature, signatureDate } =
+      req.body;
+
     if (!signatureId) {
-      return res.status(400).json({ 
-        error: "Missing required parameter: signatureId" 
+      return res.status(400).json({
+        error: "Missing required parameter: signatureId",
       });
     }
 
     const updateData = {
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
     // Only update fields that are provided
@@ -9007,26 +9770,25 @@ app.put("/update-static-report-signature/:signatureId", async (req, res) => {
     if (signature !== undefined) updateData.signature = signature;
     if (signatureDate !== undefined) updateData.signatureDate = signatureDate;
 
-    const result = await db.collection("static report signatures").updateOne(
-      { _id: new ObjectId(signatureId) },
-      { $set: updateData }
-    );
+    const result = await db
+      .collection("static report signatures")
+      .updateOne({ _id: new ObjectId(signatureId) }, { $set: updateData });
 
     if (result.matchedCount === 0) {
-      return res.status(404).json({ 
-        error: "Signature not found" 
+      return res.status(404).json({
+        error: "Signature not found",
       });
     }
 
     res.json({
       success: true,
-      message: "Signature updated successfully"
+      message: "Signature updated successfully",
     });
   } catch (error) {
     console.error("Error updating static report signature:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to update static report signature",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -9035,32 +9797,32 @@ app.put("/update-static-report-signature/:signatureId", async (req, res) => {
 app.delete("/delete-static-report-signature/:signatureId", async (req, res) => {
   try {
     const { signatureId } = req.params;
-    
+
     if (!signatureId) {
-      return res.status(400).json({ 
-        error: "Missing required parameter: signatureId" 
+      return res.status(400).json({
+        error: "Missing required parameter: signatureId",
       });
     }
 
     const result = await db.collection("static report signatures").deleteOne({
-      _id: new ObjectId(signatureId)
+      _id: new ObjectId(signatureId),
     });
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ 
-        error: "Signature not found" 
+      return res.status(404).json({
+        error: "Signature not found",
       });
     }
 
     res.json({
       success: true,
-      message: "Signature deleted successfully"
+      message: "Signature deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting static report signature:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to delete static report signature",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -9870,51 +10632,64 @@ app.post(
   ]),
   async (req, res) => {
     try {
-      console.log('Received deviation submission:', {
+      console.log("Received deviation submission:", {
         body: req.body,
         bodyKeys: Object.keys(req.body),
-        files: req.files ? Object.keys(req.files) : 'No files',
-        fileDetails: req.files ? Object.keys(req.files).map(key => ({
-          field: key,
-          count: req.files[key].length,
-          filenames: req.files[key].map(f => f.filename)
-        })) : 'No files'
+        files: req.files ? Object.keys(req.files) : "No files",
+        fileDetails: req.files
+          ? Object.keys(req.files).map((key) => ({
+              field: key,
+              count: req.files[key].length,
+              filenames: req.files[key].map((f) => f.filename),
+            }))
+          : "No files",
       });
-      
+
       // Log ALL body fields to see what's actually there
-      console.log('ALL BODY FIELDS:');
-      Object.keys(req.body).forEach(key => {
-        console.log(`  ${key}:`, req.body[key], `(type: ${typeof req.body[key]})`);
+      console.log("ALL BODY FIELDS:");
+      Object.keys(req.body).forEach((key) => {
+        console.log(
+          `  ${key}:`,
+          req.body[key],
+          `(type: ${typeof req.body[key]})`
+        );
       });
-      
+
       // Debug specific fields that might be empty
-      console.log('DEBUG - Description fields:', {
+      console.log("DEBUG - Description fields:", {
         generalPictureDescriptions: req.body.generalPictureDescriptions,
-        generalPictureDescriptionsType: typeof req.body.generalPictureDescriptions,
-        generalPictureDescriptionsIsArray: Array.isArray(req.body.generalPictureDescriptions),
+        generalPictureDescriptionsType:
+          typeof req.body.generalPictureDescriptions,
+        generalPictureDescriptionsIsArray: Array.isArray(
+          req.body.generalPictureDescriptions
+        ),
         markPictureDescriptions: req.body.markPictureDescriptions,
         markPictureDescriptionsType: typeof req.body.markPictureDescriptions,
-        markPictureDescriptionsIsArray: Array.isArray(req.body.markPictureDescriptions),
+        markPictureDescriptionsIsArray: Array.isArray(
+          req.body.markPictureDescriptions
+        ),
         pictureDescriptions: req.body.pictureDescriptions,
         markPictureIndices: req.body.markPictureIndices,
         markPictureIndicesType: typeof req.body.markPictureIndices,
-        markPictureIndicesIsArray: Array.isArray(req.body.markPictureIndices)
+        markPictureIndicesIsArray: Array.isArray(req.body.markPictureIndices),
       });
-      
+
       // Validate required fields
       if (!req.body.companyId || !req.body.projectId || !req.body.type) {
-        return res.status(400).json({ 
-          error: "Missing required fields", 
-          required: ['companyId', 'projectId', 'type'],
-          received: Object.keys(req.body)
+        return res.status(400).json({
+          error: "Missing required fields",
+          required: ["companyId", "projectId", "type"],
+          received: Object.keys(req.body),
         });
       }
-      
+
       // Check database connection
       if (!db) {
-        return res.status(500).json({ error: "Database connection not available" });
+        return res
+          .status(500)
+          .json({ error: "Database connection not available" });
       }
-      
+
       const {
         companyId,
         projectId,
@@ -9931,33 +10706,33 @@ app.post(
         selectedProjectManager,
       } = req.body;
 
-      console.log('Parsing JSON fields...');
-      
+      console.log("Parsing JSON fields...");
+
       let parsedBuildingParts = null;
       try {
         parsedBuildingParts = buildingParts ? JSON.parse(buildingParts) : null;
-        console.log('Building parts parsed successfully');
+        console.log("Building parts parsed successfully");
       } catch (e) {
-        console.error('Error parsing buildingParts:', e);
-        return res.status(400).json({ error: 'Invalid buildingParts JSON' });
+        console.error("Error parsing buildingParts:", e);
+        return res.status(400).json({ error: "Invalid buildingParts JSON" });
       }
 
       let parsedDrawing = null;
       try {
         parsedDrawing = drawing ? JSON.parse(drawing) : null;
-        console.log('Drawing parsed successfully');
+        console.log("Drawing parsed successfully");
       } catch (e) {
-        console.error('Error parsing drawing:', e);
-        return res.status(400).json({ error: 'Invalid drawing JSON' });
+        console.error("Error parsing drawing:", e);
+        return res.status(400).json({ error: "Invalid drawing JSON" });
       }
 
       let parsedProfession = null;
       try {
         parsedProfession = profession ? JSON.parse(profession) : null;
-        console.log('Profession parsed successfully');
+        console.log("Profession parsed successfully");
       } catch (e) {
-        console.error('Error parsing profession:', e);
-        return res.status(400).json({ error: 'Invalid profession JSON' });
+        console.error("Error parsing profession:", e);
+        return res.status(400).json({ error: "Invalid profession JSON" });
       }
 
       // Parse description fields - handle multiple form fields
@@ -9965,17 +10740,26 @@ app.post(
       try {
         // Check if it's an array (multiple form fields) or single string
         if (Array.isArray(req.body.generalPictureDescriptions)) {
-          parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions;
-        } else if (typeof req.body.generalPictureDescriptions === 'string') {
+          parsedGeneralPictureDescriptions =
+            req.body.generalPictureDescriptions;
+        } else if (typeof req.body.generalPictureDescriptions === "string") {
           // If it's a string, treat it as a single description (not JSON)
-          parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions ? [req.body.generalPictureDescriptions] : [];
+          parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions
+            ? [req.body.generalPictureDescriptions]
+            : [];
         } else {
           parsedGeneralPictureDescriptions = [];
         }
-        console.log('General picture descriptions parsed successfully:', parsedGeneralPictureDescriptions);
+        console.log(
+          "General picture descriptions parsed successfully:",
+          parsedGeneralPictureDescriptions
+        );
       } catch (e) {
-        console.error('Error parsing generalPictureDescriptions:', e);
-        console.log('Raw generalPictureDescriptions:', req.body.generalPictureDescriptions);
+        console.error("Error parsing generalPictureDescriptions:", e);
+        console.log(
+          "Raw generalPictureDescriptions:",
+          req.body.generalPictureDescriptions
+        );
         parsedGeneralPictureDescriptions = [];
       }
 
@@ -9984,26 +10768,39 @@ app.post(
         // Check if it's an array (multiple form fields) or single string
         if (Array.isArray(req.body.markPictureDescriptions)) {
           parsedMarkPictureDescriptions = req.body.markPictureDescriptions;
-        } else if (typeof req.body.markPictureDescriptions === 'string') {
+        } else if (typeof req.body.markPictureDescriptions === "string") {
           // If it's a string, treat it as a single description (not JSON)
-          parsedMarkPictureDescriptions = req.body.markPictureDescriptions ? [req.body.markPictureDescriptions] : [];
+          parsedMarkPictureDescriptions = req.body.markPictureDescriptions
+            ? [req.body.markPictureDescriptions]
+            : [];
         } else {
           parsedMarkPictureDescriptions = [];
         }
-        console.log('Mark picture descriptions parsed successfully:', parsedMarkPictureDescriptions);
+        console.log(
+          "Mark picture descriptions parsed successfully:",
+          parsedMarkPictureDescriptions
+        );
       } catch (e) {
-        console.error('Error parsing markPictureDescriptions:', e);
-        console.log('Raw markPictureDescriptions:', req.body.markPictureDescriptions);
+        console.error("Error parsing markPictureDescriptions:", e);
+        console.log(
+          "Raw markPictureDescriptions:",
+          req.body.markPictureDescriptions
+        );
         parsedMarkPictureDescriptions = [];
       }
 
       let parsedPictureDescriptions = [];
       try {
-        parsedPictureDescriptions = req.body.pictureDescriptions ? JSON.parse(req.body.pictureDescriptions) : [];
-        console.log('Picture descriptions parsed successfully:', parsedPictureDescriptions);
+        parsedPictureDescriptions = req.body.pictureDescriptions
+          ? JSON.parse(req.body.pictureDescriptions)
+          : [];
+        console.log(
+          "Picture descriptions parsed successfully:",
+          parsedPictureDescriptions
+        );
       } catch (e) {
-        console.error('Error parsing pictureDescriptions:', e);
-        console.log('Raw pictureDescriptions:', req.body.pictureDescriptions);
+        console.error("Error parsing pictureDescriptions:", e);
+        console.log("Raw pictureDescriptions:", req.body.pictureDescriptions);
         parsedPictureDescriptions = [];
       }
 
@@ -10012,25 +10809,32 @@ app.post(
         // Check if it's an array (multiple form fields) or single string
         if (Array.isArray(req.body.markPictureIndices)) {
           // Parse each JSON string in the array
-          parsedMarkPictureIndices = req.body.markPictureIndices.map(indexStr => {
-            try {
-              return JSON.parse(indexStr);
-            } catch (e) {
-              console.error('Error parsing individual markPictureIndex:', e);
-              return null;
-            }
-          }).filter(index => index !== null);
-        } else if (typeof req.body.markPictureIndices === 'string') {
+          parsedMarkPictureIndices = req.body.markPictureIndices
+            .map((indexStr) => {
+              try {
+                return JSON.parse(indexStr);
+              } catch (e) {
+                console.error("Error parsing individual markPictureIndex:", e);
+                return null;
+              }
+            })
+            .filter((index) => index !== null);
+        } else if (typeof req.body.markPictureIndices === "string") {
           // If it's a single JSON string, parse it and wrap in array
-          const parsedIndex = req.body.markPictureIndices ? JSON.parse(req.body.markPictureIndices) : null;
+          const parsedIndex = req.body.markPictureIndices
+            ? JSON.parse(req.body.markPictureIndices)
+            : null;
           parsedMarkPictureIndices = parsedIndex ? [parsedIndex] : [];
         } else {
           parsedMarkPictureIndices = [];
         }
-        console.log('Mark picture indices parsed successfully:', parsedMarkPictureIndices);
+        console.log(
+          "Mark picture indices parsed successfully:",
+          parsedMarkPictureIndices
+        );
       } catch (e) {
-        console.error('Error parsing markPictureIndices:', e);
-        console.log('Raw markPictureIndices:', req.body.markPictureIndices);
+        console.error("Error parsing markPictureIndices:", e);
+        console.log("Raw markPictureIndices:", req.body.markPictureIndices);
         parsedMarkPictureIndices = [];
       }
 
@@ -10068,8 +10872,13 @@ app.post(
 
       // Handle general pictures
       let generalPictures = [];
-      if (req.files["generalPictures"] && req.files["generalPictures"].length > 0) {
-        generalPictures = req.files["generalPictures"].map((file) => file.filename);
+      if (
+        req.files["generalPictures"] &&
+        req.files["generalPictures"].length > 0
+      ) {
+        generalPictures = req.files["generalPictures"].map(
+          (file) => file.filename
+        );
       }
 
       // Handle mark pictures
@@ -10088,15 +10897,39 @@ app.post(
         profession: parsedProfession,
         buildingParts: parsedBuildingParts,
         drawing: parsedDrawing,
-        selectedWorker: selectedWorker ? (() => {
-          try { return JSON.parse(selectedWorker); } catch (e) { console.error('Error parsing selectedWorker:', e); return null; }
-        })() : null,
-        selectedIndependentController: selectedIndependentController ? (() => {
-          try { return JSON.parse(selectedIndependentController); } catch (e) { console.error('Error parsing selectedIndependentController:', e); return null; }
-        })() : null,
-        selectedProjectManager: selectedProjectManager ? (() => {
-          try { return JSON.parse(selectedProjectManager); } catch (e) { console.error('Error parsing selectedProjectManager:', e); return null; }
-        })() : null,
+        selectedWorker: selectedWorker
+          ? (() => {
+              try {
+                return JSON.parse(selectedWorker);
+              } catch (e) {
+                console.error("Error parsing selectedWorker:", e);
+                return null;
+              }
+            })()
+          : null,
+        selectedIndependentController: selectedIndependentController
+          ? (() => {
+              try {
+                return JSON.parse(selectedIndependentController);
+              } catch (e) {
+                console.error(
+                  "Error parsing selectedIndependentController:",
+                  e
+                );
+                return null;
+              }
+            })()
+          : null,
+        selectedProjectManager: selectedProjectManager
+          ? (() => {
+              try {
+                return JSON.parse(selectedProjectManager);
+              } catch (e) {
+                console.error("Error parsing selectedProjectManager:", e);
+                return null;
+              }
+            })()
+          : null,
         pictures, // Add pictures field
         pictureDescriptions: parsedPictureDescriptions,
         generalPictures: generalPictures,
@@ -10108,8 +10941,8 @@ app.post(
         annotatedPdf: annotatedPdfFilename,
         annotatedPdfs,
       };
-      
-      console.log('Attempting to insert deviation data:', {
+
+      console.log("Attempting to insert deviation data:", {
         ...deviationData,
         // Show specific fields that were problematic
         generalPictures: deviationData.generalPictures,
@@ -10117,9 +10950,9 @@ app.post(
         markPictures: deviationData.markPictures,
         markPictureDescriptions: deviationData.markPictureDescriptions,
         pictureDescriptions: deviationData.pictureDescriptions,
-        markPictureIndices: deviationData.markPictureIndices
+        markPictureIndices: deviationData.markPictureIndices,
       });
-      
+
       // Insert the data into the database
       const result = await db.collection("deviations").insertOne(deviationData);
 
@@ -10127,10 +10960,10 @@ app.post(
     } catch (error) {
       console.error("Error creating deviation:", error);
       console.error("Error stack:", error.stack);
-      res.status(500).json({ 
-        error: "Failed to create deviation", 
+      res.status(500).json({
+        error: "Failed to create deviation",
         details: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
     }
   }
@@ -10169,14 +11002,24 @@ app.post(
 
       const parsedProfession = profession ? JSON.parse(profession) : null;
 
-      const parsedProjectManager = projectManager ? JSON.parse(projectManager) : null;
-      const parsedIndependentController = independentController ? JSON.parse(independentController) : null;
+      const parsedProjectManager = projectManager
+        ? JSON.parse(projectManager)
+        : null;
+      const parsedIndependentController = independentController
+        ? JSON.parse(independentController)
+        : null;
       const parsedWorker = worker ? JSON.parse(worker) : null;
       const parsedMarkPictures = markPictures ? JSON.parse(markPictures) : [];
-      const parsedMarkDescriptions = markDescriptions ? JSON.parse(markDescriptions) : [];
+      const parsedMarkDescriptions = markDescriptions
+        ? JSON.parse(markDescriptions)
+        : [];
       const parsedMarkers = markers ? JSON.parse(markers) : [];
-      const parsedAnnotatedImages = annotatedImages ? JSON.parse(annotatedImages) : {};
-      const parsedAnnotatedImagePNGs = annotatedImagePNGs ? JSON.parse(annotatedImagePNGs) : {};
+      const parsedAnnotatedImages = annotatedImages
+        ? JSON.parse(annotatedImages)
+        : {};
+      const parsedAnnotatedImagePNGs = annotatedImagePNGs
+        ? JSON.parse(annotatedImagePNGs)
+        : {};
 
       let pictures = [];
       let annotatedImage = null;
@@ -10186,19 +11029,19 @@ app.post(
 
       // Handle all uploaded files (req.files is now an array with upload.any())
       if (req.files && req.files.length > 0) {
-        req.files.forEach(file => {
-          if (file.fieldname === 'pictures') {
+        req.files.forEach((file) => {
+          if (file.fieldname === "pictures") {
             pictures.push(file.filename);
-          } else if (file.fieldname === 'annotatedImage') {
+          } else if (file.fieldname === "annotatedImage") {
             annotatedImage = file.filename;
-          } else if (file.fieldname.startsWith('markPictures_')) {
+          } else if (file.fieldname.startsWith("markPictures_")) {
             markPicturesFiles.push(file.filename);
-          } else if (file.fieldname === 'annotatedPdfs') {
+          } else if (file.fieldname === "annotatedPdfs") {
             annotatedPdfs.push({
               filename: file.filename,
               originalName: file.originalname,
             });
-          } else if (file.fieldname === 'annotatedPdfImages') {
+          } else if (file.fieldname === "annotatedPdfImages") {
             annotatedPdfImages.push({
               filename: file.filename,
               originalName: file.originalname,
@@ -10246,9 +11089,10 @@ app.delete("/delete-special-control", async (req, res) => {
     const { specialControleId, companyId, projectId } = req.body;
 
     if (!specialControleId || !companyId || !projectId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required fields: specialControleId, companyId, projectId" 
+      return res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields: specialControleId, companyId, projectId",
       });
     }
 
@@ -10256,27 +11100,26 @@ app.delete("/delete-special-control", async (req, res) => {
     const result = await db.collection("specialcontrol").deleteOne({
       _id: new ObjectId(specialControleId),
       companyId: companyId,
-      projectsId: { $in: [projectId] }
+      projectsId: { $in: [projectId] },
     });
 
     if (result.deletedCount === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Special control point not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Special control point not found",
       });
     }
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: "Special control point deleted successfully",
-      deletedCount: result.deletedCount
+      deletedCount: result.deletedCount,
     });
-
   } catch (error) {
     console.error("Error deleting special control point:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 });
@@ -10970,8 +11813,8 @@ app.post(
       const childFiles = req.files["childDrawings"] || [];
 
       // Parse the mainDrawingGroups to understand the structure
-      const groups = JSON.parse(mainDrawingGroups || '[]');
-      
+      const groups = JSON.parse(mainDrawingGroups || "[]");
+
       // Create the drawings array to store all drawing groups
       const drawings = [];
 
@@ -10980,7 +11823,7 @@ app.post(
         const group = groups[i];
         const mainDrawingIndex = group.mainIndex;
         const childIndices = group.childIndices || [];
-        
+
         // Get the main drawing file
         const mainFile = mainFiles[mainDrawingIndex];
         if (!mainFile) continue;
@@ -10993,17 +11836,19 @@ app.post(
         };
 
         // Get associated child drawings
-        const childDrawings = childIndices.map(childIndex => {
-          const childFile = childFiles[childIndex];
-          if (!childFile) return null;
-          
-          return {
-            stored: childFile.filename,
-            original: childFile.originalname,
-            parentMainIndex: mainDrawingIndex,
-            uploadedAt: new Date(),
-          };
-        }).filter(child => child !== null);
+        const childDrawings = childIndices
+          .map((childIndex) => {
+            const childFile = childFiles[childIndex];
+            if (!childFile) return null;
+
+            return {
+              stored: childFile.filename,
+              original: childFile.originalname,
+              parentMainIndex: mainDrawingIndex,
+              uploadedAt: new Date(),
+            };
+          })
+          .filter((child) => child !== null);
 
         // Create drawing group
         const drawingGroup = {
@@ -11028,10 +11873,10 @@ app.post(
         results.push(result.insertedId);
       }
 
-      res.status(201).json({ 
-        message: "Upload successful", 
+      res.status(201).json({
+        message: "Upload successful",
         insertedIds: results,
-        totalDrawings: drawings.length 
+        totalDrawings: drawings.length,
       });
     } catch (error) {
       console.error("Error:", error);
@@ -11170,16 +12015,16 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
     if (parsedIndependentController) {
       documentToInsert.independentController = parsedIndependentController;
     }
-    if (exc && exc.trim() !== '') {
+    if (exc && exc.trim() !== "") {
       documentToInsert.exc = exc;
     }
-    if (cc && cc.trim() !== '') {
+    if (cc && cc.trim() !== "") {
       documentToInsert.cc = cc;
     }
-    if (name && name.trim() !== '') {
+    if (name && name.trim() !== "") {
       documentToInsert.name = name;
     }
-    if (email && email.trim() !== '') {
+    if (email && email.trim() !== "") {
       documentToInsert.email = email;
     }
 
@@ -11299,7 +12144,10 @@ app.post(
         }));
       }
 
-      if (req.files["annotatedPdfImages"] && req.files["annotatedPdfImages"].length > 0) {
+      if (
+        req.files["annotatedPdfImages"] &&
+        req.files["annotatedPdfImages"].length > 0
+      ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
           filename: file.filename,
@@ -11309,7 +12157,7 @@ app.post(
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
         markPictures = req.files["markPictures"].map((file) => file.filename);
-        
+
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
             markDescs = [markDescriptions];
@@ -11336,29 +12184,56 @@ app.post(
             const pdfPath = path.join(__dirname, "uploads", file.filename);
             const outputDir = path.join(__dirname, "uploads");
             const pngFilename = await convertPdfToPng(pdfPath, outputDir);
-            
+
             if (pngFilename) {
               annotatedPdfImages.push({
-                originalName: file.originalname.replace('.pdf', '.png'),
+                originalName: file.originalname.replace(".pdf", ".png"),
                 filename: pngFilename,
               });
-              console.log(`Converted PDF ${file.filename} to PNG ${pngFilename}`);
+              console.log(
+                `Converted PDF ${file.filename} to PNG ${pngFilename}`
+              );
             }
           } catch (error) {
-            console.error(`Error converting PDF ${file.filename} to PNG:`, error);
+            console.error(
+              `Error converting PDF ${file.filename} to PNG:`,
+              error
+            );
           }
         }
       }
 
-      const parsedDrawing = drawing ? (typeof drawing === 'string' ? JSON.parse(drawing) : drawing) : null;
+      const parsedDrawing = drawing
+        ? typeof drawing === "string"
+          ? JSON.parse(drawing)
+          : drawing
+        : null;
       const parsedProjectManager = projectManager
-        ? (typeof projectManager === 'string' ? JSON.parse(projectManager) : projectManager)
+        ? typeof projectManager === "string"
+          ? JSON.parse(projectManager)
+          : projectManager
         : null;
 
-      const parsedRecipients = recipients ? (typeof recipients === 'string' ? JSON.parse(recipients) : recipients) : null;
-      const parsedProfession = profession ? (typeof profession === 'string' ? JSON.parse(profession) : profession) : null;
-      const parsedBuildingPart = buildingPart ? (typeof buildingPart === 'string' ? JSON.parse(buildingPart) : buildingPart) : null;
-      const parsedSelectedWorkers = selectedWorkers ? (typeof selectedWorkers === 'string' ? JSON.parse(selectedWorkers) : selectedWorkers) : null;
+      const parsedRecipients = recipients
+        ? typeof recipients === "string"
+          ? JSON.parse(recipients)
+          : recipients
+        : null;
+      const parsedProfession = profession
+        ? typeof profession === "string"
+          ? JSON.parse(profession)
+          : profession
+        : null;
+      const parsedBuildingPart = buildingPart
+        ? typeof buildingPart === "string"
+          ? JSON.parse(buildingPart)
+          : buildingPart
+        : null;
+      const parsedSelectedWorkers = selectedWorkers
+        ? typeof selectedWorkers === "string"
+          ? JSON.parse(selectedWorkers)
+          : selectedWorkers
+        : null;
 
       // Insert the data into the database
       const result = await db.collection("mentions").insertOne({
@@ -11525,7 +12400,10 @@ app.post(
         }));
       }
 
-      if (req.files["annotatedPdfImages"] && req.files["annotatedPdfImages"].length > 0) {
+      if (
+        req.files["annotatedPdfImages"] &&
+        req.files["annotatedPdfImages"].length > 0
+      ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
           filename: file.filename,
@@ -11535,7 +12413,7 @@ app.post(
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
         markPictures = req.files["markPictures"].map((file) => file.filename);
-        
+
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
             markDescs = [markDescriptions];
@@ -11563,7 +12441,9 @@ app.post(
       const parsedRecipients = recipients ? JSON.parse(recipients) : null;
       const parsedProfession = profession ? JSON.parse(profession) : null;
       const parsedBuildingPart = buildingPart ? JSON.parse(buildingPart) : null;
-      const parsedSelectedWorkers = selectedWorkers ? JSON.parse(selectedWorkers) : null;
+      const parsedSelectedWorkers = selectedWorkers
+        ? JSON.parse(selectedWorkers)
+        : null;
 
       // Insert the data into the database
       const result = await db.collection("news").insertOne({
@@ -11713,7 +12593,9 @@ app.post(
         : null;
       const parsedProfession = profession ? JSON.parse(profession) : null;
       const parsedBuildingPart = buildingPart ? JSON.parse(buildingPart) : null;
-      const parsedSelectedWorkers = selectedWorkers ? JSON.parse(selectedWorkers) : null;
+      const parsedSelectedWorkers = selectedWorkers
+        ? JSON.parse(selectedWorkers)
+        : null;
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
         pictures = req.files["pictures"].map((file) => file.filename);
@@ -11731,27 +12613,32 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-          filename: file.filename,
+            filename: file.filename,
             originalName: file.originalname,
           };
           annotatedPdfs.push(pdfInfo);
-          
+
           // Convert PDF to PNG
           try {
             const pdfPath = path.join(__dirname, "uploads", file.filename);
             const outputDir = path.join(__dirname, "uploads");
             const pngFilename = await convertPdfToPng(pdfPath, outputDir);
-            
+
             if (pngFilename) {
               annotatedPdfImages.push({
                 filename: pngFilename,
-                originalName: file.originalname.replace('.pdf', '.png'),
-                sourcePdf: file.filename
+                originalName: file.originalname.replace(".pdf", ".png"),
+                sourcePdf: file.filename,
               });
-              console.log(`Converted PDF ${file.filename} to PNG ${pngFilename}`);
+              console.log(
+                `Converted PDF ${file.filename} to PNG ${pngFilename}`
+              );
             }
           } catch (error) {
-            console.error(`Error converting PDF ${file.filename} to PNG:`, error);
+            console.error(
+              `Error converting PDF ${file.filename} to PNG:`,
+              error
+            );
           }
         }
       }
@@ -11759,7 +12646,7 @@ app.post(
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
         markPictures = req.files["markPictures"].map((file) => file.filename);
-        
+
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
             markDescs = [markDescriptions];
@@ -12026,12 +12913,14 @@ app.post(
           : certificateSchema;
 
       // Safely handle file uploads - check if req.files exists and has the expected arrays
-      const addDrawingPictures = req.files && req.files["addDrawingPictures"] 
-        ? req.files["addDrawingPictures"].map((file) => file.filename) 
-        : [];
-      const planPictures = req.files && req.files["planPictures"] 
-        ? req.files["planPictures"].map((file) => file.filename) 
-        : [];
+      const addDrawingPictures =
+        req.files && req.files["addDrawingPictures"]
+          ? req.files["addDrawingPictures"].map((file) => file.filename)
+          : [];
+      const planPictures =
+        req.files && req.files["planPictures"]
+          ? req.files["planPictures"].map((file) => file.filename)
+          : [];
 
       const checks = await db.collection("checks").find({}).toArray();
       const checksWithCreatedAt = checks.map((check) => ({
@@ -12295,7 +13184,7 @@ app.post(
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
         markPictures = req.files["markPictures"].map((file) => file.filename);
-        
+
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
             markDescs = [markDescriptions];
@@ -12311,33 +13200,41 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-          filename: file.filename,
-          originalName: file.originalname,
+            filename: file.filename,
+            originalName: file.originalname,
           };
           annotatedPdfs.push(pdfInfo);
-          
+
           // Convert PDF to PNG
           try {
             const pdfPath = path.join(__dirname, "uploads", file.filename);
             const outputDir = path.join(__dirname, "uploads");
             const pngFilename = await convertPdfToPng(pdfPath, outputDir);
-            
+
             if (pngFilename) {
               annotatedPdfImages.push({
                 filename: pngFilename,
-                originalName: file.originalname.replace('.pdf', '.png'),
-                sourcePdf: file.filename
+                originalName: file.originalname.replace(".pdf", ".png"),
+                sourcePdf: file.filename,
               });
-              console.log(`Converted PDF ${file.filename} to PNG ${pngFilename}`);
+              console.log(
+                `Converted PDF ${file.filename} to PNG ${pngFilename}`
+              );
             }
           } catch (error) {
-            console.error(`Error converting PDF ${file.filename} to PNG:`, error);
+            console.error(
+              `Error converting PDF ${file.filename} to PNG:`,
+              error
+            );
           }
         }
       }
 
       // Handle annotatedPdfImages sent from frontend
-      if (req.files["annotatedPdfImages"] && req.files["annotatedPdfImages"].length > 0) {
+      if (
+        req.files["annotatedPdfImages"] &&
+        req.files["annotatedPdfImages"].length > 0
+      ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
           filename: file.filename,
@@ -12357,7 +13254,9 @@ app.post(
       const parsedRecipients = projectUsers ? JSON.parse(projectUsers) : null;
       const parsedProfession = profession ? JSON.parse(profession) : null;
       const parsedBuildingPart = buildingPart ? JSON.parse(buildingPart) : null;
-      const parsedSelectedWorkers = selectedWorkers ? JSON.parse(selectedWorkers) : null;
+      const parsedSelectedWorkers = selectedWorkers
+        ? JSON.parse(selectedWorkers)
+        : null;
 
       // Insert the data into the database
       const result = await db.collection("requests").insertOne({
@@ -12682,9 +13581,9 @@ app.post(
         professionObject,
         users,
       } = req.body; // Replace 'username' with the new fields
-      console.log('Request body:', req.body); // Log the entire request body
-      console.log('Profession:', profession);
-      console.log('Profession Object:', professionObject);
+      console.log("Request body:", req.body); // Log the entire request body
+      console.log("Profession:", profession);
+      console.log("Profession Object:", professionObject);
       console.log(req.files); // Log files to inspect
 
       // Initialize variables for files
@@ -12705,9 +13604,12 @@ app.post(
       let parsedProfessionObject = null;
       if (professionObject) {
         try {
-          parsedProfessionObject = typeof professionObject === 'string' ? JSON.parse(professionObject) : professionObject;
+          parsedProfessionObject =
+            typeof professionObject === "string"
+              ? JSON.parse(professionObject)
+              : professionObject;
         } catch (e) {
-          console.error('Error parsing professionObject:', e);
+          console.error("Error parsing professionObject:", e);
         }
       }
 
@@ -12780,10 +13682,13 @@ app.post(
       if (profession) updateData.profession = profession;
       if (professionObject) {
         try {
-          const parsedProfessionObject = typeof professionObject === 'string' ? JSON.parse(professionObject) : professionObject;
+          const parsedProfessionObject =
+            typeof professionObject === "string"
+              ? JSON.parse(professionObject)
+              : professionObject;
           updateData.professionObject = parsedProfessionObject;
         } catch (e) {
-          console.error('Error parsing professionObject in update:', e);
+          console.error("Error parsing professionObject in update:", e);
         }
       }
       if (picture2) {
@@ -13359,616 +14264,910 @@ app.get("/users/authenticated", authenticateToken, (req, res) => {
 });
 
 // PDF Generation API
-const puppeteer = require('puppeteer');
-const Handlebars = require('handlebars');
-const fsPromises = require('fs').promises;
+const puppeteer = require("puppeteer");
+const Handlebars = require("handlebars");
+const fsPromises = require("fs").promises;
 
 // Test API to verify data fetching
-app.get("/api/test-report-data/:companyId/:projectId/:professionId", async (req, res) => {
-  try {
-    const { companyId, projectId, professionId } = req.params;
-
-    // Fetch data from existing APIs
-    const [companyResponse, projectResponse, professionResponse] = await Promise.all([
-      fetch(`${req.protocol}://${req.get('host')}/get-company-detail/${companyId}`),
-      fetch(`${req.protocol}://${req.get('host')}/get-project-detail/${projectId}`),
-      fetch(`${req.protocol}://${req.get('host')}/get-profession-detail-in-company-projects/${professionId}`)
-    ]);
-
-    if (!companyResponse.ok || !projectResponse.ok || !professionResponse.ok) {
-      return res.status(404).json({
-        error: "One or more entities not found"
-      });
-    }
-
-    const [company, project, profession] = await Promise.all([
-      companyResponse.json(),
-      projectResponse.json(),
-      professionResponse.json()
-    ]);
-
-    res.json({
-      company,
-      project,
-      profession
-    });
-
-  } catch (error) {
-    console.error('Data fetching error:', error);
-    res.status(500).json({
-      error: "Failed to fetch report data",
-      details: error.message
-    });
-  }
-});
-
-app.get("/api/generate-pdf-report/:companyId/:projectId/:subjectMatterId", async (req, res) => {
-  try {
-    const { companyId, projectId, subjectMatterId } = req.params;
-
-    // Validate required parameters
-    if (!companyId || !projectId || !subjectMatterId) {
-      return res.status(400).json({
-        error: "companyId, projectId, and subjectMatterId are required"
-      });
-    }
-
-    // Fetch data from existing APIs
-    const [companyResponse, projectResponse] = await Promise.all([
-      fetch(`${req.protocol}://${req.get('host')}/get-company-detail/${companyId}`),
-      fetch(`${req.protocol}://${req.get('host')}/get-project-detail/${projectId}`)
-    ]);
-
-    if (!companyResponse.ok || !projectResponse.ok) {
-      return res.status(404).json({
-        error: "Company or project not found"
-      });
-    }
-
-    const [company, project] = await Promise.all([
-      companyResponse.json(),
-      projectResponse.json()
-    ]);
-
-    // Fetch profession data from inputs collection using subjectMatterId
-    let profession = null;
+app.get(
+  "/api/test-report-data/:companyId/:projectId/:professionId",
+  async (req, res) => {
     try {
-      console.log('Fetching inputs document for SubjectMatterId:', subjectMatterId);
-      const professionResponse = await fetch(`${req.protocol}://${req.get('host')}/get-inputs-by-subject-matter-id`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subjectMatterId: subjectMatterId })
-      });
-      
-      if (professionResponse.ok) {
-        profession = await professionResponse.json();
-        console.log('📋 Profession data fetched using SubjectMatterId:', profession.SubjectMatterId);
-      } else {
-        console.log('❌ Failed to fetch profession data for SubjectMatterId:', subjectMatterId);
-        professionResponse = await fetch(`${req.protocol}://${req.get('host')}/get-profession-detail-in-company-projects/${professionId}`);
-        
-        if (professionResponse.ok) {
-          const professionFromProfessions = await professionResponse.json();
-          // Now fetch the inputs data using the SubjectMatterId from the profession
-          if (professionFromProfessions.SubjectMatterId) {
-            const inputsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-inputs-by-subject-matter-id`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ subjectMatterId: professionFromProfessions.SubjectMatterId })
-            });
-            if (inputsResponse.ok) {
-              profession = await inputsResponse.json();
-              console.log('📋 Profession data fetched from professions collection then inputs:', profession.SubjectMatterId);
-            }
-          }
-        }
-      }
-      
-      if (!profession) {
-        console.log('❌ Failed to fetch profession data');
+      const { companyId, projectId, professionId } = req.params;
+
+      // Fetch data from existing APIs
+      const [companyResponse, projectResponse, professionResponse] =
+        await Promise.all([
+          fetch(
+            `${req.protocol}://${req.get(
+              "host"
+            )}/get-company-detail/${companyId}`
+          ),
+          fetch(
+            `${req.protocol}://${req.get(
+              "host"
+            )}/get-project-detail/${projectId}`
+          ),
+          fetch(
+            `${req.protocol}://${req.get(
+              "host"
+            )}/get-profession-detail-in-company-projects/${professionId}`
+          ),
+        ]);
+
+      if (
+        !companyResponse.ok ||
+        !projectResponse.ok ||
+        !professionResponse.ok
+      ) {
         return res.status(404).json({
-          error: "Profession not found"
+          error: "One or more entities not found",
         });
       }
+
+      const [company, project, profession] = await Promise.all([
+        companyResponse.json(),
+        projectResponse.json(),
+        professionResponse.json(),
+      ]);
+
+      res.json({
+        company,
+        project,
+        profession,
+      });
     } catch (error) {
-      console.log('❌ Error fetching profession data:', error);
-      return res.status(500).json({
-        error: "Error fetching profession data"
+      console.error("Data fetching error:", error);
+      res.status(500).json({
+        error: "Failed to fetch report data",
+        details: error.message,
       });
     }
+  }
+);
 
-    // Initialize all variables at the beginning
-    let mainContractor = {};
-    let constructionManager = {};
-    let safetyCoordinator = {};
-    let certificationScheme = {};
-    let advisorsByType = {};
-    let inspectors = [];
-    let drawings = [];
-    let documents = [];
-    let checks = [];
-    let subcontractors = [];
-    let projectManagers = [];
-    let independentControllers = [];
-    let workers = [];
-    let projectManagementSupervision = {};
-    let tasks = {};
-    let taskEntries = { receive: [], process: [], final: [] };
-
+app.get(
+  "/api/generate-pdf-report/:companyId/:projectId/:subjectMatterId",
+  async (req, res) => {
     try {
-      // Fetch main contractors (can be multiple, use first one)
-      const mainContractorsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-mains?companyId=${companyId}&projectId=${projectId}`);
-      if (mainContractorsResponse.ok) {
-        const mainContractors = await mainContractorsResponse.json();
-        mainContractor = mainContractors[0] || company; // Use first main contractor, fallback to company
-      } else {
-        mainContractor = company; // Fallback to company if API fails
-      }
+      const { companyId, projectId, subjectMatterId } = req.params;
 
-      // Fetch construction managers (can be multiple, use first one)
-      const constructionManagersResponse = await fetch(`${req.protocol}://${req.get('host')}/get-cons?companyId=${companyId}&projectId=${projectId}`);
-      if (constructionManagersResponse.ok) {
-        const managers = await constructionManagersResponse.json();
-        constructionManager = managers[0] || {};
-      }
-
-      // Fetch safety coordinators (can be multiple, use first one)
-      const safetyCoordinatorsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-safety?companyId=${companyId}&projectId=${projectId}`);
-      if (safetyCoordinatorsResponse.ok) {
-        const coordinators = await safetyCoordinatorsResponse.json();
-        safetyCoordinator = coordinators[0] || {};
-      }
-
-      // Fetch all certification schemes (can be multiple)
-      const schemesResponse = await fetch(`${req.protocol}://${req.get('host')}/get-schemes?companyId=${companyId}&projectId=${projectId}`);
-      if (schemesResponse.ok) {
-        const schemes = await schemesResponse.json();
-        certificationScheme = {
-          schemes: schemes, // Pass all schemes to template
-          name: schemes.length > 0 ? schemes[0].item?.name || "" : "",
-          level: schemes.length > 0 ? schemes[0].level?.name || "" : ""
-        };
-      } else {
-        certificationScheme = {
-          schemes: [],
-          name: "",
-          level: ""
-        };
-      }
-
-      // Fetch advisors and group by type
-      const advisorsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-advisors?companyId=${companyId}&projectId=${projectId}`);
-      if (advisorsResponse.ok) {
-        const advisors = await advisorsResponse.json();
-        // Group advisors by their type field
-        advisors.forEach(advisor => {
-          const type = advisor.type || 'Unknown Type';
-          if (!advisorsByType[type]) {
-            advisorsByType[type] = [];
-          }
-          advisorsByType[type].push(advisor);
+      // Validate required parameters
+      if (!companyId || !projectId || !subjectMatterId) {
+        return res.status(400).json({
+          error: "companyId, projectId, and subjectMatterId are required",
         });
       }
 
-      // Fetch inspectors
-      const inspectorsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-inspectors?companyId=${companyId}&projectId=${projectId}`);
-      if (inspectorsResponse.ok) {
-        inspectors = await inspectorsResponse.json();
+      // Fetch data from existing APIs
+      const [companyResponse, projectResponse] = await Promise.all([
+        fetch(
+          `${req.protocol}://${req.get("host")}/get-company-detail/${companyId}`
+        ),
+        fetch(
+          `${req.protocol}://${req.get("host")}/get-project-detail/${projectId}`
+        ),
+      ]);
+
+      if (!companyResponse.ok || !projectResponse.ok) {
+        return res.status(404).json({
+          error: "Company or project not found",
+        });
       }
 
-      // Fetch drawings
-      const drawingsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-draws?companyId=${companyId}&projectId=${projectId}`);
-      if (drawingsResponse.ok) {
-        drawings = await drawingsResponse.json();
-      }
+      const [company, project] = await Promise.all([
+        companyResponse.json(),
+        projectResponse.json(),
+      ]);
 
-      // Fetch documents
-      const documentsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-documents?companyId=${companyId}&projectId=${projectId}`);
-      if (documentsResponse.ok) {
-        documents = await documentsResponse.json();
-      }
+      // Fetch profession data from inputs collection using subjectMatterId
+      let profession = null;
+      try {
+        console.log(
+          "Fetching inputs document for SubjectMatterId:",
+          subjectMatterId
+        );
+        const professionResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-inputs-by-subject-matter-id`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subjectMatterId: subjectMatterId }),
+          }
+        );
 
-      // Fetch checklist data from project details
-      const projectDetailResponse = await fetch(`${req.protocol}://${req.get('host')}/get-project-detail`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: projectId })
-      });
-      if (projectDetailResponse.ok) {
-        const projectDetail = await projectDetailResponse.json();
-        checks = projectDetail.checks || [];
-      }
-
-      // Fetch subcontractors
-      const subcontractorsResponse = await fetch(`${req.protocol}://${req.get('host')}/get-subs?companyId=${companyId}&projectId=${projectId}`);
-      if (subcontractorsResponse.ok) {
-        subcontractors = await subcontractorsResponse.json();
-      }
-
-      // Fetch project managers (can be multiple, use first one)
-      const projectManagersResponse = await fetch(`${req.protocol}://${req.get('host')}/get-project-managers?companyId=${companyId}&projectId=${projectId}`);
-      if (projectManagersResponse.ok) {
-        const allProjectManagers = await projectManagersResponse.json();
-        projectManagers = allProjectManagers.slice(0, 1); // Only use first project manager
-      }
-
-      // Fetch independent controllers
-      const independentControllersResponse = await fetch(`${req.protocol}://${req.get('host')}/get-independent-controller?companyId=${companyId}&projectId=${projectId}`);
-      if (independentControllersResponse.ok) {
-        independentControllers = await independentControllersResponse.json();
-      }
-
-
-
-      // Fetch workers for the specific profession
-      console.log('🔍 Fetching workers for profession ID:', subjectMatterId);
-      const workersResponse = await fetch(`${req.protocol}://${req.get('host')}/get-workers?companyId=${companyId}&projectId=${projectId}`);
-      if (workersResponse.ok) {
-        const allWorkers = await workersResponse.json();
-        console.log('📊 Total workers found:', allWorkers.length);
-        
-        // Filter workers by the specific profession's SubjectMatterId
-        if (profession && profession.SubjectMatterId) {
-          workers = allWorkers.filter(worker => {
-            if (worker.userProfession && Array.isArray(worker.userProfession)) {
-              const hasProfession = worker.userProfession.some(workerProfession => 
-                workerProfession.SubjectMatterId === profession.SubjectMatterId
-              );
-              if (hasProfession) {
-                console.log('✅ Worker matched profession:', worker.name, 'SubjectMatterId:', profession.SubjectMatterId);
-              }
-              return hasProfession;
-            }
-            return false;
-          });
+        if (professionResponse.ok) {
+          profession = await professionResponse.json();
+          console.log(
+            "📋 Profession data fetched using SubjectMatterId:",
+            profession.SubjectMatterId
+          );
         } else {
-          console.log('⚠️ No profession data available, using all workers');
-          workers = allWorkers;
-        }
-        
-        console.log('🎯 Workers filtered by profession:', workers.length);
+          console.log(
+            "❌ Failed to fetch profession data for SubjectMatterId:",
+            subjectMatterId
+          );
+          professionResponse = await fetch(
+            `${req.protocol}://${req.get(
+              "host"
+            )}/get-profession-detail-in-company-projects/${professionId}`
+          );
 
-        // Fetch Project Management Supervision Plan data from supers collection
-        try {
-          console.log('🔍 Fetching Project Management Supervision Plan data...');
-          const supervisionResponse = await fetch(`${req.protocol}://${req.get('host')}/get-project-management-supervision`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              subjectMatterId: profession.SubjectMatterId,
-              projectId: projectId,
-              companyId: companyId
-            })
+          if (professionResponse.ok) {
+            const professionFromProfessions = await professionResponse.json();
+            // Now fetch the inputs data using the SubjectMatterId from the profession
+            if (professionFromProfessions.SubjectMatterId) {
+              const inputsResponse = await fetch(
+                `${req.protocol}://${req.get(
+                  "host"
+                )}/get-inputs-by-subject-matter-id`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    subjectMatterId: professionFromProfessions.SubjectMatterId,
+                  }),
+                }
+              );
+              if (inputsResponse.ok) {
+                profession = await inputsResponse.json();
+                console.log(
+                  "📋 Profession data fetched from professions collection then inputs:",
+                  profession.SubjectMatterId
+                );
+              }
+            }
+          }
+        }
+
+        if (!profession) {
+          console.log("❌ Failed to fetch profession data");
+          return res.status(404).json({
+            error: "Profession not found",
           });
-          
-          if (supervisionResponse.ok) {
-            const supervisionData = await supervisionResponse.json();
-            projectManagementSupervision = supervisionData;
-            console.log('✅ Project Management Supervision data fetched:', supervisionData.summary);
+        }
+      } catch (error) {
+        console.log("❌ Error fetching profession data:", error);
+        return res.status(500).json({
+          error: "Error fetching profession data",
+        });
+      }
+
+      // Initialize all variables at the beginning
+      let mainContractor = {};
+      let constructionManager = {};
+      let safetyCoordinator = {};
+      let certificationScheme = {};
+      let advisorsByType = {};
+      let inspectors = [];
+      let drawings = [];
+      let documents = [];
+      let checks = [];
+      let subcontractors = [];
+      let projectManagers = [];
+      let independentControllers = [];
+      let workers = [];
+      let projectManagementSupervision = {};
+      let tasks = {};
+      let taskEntries = { receive: [], process: [], final: [] };
+
+      try {
+        // Fetch main contractors (can be multiple, use first one)
+        const mainContractorsResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-mains?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (mainContractorsResponse.ok) {
+          const mainContractors = await mainContractorsResponse.json();
+          mainContractor = mainContractors[0] || company; // Use first main contractor, fallback to company
+        } else {
+          mainContractor = company; // Fallback to company if API fails
+        }
+
+        // Fetch construction managers (can be multiple, use first one)
+        const constructionManagersResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-cons?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (constructionManagersResponse.ok) {
+          const managers = await constructionManagersResponse.json();
+          constructionManager = managers[0] || {};
+        }
+
+        // Fetch safety coordinators (can be multiple, use first one)
+        const safetyCoordinatorsResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-safety?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (safetyCoordinatorsResponse.ok) {
+          const coordinators = await safetyCoordinatorsResponse.json();
+          safetyCoordinator = coordinators[0] || {};
+        }
+
+        // Fetch all certification schemes (can be multiple)
+        const schemesResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-schemes?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (schemesResponse.ok) {
+          const schemes = await schemesResponse.json();
+          certificationScheme = {
+            schemes: schemes, // Pass all schemes to template
+            name: schemes.length > 0 ? schemes[0].item?.name || "" : "",
+            level: schemes.length > 0 ? schemes[0].level?.name || "" : "",
+          };
+        } else {
+          certificationScheme = {
+            schemes: [],
+            name: "",
+            level: "",
+          };
+        }
+
+        // Fetch advisors and group by type
+        const advisorsResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-advisors?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (advisorsResponse.ok) {
+          const advisors = await advisorsResponse.json();
+          // Group advisors by their type field
+          advisors.forEach((advisor) => {
+            const type = advisor.type || "Unknown Type";
+            if (!advisorsByType[type]) {
+              advisorsByType[type] = [];
+            }
+            advisorsByType[type].push(advisor);
+          });
+        }
+
+        // Fetch inspectors
+        const inspectorsResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-inspectors?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (inspectorsResponse.ok) {
+          inspectors = await inspectorsResponse.json();
+        }
+
+        // Fetch drawings
+        const drawingsResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-draws?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (drawingsResponse.ok) {
+          drawings = await drawingsResponse.json();
+        }
+
+        // Fetch documents
+        const documentsResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-documents?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (documentsResponse.ok) {
+          documents = await documentsResponse.json();
+        }
+
+        // Fetch checklist data from project details
+        const projectDetailResponse = await fetch(
+          `${req.protocol}://${req.get("host")}/get-project-detail`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId: projectId }),
+          }
+        );
+        if (projectDetailResponse.ok) {
+          const projectDetail = await projectDetailResponse.json();
+          checks = projectDetail.checks || [];
+        }
+
+        // Fetch subcontractors
+        const subcontractorsResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-subs?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (subcontractorsResponse.ok) {
+          subcontractors = await subcontractorsResponse.json();
+        }
+
+        // Fetch project managers (can be multiple, use first one)
+        const projectManagersResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-project-managers?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (projectManagersResponse.ok) {
+          const allProjectManagers = await projectManagersResponse.json();
+          projectManagers = allProjectManagers.slice(0, 1); // Only use first project manager
+        }
+
+        // Fetch independent controllers
+        const independentControllersResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-independent-controller?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (independentControllersResponse.ok) {
+          independentControllers = await independentControllersResponse.json();
+        }
+
+        // Fetch workers for the specific profession
+        console.log("🔍 Fetching workers for profession ID:", subjectMatterId);
+        const workersResponse = await fetch(
+          `${req.protocol}://${req.get(
+            "host"
+          )}/get-workers?companyId=${companyId}&projectId=${projectId}`
+        );
+        if (workersResponse.ok) {
+          const allWorkers = await workersResponse.json();
+          console.log("📊 Total workers found:", allWorkers.length);
+
+          // Filter workers by the specific profession's SubjectMatterId
+          if (profession && profession.SubjectMatterId) {
+            workers = allWorkers.filter((worker) => {
+              if (
+                worker.userProfession &&
+                Array.isArray(worker.userProfession)
+              ) {
+                const hasProfession = worker.userProfession.some(
+                  (workerProfession) =>
+                    workerProfession.SubjectMatterId ===
+                    profession.SubjectMatterId
+                );
+                if (hasProfession) {
+                  console.log(
+                    "✅ Worker matched profession:",
+                    worker.name,
+                    "SubjectMatterId:",
+                    profession.SubjectMatterId
+                  );
+                }
+                return hasProfession;
+              }
+              return false;
+            });
           } else {
-            console.log('⚠️ Failed to fetch Project Management Supervision data');
+            console.log("⚠️ No profession data available, using all workers");
+            workers = allWorkers;
+          }
+
+          console.log("🎯 Workers filtered by profession:", workers.length);
+
+          // Fetch Project Management Supervision Plan data from supers collection
+          try {
+            console.log(
+              "🔍 Fetching Project Management Supervision Plan data..."
+            );
+            const supervisionResponse = await fetch(
+              `${req.protocol}://${req.get(
+                "host"
+              )}/get-project-management-supervision`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  subjectMatterId: profession.SubjectMatterId,
+                  projectId: projectId,
+                  companyId: companyId,
+                }),
+              }
+            );
+
+            if (supervisionResponse.ok) {
+              const supervisionData = await supervisionResponse.json();
+              projectManagementSupervision = supervisionData;
+              console.log(
+                "✅ Project Management Supervision data fetched:",
+                supervisionData.summary
+              );
+            } else {
+              console.log(
+                "⚠️ Failed to fetch Project Management Supervision data"
+              );
+              projectManagementSupervision = {
+                success: false,
+                documents: {
+                  "Process - Project Review": [],
+                  Miscellaneous: [],
+                  "Controls for the contractor": [],
+                },
+              };
+            }
+          } catch (error) {
+            console.log(
+              "❌ Error fetching Project Management Supervision data:",
+              error
+            );
             projectManagementSupervision = {
               success: false,
               documents: {
                 "Process - Project Review": [],
-                "Miscellaneous": [],
-                "Controls for the contractor": []
-              }
+                Miscellaneous: [],
+                "Controls for the contractor": [],
+              },
             };
           }
-        } catch (error) {
-          console.log('❌ Error fetching Project Management Supervision data:', error);
-          projectManagementSupervision = {
-            success: false,
-            documents: {
-              "Process - Project Review": [],
-              "Miscellaneous": [],
-              "Controls for the contractor": []
-            }
-          };
-        }
 
-        // Fetch tasks data from tasks collection
-        try {
-          console.log('🔍 Fetching tasks data for SubjectMatterId:', profession.SubjectMatterId);
-          const tasksResponse = await fetch(`${req.protocol}://${req.get('host')}/get-tasks-by-subject-matter?subjectMatterId=${profession.SubjectMatterId}`);
-          
-          if (tasksResponse.ok) {
-            const tasksData = await tasksResponse.json();
-            tasks = tasksData.tasks;
-            console.log('✅ Tasks data fetched:', {
-              receive: tasks.receive?.length || 0,
-              process: tasks.process?.length || 0,
-              final: tasks.final?.length || 0
-            });
-          } else {
-            console.log('⚠️ Failed to fetch tasks data');
+          // Fetch tasks data from tasks collection
+          try {
+            console.log(
+              "🔍 Fetching tasks data for SubjectMatterId:",
+              profession.SubjectMatterId
+            );
+            const tasksResponse = await fetch(
+              `${req.protocol}://${req.get(
+                "host"
+              )}/get-tasks-by-subject-matter?subjectMatterId=${
+                profession.SubjectMatterId
+              }`
+            );
+
+            if (tasksResponse.ok) {
+              const tasksData = await tasksResponse.json();
+              tasks = tasksData.tasks;
+              console.log("✅ Tasks data fetched:", {
+                receive: tasks.receive?.length || 0,
+                process: tasks.process?.length || 0,
+                final: tasks.final?.length || 0,
+              });
+            } else {
+              console.log("⚠️ Failed to fetch tasks data");
+              tasks = {
+                receive: [],
+                process: [],
+                final: [],
+              };
+            }
+          } catch (error) {
+            console.log("❌ Error fetching tasks data:", error);
             tasks = {
               receive: [],
               process: [],
-              final: []
+              final: [],
             };
           }
-        } catch (error) {
-          console.log('❌ Error fetching tasks data:', error);
-          tasks = {
-            receive: [],
-            process: [],
-            final: []
-          };
-        }
 
-        // Fetch task entries from project data
-        try {
-          console.log('🔍 Fetching task entries from project data...');
-          if (project && project.tasks && Array.isArray(project.tasks)) {
-            for (const task of project.tasks) {
-              if (task.taskEntries && Array.isArray(task.taskEntries) && task.taskEntries.length > 0) {
-                // Process each task entry and convert images to base64
-                const processedEntries = [];
-                for (const entry of task.taskEntries) {
-                  const processedEntry = { ...entry, task: task };
-                  
-                  // Process annotated PDFs
-                  if (entry.annotatedPdfs && Array.isArray(entry.annotatedPdfs)) {
-                    for (const pdf of entry.annotatedPdfs) {
-                      try {
-                        if (pdf.filename) {
-                          const imagePath = path.join(__dirname, 'uploads', pdf.filename);
-                          const imageBuffer = await fs.readFile(imagePath);
-                          pdf.base64Image = imageBuffer.toString('base64');
+          // Fetch task entries from project data
+          try {
+            console.log("🔍 Fetching task entries from project data...");
+            if (project && project.tasks && Array.isArray(project.tasks)) {
+              for (const task of project.tasks) {
+                if (
+                  task.taskEntries &&
+                  Array.isArray(task.taskEntries) &&
+                  task.taskEntries.length > 0
+                ) {
+                  // Process each task entry and convert images to base64
+                  const processedEntries = [];
+                  for (const entry of task.taskEntries) {
+                    const processedEntry = { ...entry, task: task };
+
+                    // Process annotated PDFs
+                    if (
+                      entry.annotatedPdfs &&
+                      Array.isArray(entry.annotatedPdfs)
+                    ) {
+                      for (const pdf of entry.annotatedPdfs) {
+                        try {
+                          if (pdf.filename) {
+                            const imagePath = path.join(
+                              __dirname,
+                              "uploads",
+                              pdf.filename
+                            );
+                            const imageBuffer = await fs.readFile(imagePath);
+                            pdf.base64Image = imageBuffer.toString("base64");
+                          }
+                        } catch (error) {
+                          console.log(
+                            "Error reading annotated PDF image:",
+                            error
+                          );
+                          pdf.base64Image = null;
                         }
-                      } catch (error) {
-                        console.log('Error reading annotated PDF image:', error);
-                        pdf.base64Image = null;
                       }
                     }
-                  }
-                  
-                  // Process pictures
-                  if (entry.pictures && Array.isArray(entry.pictures)) {
-                    for (const picture of entry.pictures) {
-                      try {
-                        if (picture.filename) {
-                          const imagePath = path.join(__dirname, 'uploads', picture.filename);
-                          const imageBuffer = await fs.readFile(imagePath);
-                          picture.base64Image = imageBuffer.toString('base64');
+
+                    // Process pictures
+                    if (entry.pictures && Array.isArray(entry.pictures)) {
+                      for (const picture of entry.pictures) {
+                        try {
+                          if (picture.filename) {
+                            const imagePath = path.join(
+                              __dirname,
+                              "uploads",
+                              picture.filename
+                            );
+                            const imageBuffer = await fs.readFile(imagePath);
+                            picture.base64Image =
+                              imageBuffer.toString("base64");
+                          }
+                        } catch (error) {
+                          console.log("Error reading picture:", error);
+                          picture.base64Image = null;
                         }
-                      } catch (error) {
-                        console.log('Error reading picture:', error);
-                        picture.base64Image = null;
                       }
                     }
-                  }
-                  
-                  // Process marked pictures
-                  if (entry.markPictures && Array.isArray(entry.markPictures)) {
-                    for (const markPicture of entry.markPictures) {
-                      try {
-                        if (markPicture.filename) {
-                          const imagePath = path.join(__dirname, 'uploads', markPicture.filename);
-                          const imageBuffer = await fs.readFile(imagePath);
-                          markPicture.base64Image = imageBuffer.toString('base64');
+
+                    // Process marked pictures
+                    if (
+                      entry.markPictures &&
+                      Array.isArray(entry.markPictures)
+                    ) {
+                      for (const markPicture of entry.markPictures) {
+                        try {
+                          if (markPicture.filename) {
+                            const imagePath = path.join(
+                              __dirname,
+                              "uploads",
+                              markPicture.filename
+                            );
+                            const imageBuffer = await fs.readFile(imagePath);
+                            markPicture.base64Image =
+                              imageBuffer.toString("base64");
+                          }
+                        } catch (error) {
+                          console.log("Error reading marked picture:", error);
+                          markPicture.base64Image = null;
                         }
-                      } catch (error) {
-                        console.log('Error reading marked picture:', error);
-                        markPicture.base64Image = null;
                       }
                     }
+
+                    // Debug logging for entry structure
+                    console.log("🔍 Processing task entry:", {
+                      entryId: entry._id,
+                      hasPictures: !!entry.pictures,
+                      picturesCount: entry.pictures?.length || 0,
+                      hasMarkPictures: !!entry.markPictures,
+                      markPicturesCount: entry.markPictures?.length || 0,
+                      hasAnnotatedPdfs: !!entry.annotatedPdfs,
+                      annotatedPdfsCount: entry.annotatedPdfs?.length || 0,
+                      picturesFields: entry.pictures
+                        ? Object.keys(entry.pictures[0] || {})
+                        : [],
+                      markPicturesFields: entry.markPictures
+                        ? Object.keys(entry.markPictures[0] || {})
+                        : [],
+                    });
+
+                    processedEntries.push(processedEntry);
                   }
 
-                  // Debug logging for entry structure
-                  console.log('🔍 Processing task entry:', {
-                    entryId: entry._id,
-                    hasPictures: !!entry.pictures,
-                    picturesCount: entry.pictures?.length || 0,
-                    hasMarkPictures: !!entry.markPictures,
-                    markPicturesCount: entry.markPictures?.length || 0,
-                    hasAnnotatedPdfs: !!entry.annotatedPdfs,
-                    annotatedPdfsCount: entry.annotatedPdfs?.length || 0,
-                    picturesFields: entry.pictures ? Object.keys(entry.pictures[0] || {}) : [],
-                    markPicturesFields: entry.markPictures ? Object.keys(entry.markPictures[0] || {}) : []
-                  });
-                  
-                  processedEntries.push(processedEntry);
-                }
-                
-                // Categorize by task type
-                const taskType = task.Type?.toLowerCase();
-                if (taskType === 'receive') {
-                  taskEntries.receive.push(...processedEntries);
-                } else if (taskType === 'process') {
-                  taskEntries.process.push(...processedEntries);
-                } else if (taskType === 'final') {
-                  taskEntries.final.push(...processedEntries);
+                  // Categorize by task type
+                  const taskType = task.Type?.toLowerCase();
+                  if (taskType === "receive") {
+                    taskEntries.receive.push(...processedEntries);
+                  } else if (taskType === "process") {
+                    taskEntries.process.push(...processedEntries);
+                  } else if (taskType === "final") {
+                    taskEntries.final.push(...processedEntries);
+                  }
                 }
               }
-            }
-            
-            console.log('✅ Task entries processed:', {
-              receive: taskEntries.receive.length,
-              process: taskEntries.process.length,
-              final: taskEntries.final.length
-            });
-          } else {
-            console.log('⚠️ No tasks or task entries found in project data');
-          }
-        } catch (error) {
-          console.log('❌ Error processing task entries:', error);
-        }
-        
-        // Process worker images to base64
-        for (let worker of workers) {
-          if (worker.picture) {
-            try {
-              const imagePath = path.join(__dirname, 'uploads', worker.picture);
-              const imageBuffer = await fs.readFile(imagePath);
-              worker.pictureBase64 = imageBuffer.toString('base64');
-            } catch (error) {
-              console.log('Error reading worker image:', error);
-              worker.pictureBase64 = null;
-            }
-          }
-        }
-      } else {
-        console.log('❌ Failed to fetch workers:', workersResponse.status);
-      }
-    } catch (error) {
-      console.log('Error fetching additional data:', error);
-      // Continue with empty objects if data fetching fails
-    }
 
-    // Read and compile all HTML templates
-    const reportTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'report-template.html');
-    const tocTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'toc-template.html');
-    const projectDetailsTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'project-details-template.html');
-    const advisorsInspectorsTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'advisors-inspectors-template.html');
-    const documentsInfoTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'documents-info-template.html');
-    const documentsDrawingsTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'documents-drawings-template.html');
-    const checklistTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'checklist-template.html');
-    const companyOrganizationTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'company-organization-template.html');
-    const employeeListTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'employee-list-template.html');
-    const preparingProductionTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'preparing-production-template.html');
-    const projectManagementSupervisionTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'project-management-supervision-template.html');
-    const controlWorkDescriptionTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'control-work-description-template.html');
-    const standardControlPlanTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'standard-control-plan-template.html');
-    const tenderControlPlanTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'tender-control-plan-template.html');
-    const taskEntriesTemplatePath = path.join(__dirname, 'templates', 'ks-report', 'task-entries-template.html');
-    
-    const [reportTemplateContent, tocTemplateContent, projectDetailsTemplateContent, advisorsInspectorsTemplateContent, documentsInfoTemplateContent, documentsDrawingsTemplateContent, checklistTemplateContent, companyOrganizationTemplateContent, employeeListTemplateContent, preparingProductionTemplateContent, projectManagementSupervisionTemplateContent, controlWorkDescriptionTemplateContent, standardControlPlanTemplateContent, tenderControlPlanTemplateContent, taskEntriesTemplateContent] = await Promise.all([
-      fs.readFile(reportTemplatePath, 'utf8'),
-      fs.readFile(tocTemplatePath, 'utf8'),
-      fs.readFile(projectDetailsTemplatePath, 'utf8'),
-      fs.readFile(advisorsInspectorsTemplatePath, 'utf8'),
-      fs.readFile(documentsInfoTemplatePath, 'utf8'),
-      fs.readFile(documentsDrawingsTemplatePath, 'utf8'),
-      fs.readFile(checklistTemplatePath, 'utf8'),
-      fs.readFile(companyOrganizationTemplatePath, 'utf8'),
-      fs.readFile(employeeListTemplatePath, 'utf8'),
-      fs.readFile(preparingProductionTemplatePath, 'utf8'),
-      fs.readFile(projectManagementSupervisionTemplatePath, 'utf8'),
-      fs.readFile(controlWorkDescriptionTemplatePath, 'utf8'),
-      fs.readFile(standardControlPlanTemplatePath, 'utf8'),
-      fs.readFile(tenderControlPlanTemplatePath, 'utf8'),
-      fs.readFile(taskEntriesTemplatePath, 'utf8')
-    ]);
-    
-    // Register date formatting helper
-    Handlebars.registerHelper('formatDate', function(dateString) {
-      if (!dateString) return '';
-      try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-GB', { 
-          day: '2-digit', 
-          month: 'short', 
-          year: 'numeric' 
+              console.log("✅ Task entries processed:", {
+                receive: taskEntries.receive.length,
+                process: taskEntries.process.length,
+                final: taskEntries.final.length,
+              });
+            } else {
+              console.log("⚠️ No tasks or task entries found in project data");
+            }
+          } catch (error) {
+            console.log("❌ Error processing task entries:", error);
+          }
+
+          // Process worker images to base64
+          for (let worker of workers) {
+            if (worker.picture) {
+              try {
+                const imagePath = path.join(
+                  __dirname,
+                  "uploads",
+                  worker.picture
+                );
+                const imageBuffer = await fs.readFile(imagePath);
+                worker.pictureBase64 = imageBuffer.toString("base64");
+              } catch (error) {
+                console.log("Error reading worker image:", error);
+                worker.pictureBase64 = null;
+              }
+            }
+          }
+        } else {
+          console.log("❌ Failed to fetch workers:", workersResponse.status);
+        }
+      } catch (error) {
+        console.log("Error fetching additional data:", error);
+        // Continue with empty objects if data fetching fails
+      }
+
+      // Read and compile all HTML templates
+      const reportTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "report-template.html"
+      );
+      const tocTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "toc-template.html"
+      );
+      const projectDetailsTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "project-details-template.html"
+      );
+      const advisorsInspectorsTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "advisors-inspectors-template.html"
+      );
+      const documentsInfoTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "documents-info-template.html"
+      );
+      const documentsDrawingsTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "documents-drawings-template.html"
+      );
+      const checklistTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "checklist-template.html"
+      );
+      const companyOrganizationTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "company-organization-template.html"
+      );
+      const employeeListTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "employee-list-template.html"
+      );
+      const preparingProductionTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "preparing-production-template.html"
+      );
+      const projectManagementSupervisionTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "project-management-supervision-template.html"
+      );
+      const controlWorkDescriptionTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "control-work-description-template.html"
+      );
+      const standardControlPlanTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "standard-control-plan-template.html"
+      );
+      const tenderControlPlanTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "tender-control-plan-template.html"
+      );
+      const taskEntriesTemplatePath = path.join(
+        __dirname,
+        "templates",
+        "ks-report",
+        "task-entries-template.html"
+      );
+
+      const [
+        reportTemplateContent,
+        tocTemplateContent,
+        projectDetailsTemplateContent,
+        advisorsInspectorsTemplateContent,
+        documentsInfoTemplateContent,
+        documentsDrawingsTemplateContent,
+        checklistTemplateContent,
+        companyOrganizationTemplateContent,
+        employeeListTemplateContent,
+        preparingProductionTemplateContent,
+        projectManagementSupervisionTemplateContent,
+        controlWorkDescriptionTemplateContent,
+        standardControlPlanTemplateContent,
+        tenderControlPlanTemplateContent,
+        taskEntriesTemplateContent,
+      ] = await Promise.all([
+        fs.readFile(reportTemplatePath, "utf8"),
+        fs.readFile(tocTemplatePath, "utf8"),
+        fs.readFile(projectDetailsTemplatePath, "utf8"),
+        fs.readFile(advisorsInspectorsTemplatePath, "utf8"),
+        fs.readFile(documentsInfoTemplatePath, "utf8"),
+        fs.readFile(documentsDrawingsTemplatePath, "utf8"),
+        fs.readFile(checklistTemplatePath, "utf8"),
+        fs.readFile(companyOrganizationTemplatePath, "utf8"),
+        fs.readFile(employeeListTemplatePath, "utf8"),
+        fs.readFile(preparingProductionTemplatePath, "utf8"),
+        fs.readFile(projectManagementSupervisionTemplatePath, "utf8"),
+        fs.readFile(controlWorkDescriptionTemplatePath, "utf8"),
+        fs.readFile(standardControlPlanTemplatePath, "utf8"),
+        fs.readFile(tenderControlPlanTemplatePath, "utf8"),
+        fs.readFile(taskEntriesTemplatePath, "utf8"),
+      ]);
+
+      // Register date formatting helper
+      Handlebars.registerHelper("formatDate", function (dateString) {
+        if (!dateString) return "";
+        try {
+          const date = new Date(dateString);
+          return date.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          });
+        } catch (e) {
+          return dateString;
+        }
+      });
+
+      // Register add helper for indexing
+      Handlebars.registerHelper("add", function (a, b) {
+        return a + b;
+      });
+
+      const reportTemplate = Handlebars.compile(reportTemplateContent);
+      const tocTemplate = Handlebars.compile(tocTemplateContent);
+      const projectDetailsTemplate = Handlebars.compile(
+        projectDetailsTemplateContent
+      );
+      const advisorsInspectorsTemplate = Handlebars.compile(
+        advisorsInspectorsTemplateContent
+      );
+      const documentsInfoTemplate = Handlebars.compile(
+        documentsInfoTemplateContent
+      );
+      const documentsDrawingsTemplate = Handlebars.compile(
+        documentsDrawingsTemplateContent
+      );
+      const checklistTemplate = Handlebars.compile(checklistTemplateContent);
+      const companyOrganizationTemplate = Handlebars.compile(
+        companyOrganizationTemplateContent
+      );
+      const employeeListTemplate = Handlebars.compile(
+        employeeListTemplateContent
+      );
+      const preparingProductionTemplate = Handlebars.compile(
+        preparingProductionTemplateContent
+      );
+      const projectManagementSupervisionTemplate = Handlebars.compile(
+        projectManagementSupervisionTemplateContent
+      );
+      const controlWorkDescriptionTemplate = Handlebars.compile(
+        controlWorkDescriptionTemplateContent
+      );
+      const standardControlPlanTemplate = Handlebars.compile(
+        standardControlPlanTemplateContent
+      );
+      const tenderControlPlanTemplate = Handlebars.compile(
+        tenderControlPlanTemplateContent
+      );
+      const taskEntriesTemplate = Handlebars.compile(
+        taskEntriesTemplateContent
+      );
+
+      // Debug: Check if template content is loaded
+      console.log(
+        "Preparing Production Template Content Length:",
+        preparingProductionTemplateContent.length
+      );
+
+      // Read and encode the Assurement logo
+      const logoPath = path.join(__dirname, "templates", "assurement-logo.png");
+      const logoBuffer = await fs.readFile(logoPath);
+      const assurmentLogo = logoBuffer.toString("base64");
+
+      // Prepare data for templates
+      const templateData = {
+        company,
+        project,
+        profession,
+        assurmentLogo,
+        mainContractor,
+        constructionManager,
+        safetyCoordinator,
+        certificationScheme,
+        advisorsByType,
+        inspectors,
+        drawings,
+        documents,
+        checks,
+        subcontractors,
+        projectManagers,
+        independentControllers,
+        workers,
+        taskEntries,
+        currentDate: new Date().toLocaleDateString(),
+      };
+
+      // Render all HTML pages
+      const reportHtml = reportTemplate(templateData);
+      const tocHtml = tocTemplate(templateData);
+      const projectDetailsHtml = projectDetailsTemplate(templateData);
+      const advisorsInspectorsHtml = advisorsInspectorsTemplate(templateData);
+      const documentsInfoHtml = documentsInfoTemplate(templateData);
+      const documentsDrawingsHtml = documentsDrawingsTemplate(templateData);
+      const checklistHtml = checklistTemplate(templateData);
+      const companyOrganizationHtml = companyOrganizationTemplate(templateData);
+      const employeeListHtml = employeeListTemplate(templateData);
+      const preparingProductionHtml = preparingProductionTemplate(templateData);
+
+      // Debug: Log the data being sent to the supervision template
+      console.log("🔍 Data for supervision template:", {
+        projectManagementSupervision: projectManagementSupervision,
+        documents: projectManagementSupervision.documents,
+      });
+
+      const projectManagementSupervisionHtml =
+        projectManagementSupervisionTemplate({
+          ...templateData,
+          documents: projectManagementSupervision.documents,
         });
-      } catch (e) {
-        return dateString;
-      }
-    });
 
-    // Register add helper for indexing
-    Handlebars.registerHelper('add', function(a, b) {
-      return a + b;
-    });
-    
-    const reportTemplate = Handlebars.compile(reportTemplateContent);
-    const tocTemplate = Handlebars.compile(tocTemplateContent);
-    const projectDetailsTemplate = Handlebars.compile(projectDetailsTemplateContent);
-    const advisorsInspectorsTemplate = Handlebars.compile(advisorsInspectorsTemplateContent);
-    const documentsInfoTemplate = Handlebars.compile(documentsInfoTemplateContent);
-    const documentsDrawingsTemplate = Handlebars.compile(documentsDrawingsTemplateContent);
-    const checklistTemplate = Handlebars.compile(checklistTemplateContent);
-    const companyOrganizationTemplate = Handlebars.compile(companyOrganizationTemplateContent);
-    const employeeListTemplate = Handlebars.compile(employeeListTemplateContent);
-    const preparingProductionTemplate = Handlebars.compile(preparingProductionTemplateContent);
-    const projectManagementSupervisionTemplate = Handlebars.compile(projectManagementSupervisionTemplateContent);
-    const controlWorkDescriptionTemplate = Handlebars.compile(controlWorkDescriptionTemplateContent);
-    const standardControlPlanTemplate = Handlebars.compile(standardControlPlanTemplateContent);
-    const tenderControlPlanTemplate = Handlebars.compile(tenderControlPlanTemplateContent);
-    const taskEntriesTemplate = Handlebars.compile(taskEntriesTemplateContent);
-    
-    // Debug: Check if template content is loaded
-    console.log('Preparing Production Template Content Length:', preparingProductionTemplateContent.length);
+      const controlWorkDescriptionHtml =
+        controlWorkDescriptionTemplate(templateData);
 
-    // Read and encode the Assurement logo
-    const logoPath = path.join(__dirname, 'templates', 'assurement-logo.png');
-    const logoBuffer = await fs.readFile(logoPath);
-    const assurmentLogo = logoBuffer.toString('base64');
+      const standardControlPlanHtml = standardControlPlanTemplate({
+        ...templateData,
+        tasks,
+      });
 
-    // Prepare data for templates
-    const templateData = {
-      company,
-      project,
-      profession,
-      assurmentLogo,
-      mainContractor,
-      constructionManager,
-      safetyCoordinator,
-      certificationScheme,
-      advisorsByType,
-      inspectors,
-      drawings,
-      documents,
-      checks,
-      subcontractors,
-      projectManagers,
-      independentControllers,
-      workers,
-      taskEntries,
-      currentDate: new Date().toLocaleDateString()
-    };
+      const tenderControlPlanHtml = tenderControlPlanTemplate(templateData);
 
-    // Render all HTML pages
-    const reportHtml = reportTemplate(templateData);
-    const tocHtml = tocTemplate(templateData);
-    const projectDetailsHtml = projectDetailsTemplate(templateData);
-    const advisorsInspectorsHtml = advisorsInspectorsTemplate(templateData);
-    const documentsInfoHtml = documentsInfoTemplate(templateData);
-    const documentsDrawingsHtml = documentsDrawingsTemplate(templateData);
-    const checklistHtml = checklistTemplate(templateData);
-    const companyOrganizationHtml = companyOrganizationTemplate(templateData);
-    const employeeListHtml = employeeListTemplate(templateData);
-    const preparingProductionHtml = preparingProductionTemplate(templateData);
-    
-    // Debug: Log the data being sent to the supervision template
-    console.log('🔍 Data for supervision template:', {
-      projectManagementSupervision: projectManagementSupervision,
-      documents: projectManagementSupervision.documents
-    });
-    
-    const projectManagementSupervisionHtml = projectManagementSupervisionTemplate({
-      ...templateData,
-      documents: projectManagementSupervision.documents
-    });
-    
-    const controlWorkDescriptionHtml = controlWorkDescriptionTemplate(templateData);
-    
-    const standardControlPlanHtml = standardControlPlanTemplate({
-      ...templateData,
-      tasks
-    });
-    
-    const tenderControlPlanHtml = tenderControlPlanTemplate(templateData);
-    
-    const taskEntriesHtml = taskEntriesTemplate({
-      ...templateData,
-      taskEntries
-    });
-    
-    // Debug: Check if HTML is generated
-    console.log('Preparing Production HTML Length:', preparingProductionHtml.length);
+      const taskEntriesHtml = taskEntriesTemplate({
+        ...templateData,
+        taskEntries,
+      });
 
-    // Generate PDF using Puppeteer with multiple pages
-    const browser = await puppeteer.launch({ 
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    const page = await browser.newPage();
-    
-    // Create combined HTML with page breaks
-    const combinedHtml = `
+      // Debug: Check if HTML is generated
+      console.log(
+        "Preparing Production HTML Length:",
+        preparingProductionHtml.length
+      );
+
+      // Generate PDF using Puppeteer with multiple pages
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+      const page = await browser.newPage();
+
+      // Create combined HTML with page breaks
+      const combinedHtml = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -13996,37 +15195,40 @@ app.get("/api/generate-pdf-report/:companyId/:projectId/:subjectMatterId", async
       </body>
       </html>
     `;
-    
-    await page.setContent(combinedHtml, { waitUntil: 'networkidle0' });
-    
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '20mm',
-        right: '20mm',
-        bottom: '20mm',
-        left: '20mm'
-      }
-    });
 
-    await browser.close();
+      await page.setContent(combinedHtml, { waitUntil: "networkidle0" });
 
-    // Set response headers for PDF download
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=quality-assurance-report-${projectId}.pdf`);
-    res.setHeader('Content-Length', pdf.length);
+      const pdf = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: {
+          top: "20mm",
+          right: "20mm",
+          bottom: "20mm",
+          left: "20mm",
+        },
+      });
 
-    res.send(pdf);
+      await browser.close();
 
-  } catch (error) {
-    console.error('PDF generation error:', error);
-    res.status(500).json({
-      error: "Failed to generate PDF report",
-      details: error.message
-    });
+      // Set response headers for PDF download
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=quality-assurance-report-${projectId}.pdf`
+      );
+      res.setHeader("Content-Length", pdf.length);
+
+      res.send(pdf);
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      res.status(500).json({
+        error: "Failed to generate PDF report",
+        details: error.message,
+      });
+    }
   }
-});
+);
 
 // Document upload and management endpoints
 app.post(
@@ -14048,25 +15250,26 @@ app.post(
       }
 
       // Create document entries for each uploaded file
-      const documentEntries = files.map(file => ({
+      const documentEntries = files.map((file) => ({
         originalName: file.originalname,
         storedName: file.filename,
         category: category,
-        description: description || '',
+        description: description || "",
         uploadedAt: new Date(),
         companyId: companyId,
-        projectId: projectsId
+        projectId: projectsId,
       }));
 
       // Insert documents into database
-      const result = await db.collection("documents").insertMany(documentEntries);
+      const result = await db
+        .collection("documents")
+        .insertMany(documentEntries);
 
       res.status(201).json({
         message: "Documents uploaded successfully",
         documentIds: Object.values(result.insertedIds),
-        count: files.length
+        count: files.length,
       });
-
     } catch (error) {
       console.error("Error uploading documents:", error);
       res.status(500).json({ error: "Failed to upload documents" });
@@ -14086,13 +15289,12 @@ app.get("/get-documents", async (req, res) => {
       .collection("documents")
       .find({
         companyId: companyId,
-        projectId: projectId
+        projectId: projectId,
       })
       .sort({ uploadedAt: -1 })
       .toArray();
 
     res.status(200).json(documents);
-
   } catch (error) {
     console.error("Error fetching documents:", error);
     res.status(500).json({ error: "Failed to fetch documents" });
@@ -14118,7 +15320,6 @@ app.get("/download-document/:documentId", async (req, res) => {
     }
 
     res.download(filePath, document.originalName);
-
   } catch (error) {
     console.error("Error downloading document:", error);
     res.status(500).json({ error: "Failed to download document" });
@@ -14144,10 +15345,11 @@ app.delete("/delete-document/:documentId", async (req, res) => {
     }
 
     // Delete from database
-    await db.collection("documents").deleteOne({ _id: new ObjectId(documentId) });
+    await db
+      .collection("documents")
+      .deleteOne({ _id: new ObjectId(documentId) });
 
     res.status(200).json({ message: "Document deleted successfully" });
-
   } catch (error) {
     console.error("Error deleting document:", error);
     res.status(500).json({ error: "Failed to delete document" });
@@ -14220,10 +15422,20 @@ The Assurement Team`,
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Verification email sent successfully to:", email, "Message ID:", info.messageId);
+    console.log(
+      "✅ Verification email sent successfully to:",
+      email,
+      "Message ID:",
+      info.messageId
+    );
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("❌ Failed to send verification email to:", email, "Error:", error.message);
+    console.error(
+      "❌ Failed to send verification email to:",
+      email,
+      "Error:",
+      error.message
+    );
     throw error;
   }
 }
@@ -14287,10 +15499,20 @@ The Assurement Team`,
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Forgot password email sent successfully to:", email, "Message ID:", info.messageId);
+    console.log(
+      "✅ Forgot password email sent successfully to:",
+      email,
+      "Message ID:",
+      info.messageId
+    );
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error("❌ Failed to send forgot password email to:", email, "Error:", error.message);
+    console.error(
+      "❌ Failed to send forgot password email to:",
+      email,
+      "Error:",
+      error.message
+    );
     throw error;
   }
 }
@@ -14299,28 +15521,28 @@ The Assurement Team`,
 app.post("/test-forgot-password-email", async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
     }
 
     const testCode = "123456";
     const testUsername = "Test User";
-    
+
     // Test the forgot password email function directly
     await sendForgotPasswordEmail(email, testUsername, testCode);
-    
+
     res.status(200).json({
       success: true,
       message: "Forgot password test email sent successfully",
       email: email,
-      testCode: testCode
+      testCode: testCode,
     });
   } catch (error) {
     console.error("❌ Test forgot password email error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to send test forgot password email",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14329,10 +15551,10 @@ app.post("/test-forgot-password-email", async (req, res) => {
 app.post("/test-email", async (req, res) => {
   try {
     const { to, subject, message } = req.body;
-    
+
     if (!to || !subject || !message) {
-      return res.status(400).json({ 
-        error: "Missing required fields: to, subject, message" 
+      return res.status(400).json({
+        error: "Missing required fields: to, subject, message",
       });
     }
 
@@ -14357,19 +15579,18 @@ app.post("/test-email", async (req, res) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    
-    res.status(200).json({ 
-      success: true, 
+
+    res.status(200).json({
+      success: true,
       message: "Email sent successfully!",
       messageId: info.messageId,
-      response: info.response
+      response: info.response,
     });
-
   } catch (error) {
     console.error("Test email error:", error);
-    res.status(500).json({ 
-      error: "Failed to send test email", 
-      details: error.message 
+    res.status(500).json({
+      error: "Failed to send test email",
+      details: error.message,
     });
   }
 });
@@ -14378,7 +15599,7 @@ app.post("/test-email", async (req, res) => {
 app.get("/test-email-devarsulan", async (req, res) => {
   try {
     console.log("🚀 Starting dedicated test email to devarsulan@gmail.com...");
-    
+
     const transporter = nodemailer.createTransport({
       host: "email-smtp.eu-north-1.amazonaws.com",
       port: 587,
@@ -14397,7 +15618,7 @@ app.get("/test-email-devarsulan", async (req, res) => {
       subject: "🧪 AWS SES Test Email - Automated Test",
       text: `This is an automated test email sent via AWS SES API at ${new Date().toISOString()}. 
       
-Server: ${process.env.NODE_ENV || 'development'}
+Server: ${process.env.NODE_ENV || "development"}
 Timestamp: ${new Date().toLocaleString()}
 Test ID: ${Date.now()}
 
@@ -14407,7 +15628,9 @@ If you receive this email, the AWS SES integration is working perfectly! 🎉`,
           <h2 style="color: #2c3e50; text-align: center;">🧪 AWS SES Test Email</h2>
           <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <p><strong>Status:</strong> <span style="color: #27ae60;">✅ Working Perfectly!</span></p>
-            <p><strong>Server:</strong> ${process.env.NODE_ENV || 'development'}</p>
+            <p><strong>Server:</strong> ${
+              process.env.NODE_ENV || "development"
+            }</p>
             <p><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
             <p><strong>Test ID:</strong> ${Date.now()}</p>
           </div>
@@ -14424,29 +15647,28 @@ If you receive this email, the AWS SES integration is working perfectly! 🎉`,
     console.log("📧 Sending email with options:", {
       to: mailOptions.to,
       subject: mailOptions.subject,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     const info = await transporter.sendMail(mailOptions);
-    
+
     console.log("✅ Email sent successfully! Message ID:", info.messageId);
-    
-    res.status(200).json({ 
-      success: true, 
+
+    res.status(200).json({
+      success: true,
       message: "Test email sent successfully to devarsulan@gmail.com!",
       messageId: info.messageId,
       response: info.response,
       timestamp: new Date().toISOString(),
       testId: Date.now(),
-      recipient: "devarsulan@gmail.com"
+      recipient: "devarsulan@gmail.com",
     });
-
   } catch (error) {
     console.error("❌ Test email error:", error);
-    res.status(500).json({ 
-      error: "Failed to send test email to devarsulan@gmail.com", 
+    res.status(500).json({
+      error: "Failed to send test email to devarsulan@gmail.com",
       details: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -14455,25 +15677,25 @@ If you receive this email, the AWS SES integration is working perfectly! 🎉`,
 app.post("/test-create-user", async (req, res) => {
   try {
     const { email, name, role } = req.body;
-    
+
     if (!email || !name || !role) {
-      return res.status(400).json({ 
-        error: "Email, name, and role are required" 
+      return res.status(400).json({
+        error: "Email, name, and role are required",
       });
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Invalid email format. Please provide a valid email address.",
-        field: "email"
+        field: "email",
       });
     }
 
     // Generate verification code
     const verificationCode = generateVerificationCode();
-    
+
     // Create test user document
     const userData = {
       username: email,
@@ -14484,7 +15706,7 @@ app.post("/test-create-user", async (req, res) => {
       verificationCode,
       isVerified: false,
       verificationSentAt: new Date(),
-      createdAt: new Date()
+      createdAt: new Date(),
     };
 
     // Insert user into database
@@ -14493,7 +15715,7 @@ app.post("/test-create-user", async (req, res) => {
     // Send verification email
     try {
       await sendVerificationEmail(email, name, verificationCode);
-      
+
       res.status(201).json({
         success: true,
         message: "Test user created successfully! Verification email sent.",
@@ -14501,27 +15723,27 @@ app.post("/test-create-user", async (req, res) => {
         verificationSent: true,
         email: email,
         verificationCode: verificationCode, // Only for testing - remove in production
-        note: "This is a test endpoint. In production, verification codes are not returned in the response."
+        note: "This is a test endpoint. In production, verification codes are not returned in the response.",
       });
     } catch (emailError) {
       console.error("❌ Email verification failed:", emailError);
-      
+
       res.status(201).json({
         success: true,
-        message: "Test user created successfully! However, verification email could not be sent.",
+        message:
+          "Test user created successfully! However, verification email could not be sent.",
         userId: result.insertedId,
         verificationSent: false,
         email: email,
         verificationCode: verificationCode, // Only for testing
-        warning: "Please contact support to resend verification email."
+        warning: "Please contact support to resend verification email.",
       });
     }
-
   } catch (error) {
     console.error("❌ Error creating test user:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to create test user",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14529,26 +15751,36 @@ app.post("/test-create-user", async (req, res) => {
 // Save selected EuroCodes for a project profession
 app.post("/save-project-profession-eurocodes", async (req, res) => {
   try {
-    const { companyId, projectId, professionId, subjectMatterId, eurocodes } = req.body;
-    
-    if (!companyId || !projectId || !professionId || !subjectMatterId || !eurocodes) {
-      return res.status(400).json({ 
-        error: "Missing required fields: companyId, projectId, professionId, subjectMatterId, eurocodes" 
+    const { companyId, projectId, professionId, subjectMatterId, eurocodes } =
+      req.body;
+
+    if (
+      !companyId ||
+      !projectId ||
+      !professionId ||
+      !subjectMatterId ||
+      !eurocodes
+    ) {
+      return res.status(400).json({
+        error:
+          "Missing required fields: companyId, projectId, professionId, subjectMatterId, eurocodes",
       });
     }
 
     if (!Array.isArray(eurocodes) || eurocodes.length === 0) {
-      return res.status(400).json({ 
-        error: "Eurocodes must be a non-empty array" 
+      return res.status(400).json({
+        error: "Eurocodes must be a non-empty array",
       });
     }
 
     // Check if entry already exists
-    const existingEntry = await db.collection("projectprofessioeurocode").findOne({
-      companyId,
-      projectId,
-      professionId
-    });
+    const existingEntry = await db
+      .collection("projectprofessioeurocode")
+      .findOne({
+        companyId,
+        projectId,
+        professionId,
+      });
 
     const eurocodeData = {
       companyId,
@@ -14557,28 +15789,33 @@ app.post("/save-project-profession-eurocodes", async (req, res) => {
       subjectMatterId,
       eurocodes,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     let result;
     if (existingEntry) {
       // Update existing entry
-      result = await db.collection("projectprofessioeurocode").updateOne(
-        { companyId, projectId, professionId },
-        { $set: { ...eurocodeData, updatedAt: new Date() } }
-      );
+      result = await db
+        .collection("projectprofessioeurocode")
+        .updateOne(
+          { companyId, projectId, professionId },
+          { $set: { ...eurocodeData, updatedAt: new Date() } }
+        );
     } else {
       // Create new entry
-      result = await db.collection("projectprofessioeurocode").insertOne(eurocodeData);
+      result = await db
+        .collection("projectprofessioeurocode")
+        .insertOne(eurocodeData);
     }
 
     res.status(200).json({
       success: true,
-      message: existingEntry ? "Eurocodes updated successfully" : "Eurocodes saved successfully",
+      message: existingEntry
+        ? "Eurocodes updated successfully"
+        : "Eurocodes saved successfully",
       data: eurocodeData,
-      result
+      result,
     });
-
   } catch (error) {
     console.error("Error saving project profession eurocodes:", error);
     res.status(500).json({ error: "Failed to save eurocodes" });
@@ -14589,28 +15826,28 @@ app.post("/save-project-profession-eurocodes", async (req, res) => {
 app.get("/get-project-eurocodes", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
-    
+
     if (!companyId || !projectId) {
-      return res.status(400).json({ 
-        error: "Missing required fields: companyId and projectId" 
+      return res.status(400).json({
+        error: "Missing required fields: companyId and projectId",
       });
     }
 
-    const eurocodes = await db.collection("projectprofessioeurocode")
+    const eurocodes = await db
+      .collection("projectprofessioeurocode")
       .find({ companyId, projectId })
       .toArray();
 
     res.status(200).json({
       success: true,
       data: eurocodes,
-      count: eurocodes.length
+      count: eurocodes.length,
     });
-
   } catch (error) {
     console.error("Error fetching project eurocodes:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch project eurocodes",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14619,51 +15856,55 @@ app.get("/get-project-eurocodes", async (req, res) => {
 app.get("/get-eurocodes/:subjectMatterId", async (req, res) => {
   try {
     const { subjectMatterId } = req.params;
-    
+
     if (!subjectMatterId) {
-      return res.status(400).json({ 
-        error: "SubjectMatterId is required" 
+      return res.status(400).json({
+        error: "SubjectMatterId is required",
       });
     }
 
     // First try to find in inputs collection (global professions)
     let profession = await db.collection("inputs").findOne({
-      SubjectMatterId: subjectMatterId
+      SubjectMatterId: subjectMatterId,
     });
 
     // If not found in inputs, try company-specific professions
     if (!profession) {
       profession = await db.collection("professions").findOne({
-        SubjectMatterId: subjectMatterId
+        SubjectMatterId: subjectMatterId,
       });
     }
 
     if (!profession) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: "Profession not found for the given SubjectMatterId",
-        subjectMatterId: subjectMatterId
+        subjectMatterId: subjectMatterId,
       });
     }
 
     // Extract Eurocodes exactly as stored - NO FORMATTING
-    const eurocodes = profession.EuroCode || profession.Eurocode || profession.euroCode || profession.eurocode || [];
-    
+    const eurocodes =
+      profession.EuroCode ||
+      profession.Eurocode ||
+      profession.euroCode ||
+      profession.eurocode ||
+      [];
+
     // Return EuroCodes exactly as they are stored in the database (no transformation)
-    const rawEurocodes = eurocodes.map(code => String(code).trim());
+    const rawEurocodes = eurocodes.map((code) => String(code).trim());
 
     res.status(200).json({
       success: true,
       subjectMatterId: subjectMatterId,
       groupName: profession.GroupName || null,
       eurocodes: rawEurocodes,
-      count: rawEurocodes.length
+      count: rawEurocodes.length,
     });
-
   } catch (error) {
     console.error("Error fetching eurocodes:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch eurocodes",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14672,59 +15913,59 @@ app.get("/get-eurocodes/:subjectMatterId", async (req, res) => {
 app.post("/verify-email", async (req, res) => {
   try {
     const { email, verificationCode } = req.body;
-    
+
     if (!email || !verificationCode) {
-      return res.status(400).json({ 
-        error: "Email and verification code are required" 
+      return res.status(400).json({
+        error: "Email and verification code are required",
       });
     }
 
     // Find user by email and verification code
     const user = await db.collection("users").findOne({
       username: email,
-      verificationCode: verificationCode
+      verificationCode: verificationCode,
     });
 
     if (!user) {
-      return res.status(400).json({ 
-        error: "Invalid verification code or email not found" 
+      return res.status(400).json({
+        error: "Invalid verification code or email not found",
       });
     }
 
     // Check if code is expired (24 hours)
     const codeAge = Date.now() - new Date(user.verificationSentAt).getTime();
     const codeExpiry = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-    
+
     if (codeAge > codeExpiry) {
-      return res.status(400).json({ 
-        error: "Verification code has expired. Please request a new one." 
+      return res.status(400).json({
+        error: "Verification code has expired. Please request a new one.",
       });
     }
 
     // Update user as verified
     await db.collection("users").updateOne(
       { _id: user._id },
-      { 
-        $set: { 
+      {
+        $set: {
           isVerified: true,
-          verifiedAt: new Date()
+          verifiedAt: new Date(),
         },
-        $unset: { verificationCode: "" }
+        $unset: { verificationCode: "" },
       }
     );
 
     res.status(200).json({
       success: true,
-      message: "Email verified successfully! You can now log in to your account.",
+      message:
+        "Email verified successfully! You can now log in to your account.",
       userId: user._id,
-      email: user.username
+      email: user.username,
     });
-
   } catch (error) {
     console.error("❌ Email verification error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to verify email",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14733,66 +15974,69 @@ app.post("/verify-email", async (req, res) => {
 app.post("/resend-verification", async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
-      return res.status(400).json({ 
-        error: "Email is required" 
+      return res.status(400).json({
+        error: "Email is required",
       });
     }
 
     // Find user by email
     const user = await db.collection("users").findOne({
-      username: email
+      username: email,
     });
 
     if (!user) {
-      return res.status(404).json({ 
-        error: "User not found with this email address" 
+      return res.status(404).json({
+        error: "User not found with this email address",
       });
     }
 
     if (user.isVerified) {
-      return res.status(400).json({ 
-        error: "User is already verified" 
+      return res.status(400).json({
+        error: "User is already verified",
       });
     }
 
     // Generate new verification code
     const newVerificationCode = generateVerificationCode();
-    
+
     // Update user with new verification code
     await db.collection("users").updateOne(
       { _id: user._id },
-      { 
-        $set: { 
+      {
+        $set: {
           verificationCode: newVerificationCode,
-          verificationSentAt: new Date()
-        }
+          verificationSentAt: new Date(),
+        },
       }
     );
 
     // Send new verification email
     try {
-      await sendVerificationEmail(email, user.name || user.username, newVerificationCode);
-      
+      await sendVerificationEmail(
+        email,
+        user.name || user.username,
+        newVerificationCode
+      );
+
       res.status(200).json({
         success: true,
         message: "New verification email sent successfully!",
-        email: email
+        email: email,
       });
     } catch (emailError) {
       console.error("❌ Failed to send new verification email:", emailError);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to send verification email",
-        details: emailError.message 
+        details: emailError.message,
       });
     }
-
   } catch (error) {
     console.error("❌ Resend verification error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to resend verification",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14801,38 +16045,41 @@ app.post("/resend-verification", async (req, res) => {
 app.post("/check-user-verification-status", async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     if (!email) {
-      return res.status(400).json({ 
-        error: "Email is required" 
+      return res.status(400).json({
+        error: "Email is required",
       });
     }
 
     console.log(`🔍 Checking verification status for email: ${email}`);
 
     // Find all users with this email (username)
-    const users = await db.collection("users").find({
-      username: email
-    }).toArray();
+    const users = await db
+      .collection("users")
+      .find({
+        username: email,
+      })
+      .toArray();
 
     if (users.length === 0) {
       console.log(`❌ No users found with email: ${email}`);
       return res.status(200).json({
         status: "userNotFound",
-        message: "No user found with this email address"
+        message: "No user found with this email address",
       });
     }
 
     // Check if any user document has isVerified: true
-    const hasVerifiedUser = users.some(user => user.isVerified === true);
-    
+    const hasVerifiedUser = users.some((user) => user.isVerified === true);
+
     if (hasVerifiedUser) {
       console.log(`✅ User with email ${email} is already verified`);
       return res.status(200).json({
         status: "verified",
         message: "User is already verified and can login",
         hasVerifiedUser: true,
-        verificationRequired: false
+        verificationRequired: false,
       });
     } else {
       console.log(`⚠️ User with email ${email} needs verification`);
@@ -14840,15 +16087,14 @@ app.post("/check-user-verification-status", async (req, res) => {
         status: "unverified",
         message: "User needs to verify email before login",
         hasVerifiedUser: false,
-        verificationRequired: true
+        verificationRequired: true,
       });
     }
-
   } catch (error) {
     console.error("❌ Check verification status error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to check verification status",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14857,16 +16103,16 @@ app.post("/check-user-verification-status", async (req, res) => {
 app.post("/set-password-after-verification", async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
-      return res.status(400).json({ 
-        error: "Email and password are required" 
+      return res.status(400).json({
+        error: "Email and password are required",
       });
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ 
-        error: "Password must be at least 6 characters long" 
+      return res.status(400).json({
+        error: "Password must be at least 6 characters long",
       });
     }
 
@@ -14875,35 +16121,36 @@ app.post("/set-password-after-verification", async (req, res) => {
     // Find all users with this email (username) and update their passwords
     const result = await db.collection("users").updateMany(
       { username: email },
-      { 
-        $set: { 
+      {
+        $set: {
           password: password,
-          passwordSetAt: new Date()
-        }
+          passwordSetAt: new Date(),
+        },
       }
     );
 
     if (result.matchedCount === 0) {
       console.log(`❌ No users found with email: ${email}`);
       return res.status(404).json({
-        error: "No user found with this email address"
+        error: "No user found with this email address",
       });
     }
 
-    console.log(`✅ Password updated for ${result.modifiedCount} user documents with email: ${email}`);
+    console.log(
+      `✅ Password updated for ${result.modifiedCount} user documents with email: ${email}`
+    );
 
     res.status(200).json({
       success: true,
       message: "Password set successfully! You can now login.",
       email: email,
-      usersUpdated: result.modifiedCount
+      usersUpdated: result.modifiedCount,
     });
-
   } catch (error) {
     console.error("❌ Set password error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to set password",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14912,85 +16159,101 @@ app.post("/set-password-after-verification", async (req, res) => {
 app.post("/forgot-password-request", async (req, res) => {
   try {
     const { email, platform } = req.body; // platform: 'flutter' or 'react'
-    
+
     if (!email) {
-      return res.status(400).json({ 
-        error: "Email is required" 
+      return res.status(400).json({
+        error: "Email is required",
       });
     }
 
-    console.log(`🔍 Forgot password request for email: ${email} (platform: ${platform})`);
+    console.log(
+      `🔍 Forgot password request for email: ${email} (platform: ${platform})`
+    );
 
     // Define allowed roles based on platform
-    const allowedRoles = platform === 'react' 
-      ? ['Admin'] // React dashboard only for Admin
-      : ['Worker', 'Sub Contractor', 'Independent Controller', 'Admin']; // Flutter for all roles
+    const allowedRoles =
+      platform === "react"
+        ? ["Admin"] // React dashboard only for Admin
+        : ["Worker", "Sub Contractor", "Independent Controller", "Admin"]; // Flutter for all roles
 
     // Find users with this email and allowed roles
-    const users = await db.collection("users").find({
-      username: email,
-      role: { $in: allowedRoles }
-    }).toArray();
+    const users = await db
+      .collection("users")
+      .find({
+        username: email,
+        role: { $in: allowedRoles },
+      })
+      .toArray();
 
     if (users.length === 0) {
-      console.log(`❌ No users found with email: ${email} and allowed roles: ${allowedRoles.join(', ')}`);
+      console.log(
+        `❌ No users found with email: ${email} and allowed roles: ${allowedRoles.join(
+          ", "
+        )}`
+      );
       return res.status(404).json({
-        error: "No user found with this email address for the selected platform"
+        error:
+          "No user found with this email address for the selected platform",
       });
     }
 
     // Check if any user document has isVerified: true
-    const hasVerifiedUser = users.some(user => user.isVerified === true);
-    
+    const hasVerifiedUser = users.some((user) => user.isVerified === true);
+
     if (!hasVerifiedUser) {
       console.log(`❌ No verified users found with email: ${email}`);
       return res.status(400).json({
-        error: "Please verify your email address before resetting password"
+        error: "Please verify your email address before resetting password",
       });
     }
 
     // Generate forgot password code
     const forgotPasswordCode = generateVerificationCode();
-    
+
     // Update all matching users with forgot password code
     const result = await db.collection("users").updateMany(
-      { 
+      {
         username: email,
-        role: { $in: allowedRoles }
+        role: { $in: allowedRoles },
       },
-      { 
-        $set: { 
+      {
+        $set: {
           forgotPasswordCode: forgotPasswordCode,
-          forgotPasswordSentAt: new Date()
-        }
+          forgotPasswordSentAt: new Date(),
+        },
       }
     );
 
     // Send forgot password email
     try {
-      await sendForgotPasswordEmail(email, users[0].name || users[0].username, forgotPasswordCode);
-      
-      console.log(`✅ Forgot password code sent to ${email} for ${result.modifiedCount} users`);
-      
+      await sendForgotPasswordEmail(
+        email,
+        users[0].name || users[0].username,
+        forgotPasswordCode
+      );
+
+      console.log(
+        `✅ Forgot password code sent to ${email} for ${result.modifiedCount} users`
+      );
+
       res.status(200).json({
         success: true,
         message: "Forgot password code sent to your email address",
         email: email,
-        usersUpdated: result.modifiedCount
+        usersUpdated: result.modifiedCount,
       });
     } catch (emailError) {
       console.error("❌ Failed to send forgot password email:", emailError);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to send forgot password email",
-        details: emailError.message 
+        details: emailError.message,
       });
     }
-
   } catch (error) {
     console.error("❌ Forgot password request error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to process forgot password request",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -14999,32 +16262,33 @@ app.post("/forgot-password-request", async (req, res) => {
 app.post("/verify-forgot-password-code", async (req, res) => {
   try {
     const { email, code, platform } = req.body;
-    
+
     if (!email || !code) {
-      return res.status(400).json({ 
-        error: "Email and code are required" 
+      return res.status(400).json({
+        error: "Email and code are required",
       });
     }
 
     console.log(`🔍 Verifying forgot password code for email: ${email}`);
 
     // Define allowed roles based on platform
-    const allowedRoles = platform === 'react' 
-      ? ['Admin'] // React dashboard only for Admin
-      : ['Worker', 'Sub Contractor', 'Independent Controller', 'Admin']; // Flutter for all roles
+    const allowedRoles =
+      platform === "react"
+        ? ["Admin"] // React dashboard only for Admin
+        : ["Worker", "Sub Contractor", "Independent Controller", "Admin"]; // Flutter for all roles
 
     // Find user with this email, code, and allowed role
     const user = await db.collection("users").findOne({
       username: email,
       forgotPasswordCode: code,
       role: { $in: allowedRoles },
-      isVerified: true
+      isVerified: true,
     });
 
     if (!user) {
       console.log(`❌ Invalid forgot password code for email: ${email}`);
       return res.status(400).json({
-        error: "Invalid or expired forgot password code"
+        error: "Invalid or expired forgot password code",
       });
     }
 
@@ -15035,7 +16299,7 @@ app.post("/verify-forgot-password-code", async (req, res) => {
     if (codeAge > maxAge) {
       console.log(`❌ Expired forgot password code for email: ${email}`);
       return res.status(400).json({
-        error: "Forgot password code has expired. Please request a new one."
+        error: "Forgot password code has expired. Please request a new one.",
       });
     }
 
@@ -15044,14 +16308,13 @@ app.post("/verify-forgot-password-code", async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Code verified successfully. You can now reset your password.",
-      email: email
+      email: email,
     });
-
   } catch (error) {
     console.error("❌ Verify forgot password code error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to verify forgot password code",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -15060,65 +16323,73 @@ app.post("/verify-forgot-password-code", async (req, res) => {
 app.post("/reset-password", async (req, res) => {
   try {
     const { email, newPassword, platform } = req.body;
-    
+
     if (!email || !newPassword) {
-      return res.status(400).json({ 
-        error: "Email and new password are required" 
+      return res.status(400).json({
+        error: "Email and new password are required",
       });
     }
 
     if (newPassword.length < 6) {
-      return res.status(400).json({ 
-        error: "Password must be at least 6 characters long" 
+      return res.status(400).json({
+        error: "Password must be at least 6 characters long",
       });
     }
 
     console.log(`🔐 Resetting password for email: ${email}`);
 
     // Define allowed roles based on platform
-    const allowedRoles = platform === 'react' 
-      ? ['Admin'] // React dashboard only for Admin
-      : ['Worker', 'Sub Contractor', 'Independent Controller', 'Admin']; // Flutter for all roles
+    const allowedRoles =
+      platform === "react"
+        ? ["Admin"] // React dashboard only for Admin
+        : ["Worker", "Sub Contractor", "Independent Controller", "Admin"]; // Flutter for all roles
 
     // Find all users with this email and allowed roles, and update their passwords
     const result = await db.collection("users").updateMany(
-      { 
+      {
         username: email,
-        role: { $in: allowedRoles }
+        role: { $in: allowedRoles },
       },
-      { 
-        $set: { 
+      {
+        $set: {
           password: newPassword,
-          passwordResetAt: new Date()
+          passwordResetAt: new Date(),
         },
-        $unset: { 
+        $unset: {
           forgotPasswordCode: "",
-          forgotPasswordSentAt: ""
-        }
+          forgotPasswordSentAt: "",
+        },
       }
     );
 
     if (result.matchedCount === 0) {
-      console.log(`❌ No users found with email: ${email} and allowed roles: ${allowedRoles.join(', ')}`);
+      console.log(
+        `❌ No users found with email: ${email} and allowed roles: ${allowedRoles.join(
+          ", "
+        )}`
+      );
       return res.status(404).json({
-        error: "No user found with this email address for the selected platform"
+        error:
+          "No user found with this email address for the selected platform",
       });
     }
 
-    console.log(`✅ Password reset for ${result.modifiedCount} user documents with email: ${email}`);
+    console.log(
+      `✅ Password reset for ${result.modifiedCount} user documents with email: ${email}`
+    );
 
     res.status(200).json({
       success: true,
-      message: "Password reset successfully! You can now login with your new password.",
+      message:
+        "Password reset successfully! You can now login with your new password.",
       email: email,
-      usersUpdated: result.modifiedCount
+      usersUpdated: result.modifiedCount,
     });
-
   } catch (error) {
     console.error("❌ Reset password error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to reset password",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -15129,9 +16400,9 @@ app.get("/debug-signatures", async (req, res) => {
     const { projectId, companyId, professionSubjectMatterId } = req.query;
 
     if (!projectId || !companyId || !professionSubjectMatterId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required query parameters" 
+      return res.status(400).json({
+        success: false,
+        message: "Missing required query parameters",
       });
     }
 
@@ -15139,32 +16410,31 @@ app.get("/debug-signatures", async (req, res) => {
     const query = {
       companyId: companyId,
       projectsId: { $in: [projectId] },
-      professionSubjectMatterId: professionSubjectMatterId
+      professionSubjectMatterId: professionSubjectMatterId,
     };
 
-    console.log('DEBUG: Debug endpoint query:', JSON.stringify(query, null, 2));
-    
+    console.log("DEBUG: Debug endpoint query:", JSON.stringify(query, null, 2));
+
     // Test simple query first
     const allSignatures = await db.collection("signatures").find({}).toArray();
-    console.log('DEBUG: Total signatures in database:', allSignatures.length);
-    
-    const signatures = await db.collection("signatures").find(query).toArray();
-    
-    console.log('DEBUG: Debug endpoint found signatures:', signatures.length);
+    console.log("DEBUG: Total signatures in database:", allSignatures.length);
 
-    res.status(200).json({ 
-      success: true, 
+    const signatures = await db.collection("signatures").find(query).toArray();
+
+    console.log("DEBUG: Debug endpoint found signatures:", signatures.length);
+
+    res.status(200).json({
+      success: true,
       query: query,
       signatures: signatures,
-      count: signatures.length 
+      count: signatures.length,
     });
-
   } catch (error) {
     console.error("Error in debug endpoint:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Internal server error",
-      error: error.message 
+      error: error.message,
     });
   }
 });
@@ -15175,56 +16445,57 @@ app.get("/get-deviations", async (req, res) => {
     const { projectId, companyId, professionSubjectMatterId } = req.query;
 
     if (!projectId || !companyId || !professionSubjectMatterId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required query parameters: projectId, companyId, professionSubjectMatterId" 
+      return res.status(400).json({
+        success: false,
+        message:
+          "Missing required query parameters: projectId, companyId, professionSubjectMatterId",
       });
     }
 
-    console.log('=== GETTING DEVIATIONS ===');
-    console.log('Company ID:', companyId);
-    console.log('Project ID:', projectId);
-    console.log('Profession Subject Matter ID:', professionSubjectMatterId);
+    console.log("=== GETTING DEVIATIONS ===");
+    console.log("Company ID:", companyId);
+    console.log("Project ID:", projectId);
+    console.log("Profession Subject Matter ID:", professionSubjectMatterId);
 
     // Query to find deviations matching your criteria
     const query = {
       companyId: companyId,
-      "projectsId.0": projectId,  // First index of projectsId array
+      "projectsId.0": projectId, // First index of projectsId array
       "profession.SubjectMatterId": professionSubjectMatterId,
-      type: "static report"
+      type: "static report",
     };
 
-    console.log('DEBUG: Deviations query:', JSON.stringify(query, null, 2));
+    console.log("DEBUG: Deviations query:", JSON.stringify(query, null, 2));
 
-    const deviations = await db.collection("deviations")
+    const deviations = await db
+      .collection("deviations")
       .find(query)
       .sort({ submittedDate: -1 }) // Sort by newest first
       .toArray();
 
-    console.log('DEBUG: Found deviations:', deviations.length);
+    console.log("DEBUG: Found deviations:", deviations.length);
 
     // Format deviations for the table
-    const formattedDeviations = deviations.map(deviation => ({
+    const formattedDeviations = deviations.map((deviation) => ({
       id: deviation._id.toString().substring(0, 8), // Short ID
-      description: deviation.comment || 'No description',
+      description: deviation.comment || "No description",
       fullId: deviation._id.toString(),
-      submittedDate: deviation.submittedDate
+      submittedDate: deviation.submittedDate,
     }));
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       query: query,
       deviations: formattedDeviations,
       count: deviations.length,
-      rawDeviations: deviations // Include raw data for debugging
+      rawDeviations: deviations, // Include raw data for debugging
     });
-
   } catch (error) {
     console.error("Error fetching deviations:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Internal server error",
-      error: error.message 
+      error: error.message,
     });
   }
 });
@@ -15234,35 +16505,36 @@ app.get("/get-project-main-drawings", async (req, res) => {
   try {
     const { projectId, companyId } = req.query;
 
-    console.log('=== GET PROJECT MAIN DRAWINGS API CALLED ===');
-    console.log('Query parameters:', { projectId, companyId });
+    console.log("=== GET PROJECT MAIN DRAWINGS API CALLED ===");
+    console.log("Query parameters:", { projectId, companyId });
 
     if (!projectId || !companyId) {
       return res.status(400).json({
         success: false,
-        message: "Missing required query parameters: projectId, companyId"
+        message: "Missing required query parameters: projectId, companyId",
       });
     }
 
     // Build query object to find drawings associated with the project
     const query = {
       companyId: companyId,
-      projectsId: projectId
+      projectsId: projectId,
     };
 
-    console.log('MongoDB query:', JSON.stringify(query, null, 2));
+    console.log("MongoDB query:", JSON.stringify(query, null, 2));
 
     // Fetch drawings from database
-    const drawings = await db.collection("drawings")
+    const drawings = await db
+      .collection("drawings")
       .find(query)
       .sort({ createdAt: -1 })
       .toArray();
 
-    console.log('Found drawings:', drawings.length);
+    console.log("Found drawings:", drawings.length);
 
     // Format the response to extract main drawings
     const mainDrawings = [];
-    drawings.forEach(drawing => {
+    drawings.forEach((drawing) => {
       if (drawing.mainDrawings && Array.isArray(drawing.mainDrawings)) {
         drawing.mainDrawings.forEach((mainDrawing, index) => {
           mainDrawings.push({
@@ -15272,28 +16544,27 @@ app.get("/get-project-main-drawings", async (req, res) => {
             original: mainDrawing.original,
             uploadedAt: mainDrawing.uploadedAt,
             drawingName: drawing.drawingName || `Drawing ${index + 1}`,
-            createdAt: drawing.createdAt
+            createdAt: drawing.createdAt,
           });
         });
       }
     });
 
-    console.log('Extracted main drawings:', mainDrawings.length);
+    console.log("Extracted main drawings:", mainDrawings.length);
 
     res.status(200).json({
       success: true,
       query: query,
       mainDrawings: mainDrawings,
       count: mainDrawings.length,
-      rawDrawings: drawings
+      rawDrawings: drawings,
     });
-
   } catch (error) {
-    console.error('Error fetching project main drawings:', error);
+    console.error("Error fetching project main drawings:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch project main drawings",
-      error: error.message
+      error: error.message,
     });
   }
 });
