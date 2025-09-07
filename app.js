@@ -15,6 +15,6 @@ app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 app.use("/uploads/previews", express.static("uploads/previews"));
 app.use("/templates", express.static("static-report-templates"));
-// app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public")));
 
 module.exports = app;
