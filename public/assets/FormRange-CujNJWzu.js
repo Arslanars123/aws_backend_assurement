@@ -1,1 +1,0 @@
-import{r as o,g as n,j as p,h as c}from"./index-DPgj8bsv.js";import{F as x}from"./FormContext-D3odgfWO.js";const f=o.forwardRef(({bsPrefix:r,className:a,id:s,...t},e)=>{const{controlId:m}=o.useContext(x);return r=n(r,"form-range"),p.jsx("input",{...t,type:"range",ref:e,className:c(a,r),id:s||m})});f.displayName="FormRange";export{f as F};

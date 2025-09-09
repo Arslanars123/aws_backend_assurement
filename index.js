@@ -65,7 +65,19 @@ app.get("/get-project-managers", async (req, res) => {
       .find({ ...query, isProjectManager: "yes" })
       .toArray();
 
-    res.status(200).json(projectManagers);
+    // Deduplicate users based on email address (username field contains email)
+    const uniqueUsers = [];
+    const seenEmails = new Set();
+
+    for (const user of projectManagers) {
+      const email = user.username || user.email || user._id;
+      if (!seenEmails.has(email)) {
+        seenEmails.add(email);
+        uniqueUsers.push(user);
+      }
+    }
+
+    res.status(200).json(uniqueUsers);
   } catch (error) {
     console.error("Error fetching project managers:", error);
     res.status(500).json({ error: "Failed to fetch project managers" });
@@ -1052,7 +1064,19 @@ app.get("/get-project-managers", async (req, res) => {
 
     const users = await db.collection("users").find(query).toArray();
 
-    res.status(200).json(users);
+    // Deduplicate users based on email address (username field contains email)
+    const uniqueUsers = [];
+    const seenEmails = new Set();
+
+    for (const user of users) {
+      const email = user.username || user.email || user._id;
+      if (!seenEmails.has(email)) {
+        seenEmails.add(email);
+        uniqueUsers.push(user);
+      }
+    }
+
+    res.status(200).json(uniqueUsers);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch Project Managers" });
   }
@@ -1075,6 +1099,142 @@ app.get("/get-users", async (req, res) => {
     res.status(200).json(users);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// Check if user exists by username/email and return user details
+app.get("/check-user-exists", async (req, res) => {
+  try {
+    const { username } = req.query;
+
+    if (!username) {
+      return res.status(400).json({
+        error: "Username/email is required",
+      });
+    }
+
+    // Find user by username (which contains email) only
+    const user = await db.collection("users").findOne({
+      username: username
+    });
+
+    if (user) {
+      // Return user details for auto-fill
+      res.status(200).json({
+        exists: true,
+        user: {
+          name: user.name || '',
+          phone: user.phone || '',
+          address: user.address || '',
+          city: user.city || '',
+          postalCode: user.postalCode || '',
+          startDate: user.startDate || '',
+          role: user.role || '',
+          cvr: user.cvr || '',
+          contactPerson: user.contactPerson || '',
+          contactPhone: user.contactPhone || '',
+          type: user.type || '',
+          safetyCertification: user.safetyCertification || '',
+          mainId: user.mainId || '',
+          isProjectManager: user.isProjectManager || '',
+          userProfession: user.userProfession || [],
+          picture: user.picture || ''
+        }
+      });
+    } else {
+      res.status(200).json({
+        exists: false,
+        user: null
+      });
+    }
+  } catch (error) {
+    console.error("Error checking user existence:", error);
+    res.status(500).json({ 
+      error: "Failed to check user existence",
+      details: error.message 
+    });
+  }
+});
+
+// Update existing user data across all documents
+app.post("/update-existing-user", async (req, res) => {
+  try {
+    const { username, updatedData } = req.body;
+
+    if (!username || !updatedData) {
+      return res.status(400).json({
+        error: "Username and updatedData are required",
+      });
+    }
+
+    let totalDocumentsUpdated = 0;
+
+    // Update user in users collection (by email only, no companyId)
+    const userUpdateResult = await db.collection("users").updateMany(
+      { username: username },
+      { $set: updatedData }
+    );
+    totalDocumentsUpdated += userUpdateResult.modifiedCount;
+
+    // Update user data in all other collections that might contain user information
+    const collectionsToUpdate = [
+      "address notes",
+      "agreements", 
+      "safety mentions",
+      "technical requests",
+      "deviations",
+      "supervision intern",
+      "static control plan",
+      "special control",
+      "name signature",
+      "quality assurance signature",
+      "static report signatures",
+      "signatures"
+    ];
+
+    for (const collectionName of collectionsToUpdate) {
+      try {
+        // Update documents where user is referenced by username/email
+        const updateResult = await db.collection(collectionName).updateMany(
+          { 
+            $or: [
+              { username: username },
+              { "user.username": username },
+              { "user.email": username },
+              { "projectManager.username": username },
+              { "projectManager.email": username },
+              { "inspector.username": username },
+              { "inspector.email": username },
+              { "advisor.username": username },
+              { "advisor.email": username }
+            ]
+          },
+          { 
+            $set: {
+              ...updatedData,
+              updatedAt: new Date().toISOString()
+            }
+          }
+        );
+        totalDocumentsUpdated += updateResult.modifiedCount;
+      } catch (collectionError) {
+        console.error(`Error updating collection ${collectionName}:`, collectionError);
+        // Continue with other collections even if one fails
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      totalDocumentsUpdated: totalDocumentsUpdated,
+      message: `User information updated successfully across ${totalDocumentsUpdated} documents`
+    });
+
+  } catch (error) {
+    console.error("Error updating existing user:", error);
+    res.status(500).json({ 
+      error: "Failed to update existing user",
+      details: error.message 
+    });
   }
 });
 
@@ -4897,15 +5057,65 @@ app.post(
       }
       if (type) updateData.type = type;
 
-      const result = await db
-        .collection("users")
-        .updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
-
-      if (result.matchedCount === 0) {
+      // First, get the user to find their username
+      const user = await db.collection("users").findOne({ _id: new ObjectId(req.params.id) });
+      
+      if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      res.status(200).json({ message: "User updated successfully", result });
+      // Separate common fields from role-specific fields
+      const commonFields = { ...updateData };
+      const roleSpecificFields = {};
+      
+      // For Worker and Subcontractor, professions and isProjectManager should only update the specific user
+      if (user.role === 'Worker' || user.role === 'Sub Contractor') {
+        if (updateData.userProfession !== undefined) {
+          roleSpecificFields.userProfession = updateData.userProfession;
+          delete commonFields.userProfession;
+        }
+        if (updateData.isProjectManager !== undefined) {
+          roleSpecificFields.isProjectManager = updateData.isProjectManager;
+          delete commonFields.isProjectManager;
+        }
+      }
+
+      let totalUpdated = 0;
+
+      // Update ALL users with the same username (email only, no companyId) with common fields
+      if (Object.keys(commonFields).length > 0) {
+        const commonResult = await db
+          .collection("users")
+          .updateMany(
+            { username: user.username }, 
+            { $set: commonFields }
+          );
+        totalUpdated += commonResult.modifiedCount;
+      }
+
+      // Update only the specific user with role-specific fields
+      if (Object.keys(roleSpecificFields).length > 0) {
+        const specificResult = await db
+          .collection("users")
+          .updateOne(
+            { _id: new ObjectId(req.params.id) }, 
+            { $set: roleSpecificFields }
+          );
+        if (specificResult.modifiedCount > 0) {
+          totalUpdated += specificResult.modifiedCount;
+        }
+      }
+
+      if (totalUpdated === 0) {
+        return res.status(404).json({ error: "No users found with matching email" });
+      }
+
+      res.status(200).json({ 
+        message: "Users updated successfully", 
+        usersUpdated: totalUpdated,
+        commonFieldsUpdated: Object.keys(commonFields).length > 0 ? "Yes" : "No",
+        roleSpecificFieldsUpdated: Object.keys(roleSpecificFields).length > 0 ? "Yes" : "No"
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to update user" });
@@ -5889,7 +6099,7 @@ app.post("/users/forgot-password", async (req, res) => {
     // Create reset URL
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    await sendPasswordResetEmail(user.email, resetUrl);
+    await sendPasswordResetEmail(user.username, resetUrl);
 
     res.status(200).json({
       success: true,
@@ -9101,32 +9311,40 @@ app.get("/get-static-report-entries", async (req, res) => {
 // NEW: API endpoint to get static report entries by position and criteria
 app.post("/get-static-report-entries-by-position", async (req, res) => {
   try {
-    const { entryDataPos, projectId, companyId, professionKey } = req.body;
+    const { entryDataPos, projectId, companyId, subjectMatterId } = req.body;
 
     console.log("=== GETTING ENTRIES BY POSITION ===");
     console.log("Query criteria:", {
       entryDataPos,
       projectId,
       companyId,
-      professionKey,
+      subjectMatterId,
     });
 
-    if (!entryDataPos || !projectId || !companyId || !professionKey) {
+    if (!entryDataPos || !projectId || !companyId || !subjectMatterId) {
       return res.status(400).json({
         error:
-          "Missing required parameters: entryDataPos, projectId, companyId, professionKey",
+          "Missing required parameters: entryDataPos, projectId, companyId, subjectMatterId",
       });
     }
 
-    // Build the query exactly as you specified
+    // Build the query to include both exact match and null values for entryData.pos
+    // And check against profession.SubjectMatterId
     const query = {
-      "entryData.pos": entryDataPos,
       projectId: new ObjectId(projectId),
-      companyId: companyId, // Keep as string if stored as string
-      professionKey: professionKey,
+      companyId: companyId,
+      $and: [
+        {
+          $or: [
+            { "entryData.pos": entryDataPos },
+            { "entryData.pos": null }
+          ]
+        },
+        { "profession.SubjectMatterId": subjectMatterId }
+      ]
     };
 
-    console.log("MongoDB query:", JSON.stringify(query, null, 2));
+    console.log("Final MongoDB query:", JSON.stringify(query, null, 2));
 
     // Query the StaticReportRegistrationEntries collection
     const entries = await db
@@ -9134,7 +9352,7 @@ app.post("/get-static-report-entries-by-position", async (req, res) => {
       .find(query)
       .toArray();
 
-    console.log(`Found ${entries.length} entries for position ${entryDataPos}`);
+    console.log(`Found ${entries.length} entries for position ${entryDataPos} with subjectMatterId ${subjectMatterId}`);
 
     res.status(200).json({
       success: true,
@@ -9428,12 +9646,12 @@ app.get("/get-project-professions", async (req, res) => {
 // Get quality assurance signature
 app.post("/get-quality-assurance-signature", async (req, res) => {
   try {
-    const { companyId, projectId, professionId } = req.body;
+    const { companyId, projectId, subjectMatterId } = req.body;
 
-    if (!companyId || !projectId || !professionId) {
+    if (!companyId || !projectId || !subjectMatterId) {
       return res.status(400).json({
         error:
-          "Missing required parameters: companyId, projectId, professionId",
+          "Missing required parameters: companyId, projectId, subjectMatterId",
       });
     }
 
@@ -9442,7 +9660,7 @@ app.post("/get-quality-assurance-signature", async (req, res) => {
       .find({
         companyId: companyId,
         projectId: projectId,
-        professionId: professionId,
+        subjectMatterId: subjectMatterId,
       })
       .sort({ createdAt: -1 })
       .toArray();
@@ -9464,6 +9682,7 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       companyId,
       projectId,
       professionId,
+      subjectMatterId,
       professionName,
       name,
       description,
@@ -9472,26 +9691,26 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       signatureDate,
     } = req.body;
 
-    if (!companyId || !projectId || !professionId || !name || !profession) {
+    if (!companyId || !projectId || !subjectMatterId || !name || !profession) {
       return res.status(400).json({
         error:
-          "Missing required parameters: companyId, projectId, professionId, name, profession",
+          "Missing required parameters: companyId, projectId, subjectMatterId, name, profession",
       });
     }
 
-    // Check if signature already exists for this profession
+    // Check if signature already exists for this project and subject matter
     const existingSignature = await db
       .collection("quality assurance signature")
       .findOne({
         companyId: companyId,
         projectId: projectId,
-        professionId: professionId,
+        subjectMatterId: subjectMatterId,
       });
 
     if (existingSignature) {
       return res.status(409).json({
         error:
-          "Signature already exists for this profession. Use update endpoint instead.",
+          "Signature already exists for this project and subject matter. Use update endpoint instead.",
       });
     }
 
@@ -9499,6 +9718,7 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       companyId,
       projectId,
       professionId,
+      subjectMatterId,
       professionName: professionName || "",
       name,
       description: description || "",
@@ -10732,10 +10952,15 @@ app.post(
           parsedGeneralPictureDescriptions =
             req.body.generalPictureDescriptions;
         } else if (typeof req.body.generalPictureDescriptions === "string") {
-          // If it's a string, treat it as a single description (not JSON)
-          parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions
-            ? [req.body.generalPictureDescriptions]
-            : [];
+          // Try to parse as JSON first, if that fails, treat as single description
+          try {
+            parsedGeneralPictureDescriptions = JSON.parse(req.body.generalPictureDescriptions);
+          } catch (jsonError) {
+            // If JSON parsing fails, treat as a single description
+            parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions
+              ? [req.body.generalPictureDescriptions]
+              : [];
+          }
         } else {
           parsedGeneralPictureDescriptions = [];
         }
@@ -10758,10 +10983,15 @@ app.post(
         if (Array.isArray(req.body.markPictureDescriptions)) {
           parsedMarkPictureDescriptions = req.body.markPictureDescriptions;
         } else if (typeof req.body.markPictureDescriptions === "string") {
-          // If it's a string, treat it as a single description (not JSON)
-          parsedMarkPictureDescriptions = req.body.markPictureDescriptions
-            ? [req.body.markPictureDescriptions]
-            : [];
+          // Try to parse as JSON first, if that fails, treat as single description
+          try {
+            parsedMarkPictureDescriptions = JSON.parse(req.body.markPictureDescriptions);
+          } catch (jsonError) {
+            // If JSON parsing fails, treat as a single description
+            parsedMarkPictureDescriptions = req.body.markPictureDescriptions
+              ? [req.body.markPictureDescriptions]
+              : [];
+          }
         } else {
           parsedMarkPictureDescriptions = [];
         }
@@ -10883,6 +11113,7 @@ app.post(
         type,
         comment,
         submittedDate: req.body.submittedDate || new Date().toISOString(),
+        deviationNumber: req.body.deviationNumber || Math.floor(10000 + Math.random() * 90000).toString(),
         profession: parsedProfession,
         buildingParts: parsedBuildingParts,
         drawing: parsedDrawing,
