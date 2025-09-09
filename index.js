@@ -5399,6 +5399,20 @@ app.post("/determine-user-roles", async (req, res) => {
       users: users.length,
       companies: companies.length,
     });
+    
+    // Debug: Log the actual user records found
+    console.log("Users found:", users.map(u => ({ 
+      email: u.email, 
+      username: u.username, 
+      role: u.role,
+      _id: u._id 
+    })));
+    
+    // Debug: Log the company records found
+    console.log("Companies found:", companies.map(c => ({ 
+      admin: c.admin,
+      companyName: c.companyName 
+    })));
 
     // Determine roles based on results
     const roles = [];
