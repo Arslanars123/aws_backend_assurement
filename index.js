@@ -5491,6 +5491,25 @@ app.post("/determine-user-roles", async (req, res) => {
       };
     }
 
+    // Check for Independent Controller role
+    const independentControllerUsers = users.filter((user) => 
+      user.role === "Independent Controller" || 
+      user.role === "Inspector" ||
+      user.userRole === "Independent Controller" ||
+      user.userRole === "Inspector"
+    );
+
+    if (independentControllerUsers.length > 0) {
+      roles.push("Independent Controller");
+      roleDetails["Independent Controller"] = {
+        title: "Independent Controller",
+        description: "Independent project oversight and inspection",
+        icon: "verified_user",
+        color: "#FF6B35",
+        source: "user_record",
+      };
+    }
+
     // Subcontractor assigned to projects gets Project Manager role
     if (subcontractorUsers.length > 0 && projectManagerUser) {
       if (!roles.includes("Project Manager")) {
@@ -5835,13 +5854,13 @@ app.post("/get-user-projects", async (req, res) => {
 // 11. Get all companies and projects for a specific email (username)
 app.post("/get-user-companies-projects", async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, selectedRole } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
     }
 
-    console.log(`Fetching companies and projects for email: ${email}`);
+    console.log(`Fetching companies and projects for email: ${email}, selectedRole: ${selectedRole}`);
 
     // Find all users with this email
     const users = await db
@@ -5857,10 +5876,28 @@ app.post("/get-user-companies-projects", async (req, res) => {
 
     console.log(`Found ${users.length} users with email: ${email}`);
 
+    // Filter users based on selected role
+    let filteredUsers = users;
+    if (selectedRole) {
+      const roleLower = selectedRole.toLowerCase();
+      filteredUsers = users.filter(user => {
+        const userRole = user.role?.toLowerCase();
+        
+        // Handle different role formats
+        const normalizedSelectedRole = roleLower.replace(/_/g, ' ');
+        const normalizedUserRole = userRole?.replace(/_/g, ' ');
+        
+        return normalizedUserRole === normalizedSelectedRole || 
+               (normalizedSelectedRole === 'independent controller' && normalizedUserRole === 'inspector') ||
+               (normalizedSelectedRole === 'project manager' && user.isProjectManager === 'yes');
+      });
+      console.log(`Filtered to ${filteredUsers.length} users with role: ${selectedRole}`);
+    }
+
     // Group users by company and collect project IDs
     const companyMap = new Map();
 
-    for (const user of users) {
+    for (const user of filteredUsers) {
       const companyId = user.companyId;
 
       if (!companyId) {
@@ -5884,10 +5921,15 @@ app.post("/get-user-companies-projects", async (req, res) => {
         isProjectManager: user.isProjectManager,
       });
 
-      // Add project IDs from this user
+      // Add project IDs from this user (filter out invalid IDs)
       if (user.projectsId && Array.isArray(user.projectsId)) {
         user.projectsId.forEach((projectId) => {
-          if (projectId) {
+          if (projectId && 
+              projectId !== 'null' && 
+              projectId !== 'undefined' && 
+              projectId !== null && 
+              projectId !== undefined &&
+              projectId.toString().trim() !== '') {
             companyData.projectIds.add(projectId.toString());
           }
         });
@@ -5947,18 +5989,23 @@ app.post("/get-user-companies-projects", async (req, res) => {
           }
         }
 
-        result.push({
-          company: {
-            companyId: company._id,
-            companyName: company.name,
-            address: company.address,
-            city: company.city,
-            postalCode: company.postalCode,
-            cvr: company.cvr,
-          },
-          users: companyData.users,
-          projects: projects,
-        });
+        // Only include companies that have valid projects
+        if (projects.length > 0) {
+          result.push({
+            company: {
+              companyId: company._id,
+              companyName: company.name,
+              address: company.address,
+              city: company.city,
+              postalCode: company.postalCode,
+              cvr: company.cvr,
+            },
+            users: companyData.users,
+            projects: projects,
+          });
+        } else {
+          console.log(`Skipping company ${companyId} - no valid projects found`);
+        }
       } catch (error) {
         console.error(`Error processing company ${companyId}:`, error);
       }
