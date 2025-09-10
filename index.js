@@ -1156,6 +1156,88 @@ app.get("/check-user-exists", async (req, res) => {
   }
 });
 
+// Get user with picture by email - finds first user with valid picture
+app.get("/get-user-with-picture", async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "Email is required",
+      });
+    }
+
+    console.log(`🔍 Looking for user with picture for email: ${email}`);
+
+    // Find ALL users with this email (username)
+    const users = await db
+      .collection("users")
+      .find({
+        username: email,
+      })
+      .toArray();
+
+    if (users.length === 0) {
+      console.log(`❌ No users found with email: ${email}`);
+      return res.status(200).json({
+        success: false,
+        message: "No user found with this email address",
+        user: null
+      });
+    }
+
+    console.log(`📋 Found ${users.length} users with email: ${email}`);
+
+    // Find the first user that has a valid picture
+    const userWithPicture = users.find(user => 
+      user.picture && 
+      user.picture.trim() !== '' && 
+      user.picture !== null
+    );
+
+    if (userWithPicture) {
+      console.log(`✅ Found user with picture: ${userWithPicture._id}`);
+      return res.status(200).json({
+        success: true,
+        message: "User with picture found",
+        user: {
+          _id: userWithPicture._id,
+          name: userWithPicture.name || '',
+          username: userWithPicture.username || '',
+          role: userWithPicture.role || '',
+          picture: userWithPicture.picture || '',
+          phone: userWithPicture.phone || '',
+          address: userWithPicture.address || '',
+          city: userWithPicture.city || '',
+          postalCode: userWithPicture.postalCode || '',
+          startDate: userWithPicture.startDate || '',
+          cvr: userWithPicture.cvr || '',
+          contactPerson: userWithPicture.contactPerson || '',
+          contactPhone: userWithPicture.contactPhone || '',
+          type: userWithPicture.type || '',
+          safetyCertification: userWithPicture.safetyCertification || '',
+          mainId: userWithPicture.mainId || '',
+          isProjectManager: userWithPicture.isProjectManager || '',
+          userProfession: userWithPicture.userProfession || []
+        }
+      });
+    } else {
+      console.log(`⚠️ No user found with valid picture for email: ${email}`);
+      return res.status(200).json({
+        success: false,
+        message: "No user found with a valid picture",
+        user: null
+      });
+    }
+  } catch (error) {
+    console.error("❌ Error getting user with picture:", error);
+    res.status(500).json({
+      error: "Failed to get user with picture",
+      details: error.message
+    });
+  }
+});
+
 // Update existing user data across all documents
 app.post("/update-existing-user", async (req, res) => {
   try {
@@ -1726,6 +1808,85 @@ app.post("/get-controls-of-static-report", async (req, res) => {
     return res
       .status(500)
       .json({ error: "Failed to fetch controls of static report" });
+  }
+});
+
+// Admin endpoint to get all controls of static report with EuroCode filtering
+app.post("/get-all-controls-of-static-report", async (req, res) => {
+  try {
+    const { language, euroCode } = req.body;
+
+    console.log("🔍 Admin controls of static report request:", {
+      language,
+      euroCode,
+    });
+
+    // Build language filter
+    const langFilter =
+      language === "DK"
+        ? { language: "DK" } // Danish only
+        : { language: { $ne: "DK" } }; // Non-Danish (default when missing or anything else)
+
+    // Build EuroCode filter if provided
+    let euroCodeFilter = {};
+    if (euroCode && euroCode.trim() !== "") {
+      euroCodeFilter = { euroCode: euroCode.trim() };
+    }
+
+    // Query controls of static report with filters
+    const filter = {
+      ...langFilter,
+      ...euroCodeFilter,
+    };
+
+    console.log("📋 Query filter:", filter);
+
+    // Fetch all matching documents
+    const docs = await db
+      .collection("controls of static report")
+      .find(filter)
+      .toArray();
+
+    console.log("📊 Found documents:", docs.length);
+
+    // Extract all entries from all documents
+    const allEntries = [];
+    docs.forEach((doc, docIndex) => {
+      if (doc.entries && Array.isArray(doc.entries)) {
+        doc.entries.forEach((entry, entryIndex) => {
+          allEntries.push({
+            ...entry,
+            _id: `${doc._id}_${entryIndex}`, // Create unique ID
+            documentId: doc._id,
+            subjectMatterId: doc.subjectMatterId,
+            euroCode: doc.euroCode,
+            language: doc.language,
+            documentIndex: docIndex,
+            entryIndex: entryIndex,
+          });
+        });
+      }
+    });
+
+    console.log("📝 Total entries found:", allEntries.length);
+
+    res.status(200).json({
+      meta: {
+        requestedLanguage: language ?? null,
+        appliedLanguageFilter: language === "DK" ? "DK" : "non-DK",
+        requestedEuroCode: euroCode || null,
+        appliedEuroCodeFilter: euroCode || "all",
+        docsMatched: docs.length,
+        entriesCount: allEntries.length,
+        message: "Admin view - all entries from controls of static report collection",
+      },
+      entries: allEntries,
+    });
+  } catch (error) {
+    console.error("Error fetching all controls of static report:", error);
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch all controls of static report" });
   }
 });
 
