@@ -6150,8 +6150,11 @@ app.post("/get-user-companies-projects", async (req, res) => {
           }
         }
 
-        // Only include companies that have valid projects
-        if (projects.length > 0) {
+        // Include companies that have valid projects OR if user is Admin
+        const hasValidProjects = projects.length > 0;
+        const hasAdminUser = companyData.users.some(user => user.role === 'Admin');
+        
+        if (hasValidProjects || hasAdminUser) {
           result.push({
             company: {
               companyId: company._id,
@@ -6165,7 +6168,7 @@ app.post("/get-user-companies-projects", async (req, res) => {
             projects: projects,
           });
         } else {
-          console.log(`Skipping company ${companyId} - no valid projects found`);
+          console.log(`Skipping company ${companyId} - no valid projects found and no admin users`);
         }
       } catch (error) {
         console.error(`Error processing company ${companyId}:`, error);
