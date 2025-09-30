@@ -1115,7 +1115,7 @@ app.get("/check-user-exists", async (req, res) => {
 
     // Find user by username (which contains email) only
     const user = await db.collection("users").findOne({
-      username: username
+      username: username,
     });
 
     if (user) {
@@ -1123,35 +1123,35 @@ app.get("/check-user-exists", async (req, res) => {
       res.status(200).json({
         exists: true,
         user: {
-          name: user.name || '',
-          phone: user.phone || '',
-          address: user.address || '',
-          city: user.city || '',
-          postalCode: user.postalCode || '',
-          startDate: user.startDate || '',
-          role: user.role || '',
-          cvr: user.cvr || '',
-          contactPerson: user.contactPerson || '',
-          contactPhone: user.contactPhone || '',
-          type: user.type || '',
-          safetyCertification: user.safetyCertification || '',
-          mainId: user.mainId || '',
-          isProjectManager: user.isProjectManager || '',
+          name: user.name || "",
+          phone: user.phone || "",
+          address: user.address || "",
+          city: user.city || "",
+          postalCode: user.postalCode || "",
+          startDate: user.startDate || "",
+          role: user.role || "",
+          cvr: user.cvr || "",
+          contactPerson: user.contactPerson || "",
+          contactPhone: user.contactPhone || "",
+          type: user.type || "",
+          safetyCertification: user.safetyCertification || "",
+          mainId: user.mainId || "",
+          isProjectManager: user.isProjectManager || "",
           userProfession: user.userProfession || [],
-          picture: user.picture || ''
-        }
+          picture: user.picture || "",
+        },
       });
     } else {
       res.status(200).json({
         exists: false,
-        user: null
+        user: null,
       });
     }
   } catch (error) {
     console.error("Error checking user existence:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to check user existence",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1182,17 +1182,16 @@ app.get("/get-user-with-picture", async (req, res) => {
       return res.status(200).json({
         success: false,
         message: "No user found with this email address",
-        user: null
+        user: null,
       });
     }
 
     console.log(`📋 Found ${users.length} users with email: ${email}`);
 
     // Find the first user that has a valid picture
-    const userWithPicture = users.find(user => 
-      user.picture && 
-      user.picture.trim() !== '' && 
-      user.picture !== null
+    const userWithPicture = users.find(
+      (user) =>
+        user.picture && user.picture.trim() !== "" && user.picture !== null
     );
 
     if (userWithPicture) {
@@ -1202,38 +1201,38 @@ app.get("/get-user-with-picture", async (req, res) => {
         message: "User with picture found",
         user: {
           _id: userWithPicture._id,
-          name: userWithPicture.name || '',
-          username: userWithPicture.username || '',
-          role: userWithPicture.role || '',
-          picture: userWithPicture.picture || '',
-          phone: userWithPicture.phone || '',
-          address: userWithPicture.address || '',
-          city: userWithPicture.city || '',
-          postalCode: userWithPicture.postalCode || '',
-          startDate: userWithPicture.startDate || '',
-          cvr: userWithPicture.cvr || '',
-          contactPerson: userWithPicture.contactPerson || '',
-          contactPhone: userWithPicture.contactPhone || '',
-          type: userWithPicture.type || '',
-          safetyCertification: userWithPicture.safetyCertification || '',
-          mainId: userWithPicture.mainId || '',
-          isProjectManager: userWithPicture.isProjectManager || '',
-          userProfession: userWithPicture.userProfession || []
-        }
+          name: userWithPicture.name || "",
+          username: userWithPicture.username || "",
+          role: userWithPicture.role || "",
+          picture: userWithPicture.picture || "",
+          phone: userWithPicture.phone || "",
+          address: userWithPicture.address || "",
+          city: userWithPicture.city || "",
+          postalCode: userWithPicture.postalCode || "",
+          startDate: userWithPicture.startDate || "",
+          cvr: userWithPicture.cvr || "",
+          contactPerson: userWithPicture.contactPerson || "",
+          contactPhone: userWithPicture.contactPhone || "",
+          type: userWithPicture.type || "",
+          safetyCertification: userWithPicture.safetyCertification || "",
+          mainId: userWithPicture.mainId || "",
+          isProjectManager: userWithPicture.isProjectManager || "",
+          userProfession: userWithPicture.userProfession || [],
+        },
       });
     } else {
       console.log(`⚠️ No user found with valid picture for email: ${email}`);
       return res.status(200).json({
         success: false,
         message: "No user found with a valid picture",
-        user: null
+        user: null,
       });
     }
   } catch (error) {
     console.error("❌ Error getting user with picture:", error);
     res.status(500).json({
       error: "Failed to get user with picture",
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -1252,16 +1251,15 @@ app.post("/update-existing-user", async (req, res) => {
     let totalDocumentsUpdated = 0;
 
     // Update user in users collection (by email only, no companyId)
-    const userUpdateResult = await db.collection("users").updateMany(
-      { username: username },
-      { $set: updatedData }
-    );
+    const userUpdateResult = await db
+      .collection("users")
+      .updateMany({ username: username }, { $set: updatedData });
     totalDocumentsUpdated += userUpdateResult.modifiedCount;
 
     // Update user data in all other collections that might contain user information
     const collectionsToUpdate = [
       "address notes",
-      "agreements", 
+      "agreements",
       "safety mentions",
       "technical requests",
       "deviations",
@@ -1271,14 +1269,14 @@ app.post("/update-existing-user", async (req, res) => {
       "name signature",
       "quality assurance signature",
       "static report signatures",
-      "signatures"
+      "signatures",
     ];
 
     for (const collectionName of collectionsToUpdate) {
       try {
         // Update documents where user is referenced by username/email
         const updateResult = await db.collection(collectionName).updateMany(
-          { 
+          {
             $or: [
               { username: username },
               { "user.username": username },
@@ -1288,19 +1286,22 @@ app.post("/update-existing-user", async (req, res) => {
               { "inspector.username": username },
               { "inspector.email": username },
               { "advisor.username": username },
-              { "advisor.email": username }
-            ]
+              { "advisor.email": username },
+            ],
           },
-          { 
+          {
             $set: {
               ...updatedData,
-              updatedAt: new Date().toISOString()
-            }
+              updatedAt: new Date().toISOString(),
+            },
           }
         );
         totalDocumentsUpdated += updateResult.modifiedCount;
       } catch (collectionError) {
-        console.error(`Error updating collection ${collectionName}:`, collectionError);
+        console.error(
+          `Error updating collection ${collectionName}:`,
+          collectionError
+        );
         // Continue with other collections even if one fails
       }
     }
@@ -1308,14 +1309,13 @@ app.post("/update-existing-user", async (req, res) => {
     res.status(200).json({
       success: true,
       totalDocumentsUpdated: totalDocumentsUpdated,
-      message: `User information updated successfully across ${totalDocumentsUpdated} documents`
+      message: `User information updated successfully across ${totalDocumentsUpdated} documents`,
     });
-
   } catch (error) {
     console.error("Error updating existing user:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to update existing user",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1878,7 +1878,8 @@ app.post("/get-all-controls-of-static-report", async (req, res) => {
         appliedEuroCodeFilter: euroCode || "all",
         docsMatched: docs.length,
         entriesCount: allEntries.length,
-        message: "Admin view - all entries from controls of static report collection",
+        message:
+          "Admin view - all entries from controls of static report collection",
       },
       entries: allEntries,
     });
@@ -3006,8 +3007,32 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
   if (projectsId) {
     const allTasks = await db
       .collection("tasks")
-      .find({ SubjectMatterId: { $in: SubjectMatterIdArray } })
-      .sort({ Index: 1 })
+      .aggregate([
+        {
+          $match: {
+            SubjectMatterId: { $in: SubjectMatterIdArray },
+          },
+        },
+        {
+          $lookup: {
+            from: "inputs",
+            localField: "SubjectMatterId",
+            foreignField: "SubjectMatterId",
+            as: "inputs",
+          },
+        },
+        {
+          $unwind: {
+            path: "$inputs",
+            preserveNullAndEmptyArrays: true, // Optional: keeps the task even if no matching input is found
+          },
+        },
+        {
+          $sort: {
+            Index: 1,
+          },
+        },
+      ])
       .toArray();
 
     const project = await db
@@ -5219,8 +5244,10 @@ app.post(
       if (type) updateData.type = type;
 
       // First, get the user to find their username
-      const user = await db.collection("users").findOne({ _id: new ObjectId(req.params.id) });
-      
+      const user = await db
+        .collection("users")
+        .findOne({ _id: new ObjectId(req.params.id) });
+
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -5228,9 +5255,9 @@ app.post(
       // Separate common fields from role-specific fields
       const commonFields = { ...updateData };
       const roleSpecificFields = {};
-      
+
       // For Worker and Subcontractor, professions and isProjectManager should only update the specific user
-      if (user.role === 'Worker' || user.role === 'Sub Contractor') {
+      if (user.role === "Worker" || user.role === "Sub Contractor") {
         if (updateData.userProfession !== undefined) {
           roleSpecificFields.userProfession = updateData.userProfession;
           delete commonFields.userProfession;
@@ -5247,10 +5274,7 @@ app.post(
       if (Object.keys(commonFields).length > 0) {
         const commonResult = await db
           .collection("users")
-          .updateMany(
-            { username: user.username }, 
-            { $set: commonFields }
-          );
+          .updateMany({ username: user.username }, { $set: commonFields });
         totalUpdated += commonResult.modifiedCount;
       }
 
@@ -5259,7 +5283,7 @@ app.post(
         const specificResult = await db
           .collection("users")
           .updateOne(
-            { _id: new ObjectId(req.params.id) }, 
+            { _id: new ObjectId(req.params.id) },
             { $set: roleSpecificFields }
           );
         if (specificResult.modifiedCount > 0) {
@@ -5268,14 +5292,18 @@ app.post(
       }
 
       if (totalUpdated === 0) {
-        return res.status(404).json({ error: "No users found with matching email" });
+        return res
+          .status(404)
+          .json({ error: "No users found with matching email" });
       }
 
-      res.status(200).json({ 
-        message: "Users updated successfully", 
+      res.status(200).json({
+        message: "Users updated successfully",
         usersUpdated: totalUpdated,
-        commonFieldsUpdated: Object.keys(commonFields).length > 0 ? "Yes" : "No",
-        roleSpecificFieldsUpdated: Object.keys(roleSpecificFields).length > 0 ? "Yes" : "No"
+        commonFieldsUpdated:
+          Object.keys(commonFields).length > 0 ? "Yes" : "No",
+        roleSpecificFieldsUpdated:
+          Object.keys(roleSpecificFields).length > 0 ? "Yes" : "No",
       });
     } catch (error) {
       console.error(error);
@@ -5560,20 +5588,26 @@ app.post("/determine-user-roles", async (req, res) => {
       users: users.length,
       companies: companies.length,
     });
-    
+
     // Debug: Log the actual user records found
-    console.log("Users found:", users.map(u => ({ 
-      email: u.email, 
-      username: u.username, 
-      role: u.role,
-      _id: u._id 
-    })));
-    
+    console.log(
+      "Users found:",
+      users.map((u) => ({
+        email: u.email,
+        username: u.username,
+        role: u.role,
+        _id: u._id,
+      }))
+    );
+
     // Debug: Log the company records found
-    console.log("Companies found:", companies.map(c => ({ 
-      admin: c.admin,
-      companyName: c.companyName 
-    })));
+    console.log(
+      "Companies found:",
+      companies.map((c) => ({
+        admin: c.admin,
+        companyName: c.companyName,
+      }))
+    );
 
     // Determine roles based on results
     const roles = [];
@@ -5653,11 +5687,12 @@ app.post("/determine-user-roles", async (req, res) => {
     }
 
     // Check for Independent Controller role
-    const independentControllerUsers = users.filter((user) => 
-      user.role === "Independent Controller" || 
-      user.role === "Inspector" ||
-      user.userRole === "Independent Controller" ||
-      user.userRole === "Inspector"
+    const independentControllerUsers = users.filter(
+      (user) =>
+        user.role === "Independent Controller" ||
+        user.role === "Inspector" ||
+        user.userRole === "Independent Controller" ||
+        user.userRole === "Inspector"
     );
 
     if (independentControllerUsers.length > 0) {
@@ -6021,7 +6056,9 @@ app.post("/get-user-companies-projects", async (req, res) => {
       return res.status(400).json({ error: "Email is required" });
     }
 
-    console.log(`Fetching companies and projects for email: ${email}, selectedRole: ${selectedRole}`);
+    console.log(
+      `Fetching companies and projects for email: ${email}, selectedRole: ${selectedRole}`
+    );
 
     // Find all users with this email
     const users = await db
@@ -6041,18 +6078,24 @@ app.post("/get-user-companies-projects", async (req, res) => {
     let filteredUsers = users;
     if (selectedRole) {
       const roleLower = selectedRole.toLowerCase();
-      filteredUsers = users.filter(user => {
+      filteredUsers = users.filter((user) => {
         const userRole = user.role?.toLowerCase();
-        
+
         // Handle different role formats
-        const normalizedSelectedRole = roleLower.replace(/_/g, ' ');
-        const normalizedUserRole = userRole?.replace(/_/g, ' ');
-        
-        return normalizedUserRole === normalizedSelectedRole || 
-               (normalizedSelectedRole === 'independent controller' && normalizedUserRole === 'inspector') ||
-               (normalizedSelectedRole === 'project manager' && user.isProjectManager === 'yes');
+        const normalizedSelectedRole = roleLower.replace(/_/g, " ");
+        const normalizedUserRole = userRole?.replace(/_/g, " ");
+
+        return (
+          normalizedUserRole === normalizedSelectedRole ||
+          (normalizedSelectedRole === "independent controller" &&
+            normalizedUserRole === "inspector") ||
+          (normalizedSelectedRole === "project manager" &&
+            user.isProjectManager === "yes")
+        );
       });
-      console.log(`Filtered to ${filteredUsers.length} users with role: ${selectedRole}`);
+      console.log(
+        `Filtered to ${filteredUsers.length} users with role: ${selectedRole}`
+      );
     }
 
     // Group users by company and collect project IDs
@@ -6085,12 +6128,14 @@ app.post("/get-user-companies-projects", async (req, res) => {
       // Add project IDs from this user (filter out invalid IDs)
       if (user.projectsId && Array.isArray(user.projectsId)) {
         user.projectsId.forEach((projectId) => {
-          if (projectId && 
-              projectId !== 'null' && 
-              projectId !== 'undefined' && 
-              projectId !== null && 
-              projectId !== undefined &&
-              projectId.toString().trim() !== '') {
+          if (
+            projectId &&
+            projectId !== "null" &&
+            projectId !== "undefined" &&
+            projectId !== null &&
+            projectId !== undefined &&
+            projectId.toString().trim() !== ""
+          ) {
             companyData.projectIds.add(projectId.toString());
           }
         });
@@ -6152,8 +6197,10 @@ app.post("/get-user-companies-projects", async (req, res) => {
 
         // Include companies that have valid projects OR if user is Admin
         const hasValidProjects = projects.length > 0;
-        const hasAdminUser = companyData.users.some(user => user.role === 'Admin');
-        
+        const hasAdminUser = companyData.users.some(
+          (user) => user.role === "Admin"
+        );
+
         if (hasValidProjects || hasAdminUser) {
           result.push({
             company: {
@@ -6168,7 +6215,9 @@ app.post("/get-user-companies-projects", async (req, res) => {
             projects: projects,
           });
         } else {
-          console.log(`Skipping company ${companyId} - no valid projects found and no admin users`);
+          console.log(
+            `Skipping company ${companyId} - no valid projects found and no admin users`
+          );
         }
       } catch (error) {
         console.error(`Error processing company ${companyId}:`, error);
@@ -9560,13 +9609,10 @@ app.post("/get-static-report-entries-by-position", async (req, res) => {
       companyId: companyId,
       $and: [
         {
-          $or: [
-            { "entryData.pos": entryDataPos },
-            { "entryData.pos": null }
-          ]
+          $or: [{ "entryData.pos": entryDataPos }, { "entryData.pos": null }],
         },
-        { "profession.SubjectMatterId": subjectMatterId }
-      ]
+        { "profession.SubjectMatterId": subjectMatterId },
+      ],
     };
 
     console.log("Final MongoDB query:", JSON.stringify(query, null, 2));
@@ -9577,7 +9623,9 @@ app.post("/get-static-report-entries-by-position", async (req, res) => {
       .find(query)
       .toArray();
 
-    console.log(`Found ${entries.length} entries for position ${entryDataPos} with subjectMatterId ${subjectMatterId}`);
+    console.log(
+      `Found ${entries.length} entries for position ${entryDataPos} with subjectMatterId ${subjectMatterId}`
+    );
 
     res.status(200).json({
       success: true,
@@ -11179,10 +11227,13 @@ app.post(
         } else if (typeof req.body.generalPictureDescriptions === "string") {
           // Try to parse as JSON first, if that fails, treat as single description
           try {
-            parsedGeneralPictureDescriptions = JSON.parse(req.body.generalPictureDescriptions);
+            parsedGeneralPictureDescriptions = JSON.parse(
+              req.body.generalPictureDescriptions
+            );
           } catch (jsonError) {
             // If JSON parsing fails, treat as a single description
-            parsedGeneralPictureDescriptions = req.body.generalPictureDescriptions
+            parsedGeneralPictureDescriptions = req.body
+              .generalPictureDescriptions
               ? [req.body.generalPictureDescriptions]
               : [];
           }
@@ -11210,7 +11261,9 @@ app.post(
         } else if (typeof req.body.markPictureDescriptions === "string") {
           // Try to parse as JSON first, if that fails, treat as single description
           try {
-            parsedMarkPictureDescriptions = JSON.parse(req.body.markPictureDescriptions);
+            parsedMarkPictureDescriptions = JSON.parse(
+              req.body.markPictureDescriptions
+            );
           } catch (jsonError) {
             // If JSON parsing fails, treat as a single description
             parsedMarkPictureDescriptions = req.body.markPictureDescriptions
@@ -11338,7 +11391,9 @@ app.post(
         type,
         comment,
         submittedDate: req.body.submittedDate || new Date().toISOString(),
-        deviationNumber: req.body.deviationNumber || Math.floor(10000 + Math.random() * 90000).toString(),
+        deviationNumber:
+          req.body.deviationNumber ||
+          Math.floor(10000 + Math.random() * 90000).toString(),
         profession: parsedProfession,
         buildingParts: parsedBuildingParts,
         drawing: parsedDrawing,
