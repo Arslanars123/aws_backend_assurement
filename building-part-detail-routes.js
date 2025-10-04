@@ -244,6 +244,56 @@ function createBuildingPartDetailRoutes(db) {
     }
   );
 
+  // DELETE specific building part detail by ID
+  router.delete("/delete-building-part-detail/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Validate ID format
+      if (!id || id.length !== 24) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ID format",
+        });
+      }
+
+      // Check if building part detail exists
+      const existingDetail = await db
+        .collection("buildingpartsdetail")
+        .findOne({ _id: new ObjectId(id) });
+
+      if (!existingDetail) {
+        return res.status(404).json({
+          success: false,
+          message: "Building part detail not found",
+        });
+      }
+
+      // Delete the building part detail
+      const result = await db
+        .collection("buildingpartsdetail")
+        .deleteOne({ _id: new ObjectId(id) });
+
+      if (result.deletedCount === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Failed to delete the building part detail",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Building part detail deleted successfully",
+      });
+    } catch (err) {
+      console.error("delete-building-part-detail error", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  });
+
   return router;
 }
 
