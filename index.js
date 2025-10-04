@@ -1,7 +1,7 @@
 // Import required ars
 const { MongoClient, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
-const multer = require("multer");
+const { upload } = require("./services/upload");
 const xlsx = require("xlsx");
 const path = require("path");
 const fs = require("fs");
@@ -303,6 +303,10 @@ async function startServer() {
   try {
     await connectToMongoDB();
 
+    // Register building part detail routes after database connection is established
+    const createBuildingPartDetailRoutes = require("./building-part-detail-routes");
+    app.use("/", createBuildingPartDetailRoutes(db));
+
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
@@ -386,20 +390,6 @@ app.get("/health", async (req, res) => {
   }
 });
 
-// KS Report PDF Generation endpoint - REMOVED DUPLICATE MOCK ENDPOINT
-// The real implementation is at line 9469
-// 1. Create a new user
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/"); // Specify the folder where uploaded files are saved
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + "-" + file.originalname); // Create a unique filename
-  },
-});
-
-const upload = multer({ storage });
 // Route to handle user creation with file upload and email verification
 app.post(
   "/store-user",
