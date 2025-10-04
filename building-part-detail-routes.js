@@ -4,22 +4,22 @@ const { upload } = require("./services/upload");
 
 // Function to create routes with database connection
 function createBuildingPartDetailRoutes(db) {
-const router = express.Router();
+  const router = express.Router();
 
-router.post(
-  "/store-building-part-detail",
-  upload.single("image"),
-  async (req, res) => {
-    try {
-      const { buildingPartId, name, description } = req.body;
-      const imageFile = req.file; // optional
+  router.post(
+    "/store-building-part-detail",
+    upload.single("image"),
+    async (req, res) => {
+      try {
+        const { buildingPartId, name, description } = req.body;
+        const imageFile = req.file; // optional
 
-      // Validate required fields
-      if (!buildingPartId || !name || !description) {
-        return res.status(400).json({
-          message: "buildingPartId, name, and description are required",
-        });
-      }
+        // Validate required fields
+        if (!buildingPartId || !name || !description) {
+          return res.status(400).json({
+            message: "buildingPartId, name, and description are required",
+          });
+        }
 
         // Prepare image data
         let imageData = null;
@@ -61,12 +61,12 @@ router.post(
             image: imageData,
           },
         });
-    } catch (err) {
-      console.error("store-building-part-detail error", err);
-      return res.status(500).json({ message: "Internal server error" });
+      } catch (err) {
+        console.error("store-building-part-detail error", err);
+        return res.status(500).json({ message: "Internal server error" });
+      }
     }
-  }
-);
+  );
 
   // GET all building part details
   router.get("/get-building-part-details", async (req, res) => {
@@ -212,13 +212,10 @@ router.post(
           };
         }
 
-         // Update the building part detail
-         const result = await db
-           .collection("buildingpartsdetail")
-           .updateOne(
-             { _id: new ObjectId(id) },
-             { $set: updateData }
-           );
+        // Update the building part detail
+        const result = await db
+          .collection("buildingpartsdetail")
+          .updateOne({ _id: new ObjectId(id) }, { $set: updateData });
 
         if (result.modifiedCount === 0) {
           return res.status(400).json({
@@ -227,10 +224,10 @@ router.post(
           });
         }
 
-         // Get updated document
-         const updatedDetail = await db
-           .collection("buildingpartsdetail")
-           .findOne({ _id: new ObjectId(id) });
+        // Get updated document
+        const updatedDetail = await db
+          .collection("buildingpartsdetail")
+          .findOne({ _id: new ObjectId(id) });
 
         return res.status(200).json({
           success: true,
