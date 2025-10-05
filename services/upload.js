@@ -1,99 +1,41 @@
 const multer = require("multer");
 const multerS3 = require("multer-s3");
-const AWS = require("aws-sdk");
-const fs = require("fs");
+const { S3Client } = require("@aws-sdk/client-s3"); // Using AWS SDK v3
 const crypto = require("crypto");
+require("dotenv").config();
 
-// Check if S3 configuration is available
-const hasS3Config =
+// Configure AWS S3 if environment variables are present
+let s3Client = null;
+if (
   process.env.AWS_ACCESS_KEY_ID &&
   process.env.AWS_SECRET_ACCESS_KEY &&
+  process.env.AWS_SESSION_TOKEN &&
   process.env.AWS_REGION &&
-  process.env.S3_BUCKET_NAME;
-
-// Configure AWS S3 only if environment variables are present
-let s3 = null;
-if (hasS3Config) {
-  s3 = new AWS.S3({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  process.env.S3_BUCKET_NAME
+) {
+  s3Client = new S3Client({
     region: process.env.AWS_REGION,
-  });
-}
-
-// Create storage configuration based on S3 availability
-let storage;
-
-if (hasS3Config) {
-  // Dual storage configuration (local + S3)
-  storage = {
-    _handleFile: function (req, file, cb) {
-      const uniqueSuffix = crypto.randomBytes(16).toString("hex");
-      const filename = uniqueSuffix + "-" + file.originalname;
-
-      const localStorage = multer.diskStorage({
-        destination: (req, file, cb) => {
-          cb(null, "uploads/");
-        },
-        filename: (req, file, cb) => {
-          cb(null, filename);
-        },
-      });
-
-      const s3Storage = multerS3({
-        s3: s3,
-        bucket: process.env.S3_BUCKET_NAME,
-        key: function (req, file, cb) {
-          cb(null, filename);
-        },
-        contentType: multerS3.AUTO_CONTENT_TYPE,
-      });
-
-      localStorage._handleFile(req, file, (err, localResult) => {
-        if (err) {
-          return cb(err);
-        }
-
-        s3Storage._handleFile(req, file, (err, s3Result) => {
-          if (err) {
-            console.error("S3 upload failed:", err);
-            return cb(null, {
-              ...localResult,
-              s3Error: err.message,
-            });
-          }
-
-          cb(null, {
-            ...localResult,
-            s3Location: s3Result.location,
-            s3Key: s3Result.key,
-          });
-        });
-      });
-    },
-
-    _removeFile: function (req, file, cb) {
-      if (file.path) {
-        fs.unlink(file.path, cb);
-      } else {
-        cb();
-      }
-    },
-  };
-} else {
-  console.log("S3 configuration missing, using local storage only");
-  storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, "uploads/");
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = crypto.randomBytes(16).toString("hex");
-      const filename = uniqueSuffix + "-" + file.originalname;
-      cb(null, filename);
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      sessionToken: process.env.AWS_SESSION_TOKEN,
     },
   });
 }
 
+// Configure multer with multer-s3 for file upload to S3
+const storage = multerS3({
+  s3: s3Client,
+  bucket: process.env.S3_BUCKET_NAME,
+  key: function (req, file, cb) {
+    const uniqueSuffix = crypto.randomBytes(16).toString("hex");
+    const filename = uniqueSuffix + "-" + file.originalname;
+    cb(null, filename);
+  },
+  contentType: multerS3.AUTO_CONTENT_TYPE,
+});
+
+// Multer configuration for handling file upload
 const upload = multer({ storage: storage });
 
-module.exports = { upload, storage };
+module.exports = { upload };

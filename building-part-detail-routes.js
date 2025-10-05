@@ -25,13 +25,11 @@ function createBuildingPartDetailRoutes(db) {
         let imageData = null;
         if (imageFile) {
           imageData = {
-            localPath: imageFile.path,
-            filename: imageFile.filename,
             originalName: imageFile.originalname,
             mimetype: imageFile.mimetype,
             size: imageFile.size,
-            s3Location: imageFile.s3Location || null,
-            s3Key: imageFile.s3Key || null,
+            s3Location: imageFile.location || null,
+            s3Key: imageFile.key || null,
             s3Error: imageFile.s3Error || null,
           };
         }
