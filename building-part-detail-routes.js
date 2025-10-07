@@ -11,13 +11,13 @@ function createBuildingPartDetailRoutes(db) {
     upload.single("image"),
     async (req, res) => {
       try {
-        const { buildingPartId, name, description } = req.body;
+        const { buildingPartName, name, description } = req.body;
         const imageFile = req.file; // optional
 
         // Validate required fields
-        if (!buildingPartId || !name || !description) {
+        if (!buildingPartName || !name || !description) {
           return res.status(400).json({
-            message: "buildingPartId, name, and description are required",
+            message: "buildingPartName, name, and description are required",
           });
         }
 
@@ -34,9 +34,15 @@ function createBuildingPartDetailRoutes(db) {
           };
         }
 
+        const parts = await db
+          .collection("parts")
+          .find({ name: Number(buildingPartName) })
+          .toArray();
+
+        const buildingPartIds = parts.map((part) => part._id);
         // Create the building part detail document
         const buildingPartDetail = {
-          buildingPartId,
+          buildingPartIds,
           name,
           description,
           image: imageData,
@@ -53,7 +59,7 @@ function createBuildingPartDetailRoutes(db) {
           message: "Building part detail created successfully",
           data: {
             id: result.insertedId,
-            buildingPartId,
+            buildingPartIds,
             name,
             description,
             image: imageData,
@@ -81,18 +87,42 @@ function createBuildingPartDetailRoutes(db) {
       // Calculate pagination
       const skip = (parseInt(page) - 1) * parseInt(limit);
 
-      // Get total count for pagination
+      // Create the aggregation pipeline
+      const pipeline = [
+        {
+          $match: query,
+        },
+        {
+          $lookup: {
+            from: "parts", // The collection to join
+            localField: "buildingPartIds", // Field in "buildingpartsdetail" that contains the ObjectIds
+            foreignField: "_id", // Field in "parts" to match the ObjectId
+            as: "partsDetails", // Output array containing matching "parts" documents
+          },
+        },
+        {
+          // Sort by createdAt in descending order
+          $sort: { createdAt: -1 },
+        },
+        {
+          // Pagination (skip and limit)
+          $skip: skip,
+        },
+        {
+          // Limit the number of documents to return
+          $limit: parseInt(limit),
+        },
+      ];
+
+      // Get the total count of matching documents for pagination
       const totalCount = await db
         .collection("buildingpartsdetail")
         .countDocuments(query);
 
-      // Fetch building part details with pagination
+      // Execute the aggregation pipeline
       const buildingPartDetails = await db
         .collection("buildingpartsdetail")
-        .find(query)
-        .sort({ createdAt: -1 }) // Sort by newest first
-        .skip(skip)
-        .limit(parseInt(limit))
+        .aggregate(pipeline)
         .toArray();
 
       const responseTime = Date.now() - startTime;
@@ -131,21 +161,40 @@ function createBuildingPartDetailRoutes(db) {
         });
       }
 
-      // Find building part detail by ID
+      const pipeline = [
+        {
+          $match: {
+            _id: new ObjectId(id),
+          },
+        },
+        {
+          $lookup: {
+            from: "parts",
+            localField: "buildingPartIds",
+            foreignField: "_id",
+            as: "partsDetails",
+          },
+        },
+      ];
+
+      // Execute the aggregation pipeline
       const buildingPartDetail = await db
         .collection("buildingpartsdetail")
-        .findOne({ _id: new ObjectId(id) });
+        .aggregate(pipeline)
+        .toArray();
 
-      if (!buildingPartDetail) {
+      // Check if the document was found
+      if (buildingPartDetail.length === 0) {
         return res.status(404).json({
           success: false,
           message: "Building part detail not found",
         });
       }
 
+      // Return the response
       return res.status(200).json({
         success: true,
-        data: buildingPartDetail,
+        data: buildingPartDetail[0], // We return the first document since we are fetching by ID
       });
     } catch (err) {
       console.error("get-building-part-detail error", err);
