@@ -13358,7 +13358,9 @@ const isObjectNotEmpty = (obj) =>
 app.post(
   "/add-project",
   upload.fields([
-    { name: "addDrawingPictures", maxCount: 10 },
+    { name: "mainDrawings", maxCount: 50 },
+    { name: "childDrawings", maxCount: 200 },
+    { name: "documents", maxCount: 50 },
     { name: "planPictures", maxCount: 10 },
   ]),
   async (req, res) => {
