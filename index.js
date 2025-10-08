@@ -1,7 +1,7 @@
 // Import required ars
 const { MongoClient, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
-const { upload } = require("./services/upload");
+const { upload, uploadToS3 } = require("./services/upload");
 const xlsx = require("xlsx");
 const path = require("path");
 const fs = require("fs");
@@ -7630,6 +7630,8 @@ app.post(
           description: descriptions[index] || "",
           originalName: file.originalname,
           createdDate: createdDates[index] || new Date().toISOString(),
+          s3Location: file.s3Location || null,
+          s3Key: file.s3Key || null,
         }));
       }
 

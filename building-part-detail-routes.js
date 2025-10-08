@@ -25,11 +25,12 @@ function createBuildingPartDetailRoutes(db) {
         let imageData = null;
         if (imageFile) {
           imageData = {
+            filename: imageFile.filename,
             originalName: imageFile.originalname,
             mimetype: imageFile.mimetype,
             size: imageFile.size,
-            s3Location: imageFile.location || null,
-            s3Key: imageFile.key || null,
+            s3Location: imageFile.s3Location || null,
+            s3Key: imageFile.s3Key || null,
             s3Error: imageFile.s3Error || null,
           };
         }
@@ -248,7 +249,6 @@ function createBuildingPartDetailRoutes(db) {
         // Handle image update if provided
         if (imageFile) {
           updateData.image = {
-            localPath: imageFile.path,
             filename: imageFile.filename,
             originalName: imageFile.originalname,
             mimetype: imageFile.mimetype,
