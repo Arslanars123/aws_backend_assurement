@@ -74,12 +74,10 @@ function createSupervisionInternRoutes(db) {
 
         // Check database connection
         if (!db) {
-          return res
-            .status(500)
-            .json({
-              success: false,
-              error: "Database connection not available",
-            });
+          return res.status(500).json({
+            success: false,
+            error: "Database connection not available",
+          });
         }
 
         const {
@@ -367,6 +365,350 @@ function createSupervisionInternRoutes(db) {
       }
     }
   );
+
+  // GET specific supervision intern detail by ID
+  router.get("/get-supervision-intern-detail/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Validate ID format
+      if (!id || id.length !== 24) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ID format",
+        });
+      }
+
+      const supervisionIntern = await db
+        .collection("supervision-interns")
+        .findOne({ _id: new ObjectId(id) });
+
+      if (!supervisionIntern) {
+        return res.status(404).json({
+          success: false,
+          message: "Supervision intern not found",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: supervisionIntern,
+      });
+    } catch (err) {
+      console.error("get-supervision-intern-detail error", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  });
+
+  // POST update supervision intern by ID
+  router.post(
+    "/update-supervision-intern/:id",
+    upload.fields([
+      { name: "generalPictures", maxCount: 10 },
+      { name: "markPictures", maxCount: 10 },
+      { name: "annotatedImage", maxCount: 10 },
+      { name: "originalPdf", maxCount: 1 },
+      { name: "annotatedPdf", maxCount: 1 },
+      { name: "annotatedPdfs", maxCount: 10 },
+    ]),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        // Validate ID format
+        if (!id || id.length !== 24) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid ID format",
+          });
+        }
+
+        // Check if supervision intern exists
+        const existingIntern = await db
+          .collection("supervision-interns")
+          .findOne({ _id: new ObjectId(id) });
+
+        if (!existingIntern) {
+          return res.status(404).json({
+            success: false,
+            message: "Supervision intern not found",
+          });
+        }
+
+        console.log("Updating supervision intern:", {
+          body: req.body,
+          bodyKeys: Object.keys(req.body),
+          files: req.files ? Object.keys(req.files) : "No files",
+        });
+
+        const {
+          companyId,
+          projectId,
+          comment,
+          profession,
+          buildingParts,
+          drawing,
+          type,
+          submittedDate,
+          generalPictureDescriptions,
+          markPictureDescriptions,
+          markPictureIndices,
+          selectedWorker,
+          selectedIndependentController,
+          selectedProjectManager,
+        } = req.body;
+
+        // Prepare update data
+        const updateData = {
+          updatedAt: new Date(),
+        };
+
+        // Add fields if provided
+        if (companyId) updateData.companyId = companyId;
+        if (projectId) updateData.projectId = projectId;
+        if (type) updateData.type = type;
+        if (comment !== undefined) updateData.comment = comment;
+        if (submittedDate) updateData.submittedDate = submittedDate;
+
+        // Parse and add JSON fields if provided
+        if (profession) {
+          try {
+            updateData.profession = JSON.parse(profession);
+          } catch (e) {
+            console.error("Error parsing profession:", e);
+          }
+        }
+
+        if (buildingParts) {
+          try {
+            updateData.buildingParts = JSON.parse(buildingParts);
+          } catch (e) {
+            console.error("Error parsing buildingParts:", e);
+          }
+        }
+
+        if (drawing) {
+          try {
+            updateData.drawing = JSON.parse(drawing);
+          } catch (e) {
+            console.error("Error parsing drawing:", e);
+          }
+        }
+
+        if (selectedWorker) {
+          try {
+            updateData.selectedWorker = JSON.parse(selectedWorker);
+          } catch (e) {
+            console.error("Error parsing selectedWorker:", e);
+          }
+        }
+
+        if (selectedIndependentController) {
+          try {
+            updateData.selectedIndependentController = JSON.parse(
+              selectedIndependentController
+            );
+          } catch (e) {
+            console.error("Error parsing selectedIndependentController:", e);
+          }
+        }
+
+        if (selectedProjectManager) {
+          try {
+            updateData.selectedProjectManager = JSON.parse(
+              selectedProjectManager
+            );
+          } catch (e) {
+            console.error("Error parsing selectedProjectManager:", e);
+          }
+        }
+
+        // Parse descriptions
+        if (generalPictureDescriptions) {
+          try {
+            if (Array.isArray(generalPictureDescriptions)) {
+              updateData.generalPictureDescriptions =
+                generalPictureDescriptions;
+            } else if (typeof generalPictureDescriptions === "string") {
+              try {
+                updateData.generalPictureDescriptions = JSON.parse(
+                  generalPictureDescriptions
+                );
+              } catch (jsonError) {
+                updateData.generalPictureDescriptions = [
+                  generalPictureDescriptions,
+                ];
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing generalPictureDescriptions:", e);
+          }
+        }
+
+        if (markPictureDescriptions) {
+          try {
+            if (Array.isArray(markPictureDescriptions)) {
+              updateData.markPictureDescriptions = markPictureDescriptions;
+            } else if (typeof markPictureDescriptions === "string") {
+              try {
+                updateData.markPictureDescriptions = JSON.parse(
+                  markPictureDescriptions
+                );
+              } catch (jsonError) {
+                updateData.markPictureDescriptions = [markPictureDescriptions];
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing markPictureDescriptions:", e);
+          }
+        }
+
+        if (markPictureIndices) {
+          try {
+            if (Array.isArray(markPictureIndices)) {
+              updateData.markPictureIndices = markPictureIndices
+                .map((indexStr) => {
+                  try {
+                    return JSON.parse(indexStr);
+                  } catch (e) {
+                    return null;
+                  }
+                })
+                .filter((index) => index !== null);
+            } else if (typeof markPictureIndices === "string") {
+              const parsedIndex = JSON.parse(markPictureIndices);
+              updateData.markPictureIndices = parsedIndex ? [parsedIndex] : [];
+            }
+          } catch (e) {
+            console.error("Error parsing markPictureIndices:", e);
+          }
+        }
+
+        // Handle file updates
+        if (
+          req.files["annotatedImage"] &&
+          req.files["annotatedImage"].length > 0
+        ) {
+          updateData.annotatedImage = req.files["annotatedImage"][0].filename;
+        }
+
+        if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
+          updateData.originalPdf = req.files["originalPdf"][0].filename;
+        }
+
+        if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
+          updateData.annotatedPdf = req.files["annotatedPdf"][0].filename;
+        }
+
+        if (
+          req.files["annotatedPdfs"] &&
+          req.files["annotatedPdfs"].length > 0
+        ) {
+          updateData.annotatedPdfs = req.files["annotatedPdfs"].map(
+            (file) => file.filename
+          );
+        }
+
+        if (
+          req.files["generalPictures"] &&
+          req.files["generalPictures"].length > 0
+        ) {
+          updateData.generalPictures = req.files["generalPictures"].map(
+            (file) => file.filename
+          );
+        }
+
+        if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
+          updateData.markPictures = req.files["markPictures"].map(
+            (file) => file.filename
+          );
+        }
+
+        // Update the supervision intern
+        const result = await db
+          .collection("supervision-interns")
+          .updateOne({ _id: new ObjectId(id) }, { $set: updateData });
+
+        if (result.modifiedCount === 0) {
+          return res.status(400).json({
+            success: false,
+            message: "No changes made or supervision intern not found",
+          });
+        }
+
+        // Get updated document
+        const updatedIntern = await db
+          .collection("supervision-interns")
+          .findOne({ _id: new ObjectId(id) });
+
+        return res.status(200).json({
+          success: true,
+          message: "Supervision intern updated successfully",
+          data: updatedIntern,
+        });
+      } catch (err) {
+        console.error("update-supervision-intern error", err);
+        return res.status(500).json({
+          success: false,
+          message: "Internal server error",
+          details: err.message,
+        });
+      }
+    }
+  );
+
+  // POST delete supervision intern by ID
+  router.post("/delete-supervision-intern/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Validate ID format
+      if (!id || id.length !== 24) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ID format",
+        });
+      }
+
+      // Check if supervision intern exists
+      const existingIntern = await db
+        .collection("supervision-interns")
+        .findOne({ _id: new ObjectId(id) });
+
+      if (!existingIntern) {
+        return res.status(404).json({
+          success: false,
+          message: "Supervision intern not found",
+        });
+      }
+
+      // Delete the supervision intern
+      const result = await db
+        .collection("supervision-interns")
+        .deleteOne({ _id: new ObjectId(id) });
+
+      if (result.deletedCount === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Failed to delete supervision intern",
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Supervision intern deleted successfully",
+      });
+    } catch (err) {
+      console.error("delete-supervision-intern error", err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  });
 
   return router;
 }
