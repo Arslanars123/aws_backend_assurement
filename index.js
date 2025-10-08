@@ -311,6 +311,10 @@ async function startServer() {
     const createSupervisionChecklistRoutes = require("./supervision-checklist-routes");
     app.use("/", createSupervisionChecklistRoutes(db));
 
+    // Register supervision intern routes after database connection is established
+    const createSupervisionInternRoutes = require("./supervision-intern-routes");
+    app.use("/", createSupervisionInternRoutes(db));
+
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
