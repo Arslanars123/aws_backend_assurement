@@ -370,8 +370,8 @@ function createSupervisionInternRoutes(db) {
           markPictureDescriptions: parsedMarkPictureDescriptions,
           markPictureIndices: parsedMarkPictureIndices,
           annotatedImage: annotatedImage,
-          originalPdf: originalPdfFilename,
-          annotatedPdf: annotatedPdfFilename,
+          originalPdf: originalPdf,
+          annotatedPdf: annotatedPdf,
           annotatedPdfs,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -628,29 +628,58 @@ function createSupervisionInternRoutes(db) {
           }
         }
 
-        // Handle file updates
+        // Handle file updates with S3 metadata
         if (
           req.files["annotatedImage"] &&
           req.files["annotatedImage"].length > 0
         ) {
-          updateData.annotatedImage = req.files["annotatedImage"][0].filename;
+          const file = req.files["annotatedImage"][0];
+          updateData.annotatedImage = {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          };
         }
 
         if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
-          updateData.originalPdf = req.files["originalPdf"][0].filename;
+          const file = req.files["originalPdf"][0];
+          updateData.originalPdf = {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          };
         }
 
         if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
-          updateData.annotatedPdf = req.files["annotatedPdf"][0].filename;
+          const file = req.files["annotatedPdf"][0];
+          updateData.annotatedPdf = {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          };
         }
 
         if (
           req.files["annotatedPdfs"] &&
           req.files["annotatedPdfs"].length > 0
         ) {
-          updateData.annotatedPdfs = req.files["annotatedPdfs"].map(
-            (file) => file.filename
-          );
+          updateData.annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          }));
         }
 
         if (
@@ -658,14 +687,26 @@ function createSupervisionInternRoutes(db) {
           req.files["generalPictures"].length > 0
         ) {
           updateData.generalPictures = req.files["generalPictures"].map(
-            (file) => file.filename
+            (file) => ({
+              filename: file.filename,
+              originalName: file.originalname,
+              mimetype: file.mimetype,
+              size: file.size,
+              s3Location: file.s3Location || null,
+              s3Key: file.s3Key || null,
+            })
           );
         }
 
         if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-          updateData.markPictures = req.files["markPictures"].map(
-            (file) => file.filename
-          );
+          updateData.markPictures = req.files["markPictures"].map((file) => ({
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          }));
         }
 
         // Update the supervision intern
