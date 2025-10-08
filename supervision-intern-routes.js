@@ -261,53 +261,94 @@ function createSupervisionInternRoutes(db) {
           parsedMarkPictureIndices = [];
         }
 
-        // Handle annotated image
+        // Handle annotated image with S3 metadata
         let annotatedImage = null;
         if (
           req.files["annotatedImage"] &&
           req.files["annotatedImage"].length > 0
         ) {
-          annotatedImage = req.files["annotatedImage"][0].filename;
+          const file = req.files["annotatedImage"][0];
+          annotatedImage = {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          };
         }
 
-        // Handle original PDF
-        let originalPdfFilename = null;
+        // Handle original PDF with S3 metadata
+        let originalPdf = null;
         if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
-          originalPdfFilename = req.files["originalPdf"][0].filename;
+          const file = req.files["originalPdf"][0];
+          originalPdf = {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          };
         }
 
-        // Handle annotated PDF
-        let annotatedPdfFilename = null;
+        // Handle annotated PDF with S3 metadata
+        let annotatedPdf = null;
         if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
-          annotatedPdfFilename = req.files["annotatedPdf"][0].filename;
+          const file = req.files["annotatedPdf"][0];
+          annotatedPdf = {
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          };
         }
 
-        // Handle multiple annotated PDFs
+        // Handle multiple annotated PDFs with S3 metadata
         let annotatedPdfs = [];
         if (
           req.files["annotatedPdfs"] &&
           req.files["annotatedPdfs"].length > 0
         ) {
-          annotatedPdfs = req.files["annotatedPdfs"].map(
-            (file) => file.filename
-          );
+          annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          }));
         }
 
-        // Handle general pictures
+        // Handle general pictures with S3 metadata
         let generalPictures = [];
         if (
           req.files["generalPictures"] &&
           req.files["generalPictures"].length > 0
         ) {
-          generalPictures = req.files["generalPictures"].map(
-            (file) => file.filename
-          );
+          generalPictures = req.files["generalPictures"].map((file) => ({
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          }));
         }
 
-        // Handle mark pictures
+        // Handle mark pictures with S3 metadata
         let markPictures = [];
         if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-          markPictures = req.files["markPictures"].map((file) => file.filename);
+          markPictures = req.files["markPictures"].map((file) => ({
+            filename: file.filename,
+            originalName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+          }));
         }
 
         // Prepare data for insertion
