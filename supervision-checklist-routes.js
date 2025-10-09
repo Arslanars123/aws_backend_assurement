@@ -20,7 +20,7 @@ function createSupervisionChecklistRoutes(db) {
 
       // Query to find all records where projectId exists in the projectID array field
       const supervisionDetails = await db
-        .collection("supervision-check-list")
+        .collection("project-supervision-check-list")
         .find({ projectID: new ObjectId(projectId) })
         .toArray();
 
@@ -76,7 +76,7 @@ function createSupervisionChecklistRoutes(db) {
 
       // Update the record with projectId
       const result = await db
-        .collection("supervision-check-list")
+        .collection("project-supervision-check-list")
         .updateOne(
           { _id: new ObjectId(supervisionCheckListId) },
           { $set: updateData }
@@ -91,7 +91,7 @@ function createSupervisionChecklistRoutes(db) {
 
       // Get the updated record
       const updatedRecord = await db
-        .collection("supervision-check-list")
+        .collection("project-supervision-check-list")
         .findOne({ _id: new ObjectId(supervisionCheckListId) });
 
       return res.status(200).json({
