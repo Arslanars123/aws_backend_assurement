@@ -15775,6 +15775,7 @@ app.post(
 
       // Create document entries for each uploaded file
       const documentEntries = files.map((file) => ({
+        ...file,
         originalName: file.originalname,
         storedName: file.filename,
         category: category,
