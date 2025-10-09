@@ -53,37 +53,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Get Project Managers API
-app.get("/get-project-managers", async (req, res) => {
-  try {
-    const { companyId, projectId } = req.query;
-    const query = addFilters({}, companyId, projectId);
-
-    // Fetch project managers from users collection with isProjectManager 'yes'
-    const projectManagers = await db
-      .collection("users")
-      .find({ ...query, isProjectManager: "yes" })
-      .toArray();
-
-    // Deduplicate users based on email address (username field contains email)
-    const uniqueUsers = [];
-    const seenEmails = new Set();
-
-    for (const user of projectManagers) {
-      const email = user.username || user.email || user._id;
-      if (!seenEmails.has(email)) {
-        seenEmails.add(email);
-        uniqueUsers.push(user);
-      }
-    }
-
-    res.status(200).json(uniqueUsers);
-  } catch (error) {
-    console.error("Error fetching project managers:", error);
-    res.status(500).json({ error: "Failed to fetch project managers" });
-  }
-});
-
 // Get Independent Controllers API
 app.get("/get-independent-controllers", async (req, res) => {
   try {
