@@ -13439,6 +13439,28 @@ app.post(
 
       const newProjectId = result.insertedId?.toString();
 
+      if (!newProjectId)
+        res.status(500).json({ error: "Failed to create project" });
+
+      const supervisionchecklist = await db
+        .collection("supervision-check-list")
+        .find({})
+        .toArray();
+
+      if (supervisionchecklist.length > 0) {
+        const supervisionInsertPromises = supervisionchecklist.map((check) => {
+          return db.collection("project-supervision-check-list").insertOne({
+            projectId: new ObjectId(newProjectId),
+            checkId: check._id,
+            checkDetails: check,
+            createdAt: new Date(),
+          });
+        });
+
+        // Wait for all insertions to complete
+        await Promise.all(supervisionInsertPromises);
+      }
+
       if (parsedProfessions?.length > 0) {
         const updatedProfessions = parsedProfessions.map((profession) => {
           const filteredProjectsId =

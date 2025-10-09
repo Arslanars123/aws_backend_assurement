@@ -18,10 +18,9 @@ function createSupervisionChecklistRoutes(db) {
         });
       }
 
-      // Query to find all records where projectId exists in the projectID array field
       const supervisionDetails = await db
         .collection("project-supervision-check-list")
-        .find({ projectID: new ObjectId(projectId) })
+        .find({ projectId: new ObjectId(projectId) })
         .toArray();
 
       return res.status(200).json({
@@ -50,9 +49,9 @@ function createSupervisionChecklistRoutes(db) {
           message: "supervisionCheckListId and projectId are required",
         });
       }
-      // Check if the record exists
+
       const existingRecord = await db
-        .collection("supervision-check-list")
+        .collection("project-supervision-check-list")
         .findOne({ _id: new ObjectId(supervisionCheckListId) });
 
       if (!existingRecord) {
@@ -62,11 +61,10 @@ function createSupervisionChecklistRoutes(db) {
         });
       }
 
-      // Prepare update data
       const updateData = {
         updatedAt: new Date(),
-        isAproved: true,
-        approvedDate: Date.now(),
+        isApproved: true,
+        approvedDate: new Date(),
       };
 
       // Add note if provided
@@ -74,7 +72,7 @@ function createSupervisionChecklistRoutes(db) {
         updateData.note = note;
       }
 
-      // Update the record with projectId
+      // Update the record in project-supervision-check-list
       const result = await db
         .collection("project-supervision-check-list")
         .updateOne(
