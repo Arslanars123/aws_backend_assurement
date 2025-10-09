@@ -132,6 +132,7 @@ function createProjectManagementRoutes(db) {
           plan,
           certificateSchema,
           companyId,
+          mainDrawingGroups,
         } = req.body;
 
         const parsedBasicDetails =
@@ -164,16 +165,6 @@ function createProjectManagementRoutes(db) {
           typeof certificateSchema === "string"
             ? JSON.parse(certificateSchema)
             : certificateSchema;
-
-        // Safely handle file uploads
-        const addDrawingPictures =
-          req.files && req.files["addDrawingPictures"]
-            ? req.files["addDrawingPictures"].map((file) => file.filename)
-            : [];
-        const planPictures =
-          req.files && req.files["planPictures"]
-            ? req.files["planPictures"].map((file) => file.filename)
-            : [];
 
         const checks = await db.collection("checks").find({}).toArray();
         const checksWithCreatedAt = checks.map((check) => ({
@@ -262,6 +253,12 @@ function createProjectManagementRoutes(db) {
           });
         }
 
+        // Handle plan pictures
+        const planPictures =
+          req.files && req.files["planPictures"]
+            ? req.files["planPictures"].map((file) => file.filename)
+            : [];
+
         let planId = "";
         if (isObjectNotEmpty(parsedPlan)) {
           const plan = await db.collection("plans").insertOne({
@@ -274,14 +271,89 @@ function createProjectManagementRoutes(db) {
           planId = plan.insertedId?.toString();
         }
 
-        if (isObjectNotEmpty(parsedAddDrawing)) {
-          await db.collection("draws").insertOne({
-            ...parsedAddDrawing,
-            pictures: addDrawingPictures,
-            companyId,
-            projectsId: [newProjectId],
-            planId,
-          });
+        // Handle drawings (similar to store-draw API)
+        if (parsedAddDrawing && mainDrawingGroups) {
+          const mainFiles = req.files["mainDrawings"] || [];
+          const childFiles = req.files["childDrawings"] || [];
+
+          // Parse the mainDrawingGroups to understand the structure
+          const groups = JSON.parse(mainDrawingGroups || "[]");
+
+          // Create the drawings array to store all drawing groups
+          const drawings = [];
+
+          // Process each main drawing group
+          for (let i = 0; i < groups.length; i++) {
+            const group = groups[i];
+            const mainDrawingIndex = group.mainIndex;
+            const childIndices = group.childIndices || [];
+
+            // Get the main drawing file
+            const mainFile = mainFiles[mainDrawingIndex];
+            if (!mainFile) continue;
+
+            // Create main drawing object
+            const mainDrawing = {
+              stored: mainFile.filename,
+              original: mainFile.originalname,
+              uploadedAt: new Date(),
+            };
+
+            // Get associated child drawings
+            const childDrawings = childIndices
+              .map((childIndex) => {
+                const childFile = childFiles[childIndex];
+                if (!childFile) return null;
+
+                return {
+                  stored: childFile.filename,
+                  original: childFile.originalname,
+                  parentMainIndex: mainDrawingIndex,
+                  uploadedAt: new Date(),
+                };
+              })
+              .filter((child) => child !== null);
+
+            // Create drawing group
+            const drawingGroup = {
+              mainDrawing,
+              childDrawings,
+              createdAt: new Date(),
+            };
+
+            drawings.push(drawingGroup);
+          }
+
+          // Insert all drawing groups into the database
+          for (const drawingGroup of drawings) {
+            await db.collection("draws").insertOne({
+              companyId,
+              projectsId: [newProjectId],
+              planId,
+              mainDrawings: [drawingGroup.mainDrawing],
+              childDrawings: drawingGroup.childDrawings,
+              createdAt: drawingGroup.createdAt,
+              ...parsedAddDrawing,
+            });
+          }
+        }
+
+        // Handle documents (similar to store-documents API)
+        const documentFiles = req.files["documents"] || [];
+        if (documentFiles.length > 0) {
+          // Create document entries for each uploaded file
+          const documentEntries = documentFiles.map((file) => ({
+            originalName: file.originalname,
+            storedName: file.filename,
+            category: parsedAddDrawing?.category || "general",
+            description: parsedAddDrawing?.description || "",
+            uploadedAt: new Date(),
+            companyId: companyId,
+            projectId: newProjectId,
+          }));
+
+          // Insert documents into database
+          await db.collection("documents").insertMany(documentEntries);
         }
 
         res.status(201).json(result);
