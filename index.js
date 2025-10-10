@@ -11752,7 +11752,7 @@ app.post(
           city: city,
           companyId: companyId,
           verificationCode,
-          isVerified: faslse,
+          isVerified: false,
           verificationSentAt: new Date(),
           createdAt: new Date(),
         };
