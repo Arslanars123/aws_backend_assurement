@@ -5102,7 +5102,27 @@ app.get("/get-parts", async (req, res) => {
     if (SubjectMatterId && SubjectMatterId !== "null")
       query.SubjectMatterId = SubjectMatterId;
 
-    const parts = await db.collection("parts").find(query).toArray();
+    const pipeLine = [
+      {
+        $match: query,
+      },
+      {
+        $lookup: {
+          from: "buildingpartsdetail",
+          localField: "_id",
+          foreignField: "buildingPartIds",
+          as: "buildingPartDetail",
+        },
+      },
+      {
+        $unwind: {
+          path: "$buildingPartDetail",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+    ];
+
+    const parts = await db.collection("parts").aggregate(pipeLine).toArray();
     res.status(200).json(parts);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch parts" });
