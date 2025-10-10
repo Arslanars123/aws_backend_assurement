@@ -11735,8 +11735,92 @@ app.post(
 
       // Insert into DB
       const result = await db.collection("companies").insertOne(companyData);
+      const companyId = result.insertedId;
 
-      res.status(201).json(result);
+      try {
+        const adminPassword = generateRandomPassword();
+        const verificationCode = generateVerificationCode();
+
+        const adminUserData = {
+          username: email,
+          password: adminPassword,
+          role: "admin",
+          phone: companyPhone,
+          name: contactPerson,
+          address: address,
+          postalCode: postalCode,
+          city: city,
+          companyId: companyId,
+          verificationCode,
+          isVerified: faslse,
+          verificationSentAt: new Date(),
+          createdAt: new Date(),
+        };
+
+        const userResult = await db
+          .collection("users")
+          .insertOne(adminUserData);
+
+        try {
+          await sendCompanyAdminWelcomeEmail(
+            email,
+            contactPerson || name,
+            adminPassword,
+            verificationCode,
+            name
+          );
+
+          res.status(201).json({
+            success: true,
+            message:
+              "Company and admin user created successfully! Login credentials sent to admin email.",
+            companyId: companyId,
+            userId: userResult.insertedId,
+            emailSent: true,
+            company: {
+              name,
+              email,
+              contactPerson,
+            },
+          });
+        } catch (emailError) {
+          console.error("❌ Welcome email failed:", emailError);
+
+          res.status(201).json({
+            success: true,
+            message:
+              "Company and admin user created successfully! However, login credentials email could not be sent.",
+            companyId: companyId,
+            userId: userResult.insertedId,
+            emailSent: false,
+            warning:
+              "Please contact support to resend login credentials email.",
+            company: {
+              name,
+              email,
+              contactPerson,
+            },
+          });
+        }
+      } catch (userError) {
+        console.error("❌ Admin user creation failed:", userError);
+
+        // Company was created but admin user failed
+        res.status(201).json({
+          success: true,
+          message:
+            "Company created successfully! However, admin user creation failed.",
+          companyId: companyId,
+          userId: null,
+          emailSent: false,
+          warning: "Please contact support to create admin user manually.",
+          company: {
+            name,
+            email,
+            contactPerson,
+          },
+        });
+      }
     } catch (error) {
       console.error("Error:", error);
       res.status(500).json({ error: "Failed to create company" });
@@ -15693,6 +15777,17 @@ function generateVerificationCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// Generate a random password for admin users
+function generateRandomPassword() {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+  let password = "";
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
 // Send verification email
 async function sendVerificationEmail(email, username, verificationCode) {
   try {
@@ -15764,6 +15859,113 @@ The Assurement Team`,
   } catch (error) {
     console.error(
       "❌ Failed to send verification email to:",
+      email,
+      "Error:",
+      error.message
+    );
+    throw error;
+  }
+}
+
+async function sendCompanyAdminWelcomeEmail(
+  email,
+  username,
+  adminPassword,
+  verificationCode,
+  companyName
+) {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: "email-smtp.eu-north-1.amazonaws.com",
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      logger: true,
+      debug: true,
+    });
+
+    const mailOptions = {
+      from: "info@assurement.dk",
+      to: email,
+      subject: "🏢 Welcome to Assurement - Company Admin Account Created",
+      text: `Hello ${username},
+
+Congratulations! Your company "${companyName}" has been successfully registered on Assurement.
+
+Your admin account has been created with the following details:
+- Email: ${email}
+- Password: ${adminPassword}
+- Role: Admin
+- Company: ${companyName}
+Your verification code is: ${verificationCode}
+
+You can now login with these credentials. We recommend changing your password after first login for security.
+
+Best regards,
+The Assurement Team`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h2 style="color: #2c3e50;">🏢 Welcome to Assurement!</h2>
+            <p style="color: #7f8c8d;">Your company admin account has been created successfully</p>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #2c3e50; margin: 0 0 15px 0;">Company Details</h3>
+            <p style="margin: 5px 0;"><strong>Company Name:</strong> ${companyName}</p>
+            <p style="margin: 5px 0;"><strong>Your Role:</strong> <span style="color: #e74c3c; font-weight: bold;">Admin</span></p>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+            <h3 style="color: #27ae60; margin: 0;">Your Login Credentials</h3>
+            <div style="margin: 15px 0; padding: 15px; background-color: white; border: 2px dashed #3498db; border-radius: 8px;">
+              <p style="margin: 5px 0; color: #2c3e50;"><strong>Email:</strong> ${email}</p>
+              <p style="margin: 5px 0; color: #2c3e50;"><strong>Password:</strong> <span style="font-family: monospace; font-size: 18px; font-weight: bold; color: #e74c3c;">${adminPassword}</span></p>
+            </div>
+            <p style="color: #7f8c8d; margin: 0;">You can now login with these credentials. We recommend changing your password after first login for security.</p>
+          </div>
+          
+          <div style="margin: 30px 0;">
+            <p style="color: #2c3e50; line-height: 1.6;">
+              Hello <strong>${username}</strong>,<br><br>
+              Congratulations! Your company <strong>"${companyName}"</strong> has been successfully registered on Assurement. 
+              You have been automatically set up as the company administrator.
+            </p>
+            <p style="color: #2c3e50; line-height: 1.6;">
+              As an admin, you can now:
+            </p>
+            <ul style="color: #2c3e50; line-height: 1.6;">
+              <li>Manage company information and settings</li>
+              <li>Create and manage projects</li>
+              <li>Add and manage team members</li>
+              <li>Access all company reports and analytics</li>
+            </ul>
+          </div>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+          <p style="text-align: center; color: #7f8c8d; font-size: 12px;">
+            Sent from Assurement Backend Server<br>
+            If you didn't create this company account, please contact support immediately.
+          </p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(
+      "✅ Company admin welcome email sent successfully to:",
+      email,
+      "Message ID:",
+      info.messageId
+    );
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(
+      "❌ Failed to send company admin welcome email to:",
       email,
       "Error:",
       error.message
