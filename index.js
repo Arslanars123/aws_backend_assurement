@@ -11752,7 +11752,7 @@ app.post(
           city: city,
           companyId: companyId,
           verificationCode,
-          isVerified: false,
+          isVerified: true,
           verificationSentAt: new Date(),
           createdAt: new Date(),
         };
@@ -15900,7 +15900,6 @@ Your admin account has been created with the following details:
 - Password: ${adminPassword}
 - Role: Admin
 - Company: ${companyName}
-Your verification code is: ${verificationCode}
 
 You can now login with these credentials. We recommend changing your password after first login for security.
 
@@ -15925,6 +15924,7 @@ The Assurement Team`,
             <div style="margin: 15px 0; padding: 15px; background-color: white; border: 2px dashed #3498db; border-radius: 8px;">
               <p style="margin: 5px 0; color: #2c3e50;"><strong>Email:</strong> ${email}</p>
               <p style="margin: 5px 0; color: #2c3e50;"><strong>Password:</strong> <span style="font-family: monospace; font-size: 18px; font-weight: bold; color: #e74c3c;">${adminPassword}</span></p>
+              <p style="margin: 5px 0; color: #2c3e50;"><strong>Your verification code is::</strong> <span style="font-family: monospace; font-size: 18px; font-weight: bold; color: #e74c3c;">${verificationCode}</span></p>
             </div>
             <p style="color: #7f8c8d; margin: 0;">You can now login with these credentials. We recommend changing your password after first login for security.</p>
           </div>
