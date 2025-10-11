@@ -1642,14 +1642,10 @@ app.get("/get-controls", async (req, res) => {
 // New endpoint for "controls of static report" collection
 app.post("/get-controls-of-static-report", async (req, res) => {
   try {
-    const { subjectMatterId, language, projectId } = req.body;
+    const { subjectMatterId, projectId } = req.body;
 
-    // Log when using fallback
     if (!projectId) {
-      console.log("⚠️ No projectId provided, using fallback:", projectId);
       return res.status(400).json({ error: "projectId is required" });
-    } else {
-      console.log("✅ Using provided projectId:", projectId);
     }
 
     if (!subjectMatterId) {
@@ -1657,24 +1653,16 @@ app.post("/get-controls-of-static-report", async (req, res) => {
     }
 
     let euroCodesStr = [];
-    let euroCodeSource = "inputs"; // Track where EuroCodes came from
+    let euroCodeSource = "inputs";
 
-    // 1) First try to get EuroCodes from projectprofessioeurocode collection (user's selection)
     if (projectId) {
       try {
-        console.log("🔍 Looking for project EuroCodes:", {
-          projectId,
-          subjectMatterId,
-        });
-
         const projectEuroCodesDoc = await db
           .collection("projectprofessioeurocode")
           .findOne({
             subjectMatterId: subjectMatterId,
             projectId: projectId,
           });
-
-        console.log("📋 Found project EuroCodes doc:", projectEuroCodesDoc);
 
         if (
           projectEuroCodesDoc &&
@@ -1687,11 +1675,6 @@ app.post("/get-controls-of-static-report", async (req, res) => {
             )
             .map((v) => String(v).trim());
           euroCodeSource = "projectprofessioeurocode";
-          console.log("✅ Using project EuroCodes:", euroCodesStr);
-        } else {
-          console.log(
-            "❌ No valid project EuroCodes found, will return empty results"
-          );
         }
       } catch (error) {
         console.log(
@@ -1699,22 +1682,11 @@ app.post("/get-controls-of-static-report", async (req, res) => {
           error.message
         );
       }
-    } else {
-      console.log("⚠️ No projectId provided, using fallback project ID");
-      // This should not happen anymore since we have a fallback, but keeping for safety
     }
-
-    // 2) If no project-specific EuroCodes found, return empty results (NO FALLBACK)
     if (euroCodesStr.length === 0) {
-      console.log(
-        "❌ No project-specific EuroCodes found, returning empty results (no fallback)"
-      );
-
       return res.status(200).json({
         meta: {
           subjectMatterId,
-          requestedLanguage: language ?? null,
-          appliedLanguageFilter: language === "DK" ? "DK" : "non-DK",
           euroCodes: [],
           euroCodeSource: "none", // No EuroCodes found
           projectId: projectId || null,
@@ -1727,23 +1699,14 @@ app.post("/get-controls-of-static-report", async (req, res) => {
       });
     }
 
-    // 3) Build language filter per your rule
-    const langFilter =
-      language === "DK"
-        ? { language: "DK" } // Danish only
-        : { language: { $ne: "DK" } }; // Non-Danish (default when missing or anything else)
-
-    // 4) Query controls of static report by euroCode IN EuroCode[] AND language rule
     const filter = {
-      euroCode: { $in: euroCodesStr }, // controls store "1" (string) in your screenshot
-      ...langFilter,
+      euroCode: { $in: euroCodesStr },
     };
 
-    // Only fetch the entries array (and minimal meta for context)
     const docs = await db
       .collection("controls of static report")
       .find(filter, {
-        projection: { _id: 1, euroCode: 1, language: 1, entries: 1 },
+        projection: { _id: 1, euroCode: 1, entries: 1 },
       })
       .toArray();
 
@@ -1754,7 +1717,6 @@ app.post("/get-controls-of-static-report", async (req, res) => {
       });
     }
 
-    // 5) Return ENTRIES ONLY (flattened) + meta if you need it
     const entries = docs.flatMap((d) =>
       Array.isArray(d.entries) ? d.entries : []
     );
@@ -1762,8 +1724,6 @@ app.post("/get-controls-of-static-report", async (req, res) => {
     return res.status(200).json({
       meta: {
         subjectMatterId,
-        requestedLanguage: language ?? null,
-        appliedLanguageFilter: language === "DK" ? "DK" : "non-DK",
         euroCodes: euroCodesStr,
         euroCodeSource: euroCodeSource, // Show where EuroCodes came from
         projectId: projectId || null,
@@ -13430,121 +13390,6 @@ app.post(
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to update plan" });
-    }
-  }
-);
-
-app.post(
-  "/store-project",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
-  async (req, res) => {
-    try {
-      const { name, address, postCode, city, startDate, companyId } = req.body; // Use the new fields instead of 'username'
-      console.log(req.files); // Log files to inspect
-
-      // Initialize variables for files
-      let picture = null;
-      let pictures = [];
-
-      // Handle single picture upload
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
-      }
-
-      // Handle multiple pictures upload
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
-      }
-
-      // Insert the data into the database
-      const result = await db.collection("projects").insertOne({
-        name, // Use 'name' instead of 'username'
-        address,
-        postCode,
-        city,
-        startDate,
-        picture, // Single file (null if not uploaded)
-        pictures, // Array of multiple files (empty if not uploaded)
-        companyId,
-      });
-
-      res.status(201).json(result);
-    } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create project" });
-    }
-  }
-);
-app.post(
-  "/update-project/:id",
-  upload.fields([
-    { name: "picture", maxCount: 1 }, // Single file field
-    { name: "pictures", maxCount: 10 }, // Multiple file field
-  ]),
-  async (req, res) => {
-    try {
-      const {
-        name,
-        address,
-        postalCode,
-        city,
-        startDate,
-        picture2,
-        pictures2, // Optional field for single file reference
-      } = req.body;
-      console.log(pictures2);
-
-      const updateData = {};
-
-      // Dynamically add provided fields to updateData
-      if (name) updateData.name = name; // Add 'name' field
-      if (address) updateData.address = address; // Add 'address' field
-      if (postalCode) updateData.postalCode = postalCode; // Add 'postalCode' field
-      if (city) updateData.city = city; // Add 'city' field
-      if (startDate) updateData.startDate = startDate; // Add 'startDate' field
-      if (picture2) {
-        updateData.picture = picture2; // Use the existing picture if provided in the request
-      }
-
-      // Handle single file upload (picture)
-      if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
-      }
-
-      let picturesArray = [];
-      if (!pictures2) {
-        updateData.pictures = [];
-      }
-      if (pictures2) {
-        picturesArray = pictures2.split(","); // Splitting by comma
-        updateData.pictures = picturesArray;
-      }
-
-      // Handle multiple file uploads (pictures)
-      if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
-
-        // Append new files to the existing files
-        const existingFiles = picturesArray;
-        updateData.pictures = [...existingFiles, ...newFiles];
-      }
-
-      // Update the project document in the database
-      const result = await db
-        .collection("projects")
-        .updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
-
-      if (result.matchedCount === 0) {
-        return res.status(404).json({ error: "Project not found" });
-      }
-
-      res.status(200).json({ message: "Project updated successfully", result });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to update project" });
     }
   }
 );
