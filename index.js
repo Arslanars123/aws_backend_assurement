@@ -287,6 +287,10 @@ async function startServer() {
     const createSupervisionInternRoutes = require("./supervision-intern-routes");
     app.use("/", createSupervisionInternRoutes(db));
 
+    // Register static report controls routes after database connection is established
+    const createStaticReportControlsRoutes = require("./static-report-controls-routes");
+    app.use("/", createStaticReportControlsRoutes(db));
+
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
@@ -1636,108 +1640,6 @@ app.get("/get-controls", async (req, res) => {
     res.status(200).json(controls);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch controls" });
-  }
-});
-
-// New endpoint for "controls of static report" collection
-app.post("/get-controls-of-static-report", async (req, res) => {
-  try {
-    const { subjectMatterId, projectId } = req.body;
-
-    if (!projectId) {
-      return res.status(400).json({ error: "projectId is required" });
-    }
-
-    if (!subjectMatterId) {
-      return res.status(400).json({ error: "subjectMatterId is required" });
-    }
-
-    let euroCodesStr = [];
-    let euroCodeSource = "inputs";
-
-    if (projectId) {
-      try {
-        const projectEuroCodesDoc = await db
-          .collection("projectprofessioeurocode")
-          .findOne({
-            subjectMatterId: subjectMatterId,
-            projectId: projectId,
-          });
-
-        if (
-          projectEuroCodesDoc &&
-          projectEuroCodesDoc.eurocodes &&
-          Array.isArray(projectEuroCodesDoc.eurocodes)
-        ) {
-          euroCodesStr = projectEuroCodesDoc.eurocodes
-            .filter(
-              (v) => v !== undefined && v !== null && `${v}`.trim() !== ""
-            )
-            .map((v) => String(v).trim());
-          euroCodeSource = "projectprofessioeurocode";
-        }
-      } catch (error) {
-        console.log(
-          "❌ Error fetching from projectprofessioeurocode, will return empty results:",
-          error.message
-        );
-      }
-    }
-    if (euroCodesStr.length === 0) {
-      return res.status(200).json({
-        meta: {
-          subjectMatterId,
-          euroCodes: [],
-          euroCodeSource: "none", // No EuroCodes found
-          projectId: projectId || null,
-          docsMatched: 0,
-          entriesCount: 0,
-          message:
-            "No project-specific EuroCodes configured for this project and subject matter",
-        },
-        entries: [],
-      });
-    }
-
-    const filter = {
-      euroCode: { $in: euroCodesStr },
-    };
-
-    const docs = await db
-      .collection("controls of static report")
-      .find(filter, {
-        projection: { _id: 1, euroCode: 1, entries: 1 },
-      })
-      .toArray();
-
-    if (!docs.length) {
-      return res.status(404).json({
-        error: "No controls found for the given EuroCode(s) and language rule",
-        filter,
-      });
-    }
-
-    const entries = docs.flatMap((d) =>
-      Array.isArray(d.entries) ? d.entries : []
-    );
-
-    return res.status(200).json({
-      meta: {
-        subjectMatterId,
-        euroCodes: euroCodesStr,
-        euroCodeSource: euroCodeSource, // Show where EuroCodes came from
-        projectId: projectId || null,
-        usedFallbackProjectId: !projectId, // Show if fallback was used
-        docsMatched: docs.length,
-        entriesCount: entries.length,
-      },
-      entries,
-    });
-  } catch (error) {
-    console.error("Error fetching controls of static report:", error);
-    return res
-      .status(500)
-      .json({ error: "Failed to fetch controls of static report" });
   }
 });
 
