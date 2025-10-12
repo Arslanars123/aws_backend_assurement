@@ -2305,9 +2305,10 @@ app.get("/get-company-professions", async (req, res) => {
 
     if (companyId && companyId !== "null" && companyId !== "undefined") {
       query.companyId = companyId;
+      query.projectId = null
     }
     if (projectId && projectId !== "null" && projectId !== "undefined") {
-      query.projectsId = { $in: [projectId] };
+      query.projectId = projectId;
     }
     if (
       SubjectMatterId &&
@@ -2836,10 +2837,16 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
       }
     }
 
-    const existingProfession = await db.collection("professions").findOne({
+    const filter = {
       professionID,
       companyId,
-    });
+    };
+
+    if (projectsId) filter.projectId = projectsId;
+
+    const existingProfession = await db
+      .collection("professions")
+      .findOne(filter);
 
     const subjectMatterIdKey = `${profession.SubjectMatterId}`;
 
@@ -2852,9 +2859,11 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
         .collection("professions")
         .updateOne({ professionID, companyId }, { $set: professionDetails });
     } else {
-      await db.collection("professions").insertOne({
+      const professionToInsert = {
         ...profession,
-      });
+        ...(projectsId && { projectId: projectsId }),
+      };
+      await db.collection("professions").insertOne(professionToInsert);
     }
   }
 

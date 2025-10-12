@@ -39,10 +39,33 @@ function createProjectManagementRoutes(db) {
       const { professionID, companyId, ...professionDetails } = profession;
       SubjectMatterIdArray.push(profession.SubjectMatterId);
 
-      const existingProfession = await db.collection("professions").findOne({
+      if (projectsId) {
+        for (const euroCode of profession.projectEuroCodes) {
+          const docs = await db
+            .collection("controls of static report")
+            .find({ euroCode: { $in: [Number(euroCode), String(euroCode)] } })
+            .toArray();
+
+          for (const doc of docs) {
+            await db.collection("projectcontrolsofstaticreport").insertOne({
+              projectId: projectsId,
+              professionId: professionID,
+              companyId: companyId,
+              detail: doc,
+            });
+          }
+        }
+      }
+
+      const filter = {
         professionID,
         companyId,
-      });
+      };
+
+      if (projectsId) filter.projectId = projectsId;
+      const existingProfession = await db
+        .collection("professions")
+        .findOne(filter);
 
       const subjectMatterIdKey = `${profession.SubjectMatterId}`;
 
@@ -56,9 +79,11 @@ function createProjectManagementRoutes(db) {
           .collection("professions")
           .updateOne({ professionID, companyId }, { $set: professionDetails });
       } else {
-        await db.collection("professions").insertOne({
+        const professionToInsert = {
           ...profession,
-        });
+          ...(projectsId && { projectId: projectsId }),
+        };
+        await db.collection("professions").insertOne(professionToInsert);
       }
     }
 
