@@ -16029,73 +16029,89 @@ app.post("/test-create-user", async (req, res) => {
   }
 });
 
-// Save selected EuroCodes for a project profession
 app.post("/save-project-profession-eurocodes", async (req, res) => {
   try {
-    const { companyId, projectId, professionId, subjectMatterId, eurocodes } =
-      req.body;
+    const { companyId, projectId, professionIds, eurocodes } = req.body;
 
-    if (
-      !companyId ||
-      !projectId ||
-      !professionId ||
-      !subjectMatterId ||
-      !eurocodes
-    ) {
+    if (!companyId || !projectId || !professionIds || !eurocodes) {
       return res.status(400).json({
         error:
-          "Missing required fields: companyId, projectId, professionId, subjectMatterId, eurocodes",
+          "Missing required fields: companyId, projectId, professionIds, eurocodes",
+      });
+    }
+
+    if (!Array.isArray(professionIds) || professionIds.length === 0) {
+      return res.status(400).json({
+        error: "professionIds must be a non-empty array",
       });
     }
 
     if (!Array.isArray(eurocodes) || eurocodes.length === 0) {
       return res.status(400).json({
-        error: "Eurocodes must be a non-empty array",
+        error: "eurocodes must be a non-empty array",
       });
     }
 
-    // Check if entry already exists
-    const existingEntry = await db
-      .collection("projectprofessioeurocode")
-      .findOne({
-        companyId,
-        projectId,
-        professionId,
+    // Validate that professionIds and eurocodes arrays have the same length
+    if (professionIds.length !== eurocodes.length) {
+      return res.status(400).json({
+        error: "professionIds and eurocodes arrays must have the same length",
       });
+    }
 
-    const eurocodeData = {
-      companyId,
-      projectId,
-      professionId,
-      subjectMatterId,
-      eurocodes,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    // Process each profession with its corresponding eurocodes using upsert
+    const results = [];
 
-    let result;
-    if (existingEntry) {
-      // Update existing entry
-      result = await db
+    for (let i = 0; i < professionIds.length; i++) {
+      const professionId = professionIds[i];
+      const professionEurocodes = eurocodes[i];
+
+      // Validate that each eurocodes entry is an array
+      if (!Array.isArray(professionEurocodes)) {
+        return res.status(400).json({
+          error: `Eurocodes for profession ${professionId} must be an array`,
+        });
+      }
+
+      // Use upsert to create or update in one operation
+      const eurocodeData = await db
         .collection("projectprofessioeurocode")
-        .updateOne(
-          { companyId, projectId, professionId },
-          { $set: { ...eurocodeData, updatedAt: new Date() } }
+        .findOneAndUpdate(
+          {
+            companyId,
+            projectId,
+            professionId,
+          },
+          {
+            $set: {
+              companyId,
+              projectId,
+              professionId,
+              eurocodes: professionEurocodes,
+              updatedAt: new Date(),
+            },
+            $setOnInsert: {
+              createdAt: new Date(),
+            },
+          },
+          {
+            upsert: true,
+            returnDocument: "after",
+          }
         );
-    } else {
-      // Create new entry
-      result = await db
-        .collection("projectprofessioeurocode")
-        .insertOne(eurocodeData);
+
+      results.push({
+        professionId,
+        result: eurocodeData.lastErrorObject?.upserted ? "created" : "updated",
+        eurocodeData: eurocodeData.value,
+      });
     }
 
     res.status(200).json({
       success: true,
-      message: existingEntry
-        ? "Eurocodes updated successfully"
-        : "Eurocodes saved successfully",
-      data: eurocodeData,
-      result,
+      message: "Project profession eurocodes processed successfully",
+      data: results,
+      totalProcessed: results.length,
     });
   } catch (error) {
     console.error("Error saving project profession eurocodes:", error);
