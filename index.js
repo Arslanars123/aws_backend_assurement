@@ -2809,9 +2809,32 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
   const professionAssociatedData = {};
 
   for (const profession of professions) {
+    // Remove _id field from profession object
     delete profession?._id;
+
+    // Destructure profession to extract specific fields
     const { professionID, companyId, ...professionDetails } = profession;
+
+    // Push SubjectMatterId to array (assuming SubjectMatterIdArray is initialized before the loop)
     SubjectMatterIdArray.push(profession.SubjectMatterId);
+
+    if (projectsId) {
+      for (const euroCode of profession.projectEuroCodes) {
+        const docs = await db
+          .collection("controls of static report")
+          .find({ euroCode: { $in: [Number(euroCode), String(euroCode)] } })
+          .toArray();
+
+        for (const doc of docs) {
+          await db.collection("projectcontrolsofstaticreport").insertOne({
+            projectId: projectsId,
+            professionId: professionID,
+            companyId: companyId,
+            detail: doc,
+          });
+        }
+      }
+    }
 
     const existingProfession = await db.collection("professions").findOne({
       professionID,
@@ -2824,7 +2847,6 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
       staticDocumentCheckList,
       staticReportRegistration,
     };
-
     if (existingProfession) {
       await db
         .collection("professions")

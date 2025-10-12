@@ -205,28 +205,6 @@ function createProjectManagementRoutes(db) {
           await Promise.all(supervisionInsertPromises);
         }
 
-        // const controlsofStaticReport = await db
-        //   .collection("controls of static report")
-        //   .find({})
-        //   .toArray();
-
-        // if (controlsofStaticReport.length > 0) {
-        //   const controlsofStaticReportPromises = controlsofStaticReport.map(
-        //     (staticReport) => {
-        //       return db
-        //         .collection("project-controls-of-static-report")
-        //         .insertOne({
-        //           projectId: new ObjectId(newProjectId),
-        //           staticReportId: staticReport._id,
-        //           staticReportDetails: staticReport,
-        //           createdAt: new Date(),
-        //         });
-        //     }
-        //   );
-
-        //   await Promise.all(controlsofStaticReportPromises);
-        // }
-
         if (parsedProfessions?.length > 0) {
           const updatedProfessions = parsedProfessions.map((profession) => {
             const filteredProjectsId =
