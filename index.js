@@ -448,6 +448,7 @@ app.post(
       let verificationCode = null;
       let verificationSentAt = null;
       let shouldSendEmail = true;
+      let generatedPassword = null;
 
       if (existingUser && existingUser.isVerified === true) {
         // Email already verified, set new user as verified by default
@@ -457,17 +458,19 @@ app.post(
           `✅ User with email ${username} already verified. New user will be verified by default.`
         );
       } else {
-        // Generate verification code for new or unverified user
-        verificationCode = generateVerificationCode();
-        verificationSentAt = new Date();
+        // Generate password for new user (no verification needed)
+        generatedPassword = generateRandomPassword();
+        isVerified = true; // Set as verified since we're sending password directly
         shouldSendEmail = true;
+        console.log(
+          `✅ New user ${username} will receive generated password via email.`
+        );
       }
 
-      // Create user document with verification status
-      // Password is set to null by default - user will set it after email verification
+      // Create user document with generated password
       const userData = {
         username,
-        password: null, // Password will be set by user after email verification
+        password: generatedPassword, // Generated password sent via email
         role,
         phone,
         name,
@@ -495,44 +498,73 @@ app.post(
       // Insert user into database
       const result = await db.collection("users").insertOne(userData);
 
-      // Send verification email only if needed
-      if (shouldSendEmail && verificationCode) {
+      // Update common basic details for all users with the same email
+      try {
+        const commonDetails = {
+          name,
+          phone,
+          address,
+          postalCode,
+          city,
+          startDate,
+          picture,
+          contactPicture,
+          cvr,
+          contactPerson,
+          contactPhone
+        };
+
+        await db.collection("users").updateMany(
+          { username: username },
+          {
+            $set: commonDetails
+          }
+        );
+
+        console.log(`✅ Updated common details for all users with email: ${username}`);
+      } catch (updateError) {
+        console.error("❌ Failed to update common details:", updateError);
+        // Don't fail the user creation if common details update fails
+      }
+
+      // Send password email only if needed
+      if (shouldSendEmail && generatedPassword) {
         try {
-          await sendVerificationEmail(
+          await sendUserWelcomeEmail(
             username,
             name || username,
-            verificationCode
+            generatedPassword
           );
 
           res.status(201).json({
             success: true,
-            message: "User created successfully! Verification email sent.",
+            message: "User created successfully! Login credentials sent via email.",
             userId: result.insertedId,
-            verificationSent: true,
+            emailSent: true,
             email: username,
           });
         } catch (emailError) {
-          console.error("❌ Email verification failed:", emailError);
+          console.error("❌ Welcome email failed:", emailError);
 
           // User was created but email failed - return success with warning
           res.status(201).json({
             success: true,
             message:
-              "User created successfully! However, verification email could not be sent.",
+              "User created successfully! However, login credentials email could not be sent.",
             userId: result.insertedId,
-            verificationSent: false,
+            emailSent: false,
             email: username,
-            warning: "Please contact support to resend verification email.",
+            warning: "Please contact support to resend login credentials email.",
           });
         }
       } else {
-        // No email verification needed - user is already verified
+        // No email needed - user is already verified
         res.status(201).json({
           success: true,
           message:
-            "User created successfully! Email already verified - no verification needed.",
+            "User created successfully! Email already verified - no email needed.",
           userId: result.insertedId,
-          verificationSent: false,
+          emailSent: false,
           email: username,
           isVerified: true,
         });
@@ -546,6 +578,109 @@ app.post(
     }
   }
 );
+
+// Helper function to find actual filename in uploads directory
+function findActualFilename(storedFilename) {
+  if (!storedFilename) return null;
+  
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const uploadsDir = path.join(__dirname, 'uploads');
+    
+    if (!fs.existsSync(uploadsDir)) return storedFilename;
+    
+    const files = fs.readdirSync(uploadsDir);
+    
+    // Look for files that end with the stored filename
+    const matchingFile = files.find(file => file.endsWith(storedFilename));
+    
+    return matchingFile || storedFilename;
+  } catch (error) {
+    console.error('Error finding actual filename:', error);
+    return storedFilename;
+  }
+}
+
+// Get users by email for auto-loading common details
+app.get("/get-users-by-email/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const users = await db.collection("users").find({
+      username: email
+    }).toArray();
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "No users found with this email" });
+    }
+
+           // Extract common basic details from the first user
+           const commonDetails = {
+             name: users[0].name,
+             phone: users[0].phone,
+             address: users[0].address,
+             postalCode: users[0].postalCode,
+             city: users[0].city,
+             startDate: users[0].startDate,
+             picture: findActualFilename(users[0].picture),
+             cvr: users[0].cvr
+           };
+
+    res.status(200).json({
+      commonDetails,
+      existingUsers: users.map(user => ({
+        _id: user._id,
+        role: user.role,
+        userRole: user.userRole,
+        isProjectManager: user.isProjectManager
+      }))
+    });
+  } catch (error) {
+    console.error("Error fetching users by email:", error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// Update common basic details across all users with the same email
+app.post("/update-common-user-details", async (req, res) => {
+  try {
+    const { email, commonDetails } = req.body;
+
+    if (!email || !commonDetails) {
+      return res.status(400).json({ error: "Email and common details are required" });
+    }
+
+           // Update all users with the same email
+           const result = await db.collection("users").updateMany(
+             { username: email },
+             {
+               $set: {
+                 name: commonDetails.name,
+                 phone: commonDetails.phone,
+                 address: commonDetails.address,
+                 postalCode: commonDetails.postalCode,
+                 city: commonDetails.city,
+                 startDate: commonDetails.startDate,
+                 picture: findActualFilename(commonDetails.picture),
+                 cvr: commonDetails.cvr
+               }
+             }
+           );
+
+    res.json({
+      message: "Common details updated successfully",
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error updating common details:", error);
+    res.status(500).json({ error: "Failed to update common details" });
+  }
+});
 
 app.post("/updateUser", async (req, res) => {
   try {
@@ -1029,8 +1164,12 @@ app.get("/get-project-managers", async (req, res) => {
 
     if (companyId && companyId !== "null") query.companyId = companyId;
 
-    // If projectId is provided, include only users who are assigned to this project
-    if (projectId && projectId !== "null") {
+    // If excludeAssigned is true, exclude users already assigned to this project
+    if (excludeAssigned === "true" && projectId && projectId !== "null") {
+      query.projectsId = { $nin: projectId.split(",").map((id) => id.trim()) };
+    }
+    // If projectId is provided without excludeAssigned, include only users who are assigned to this project
+    else if (projectId && projectId !== "null") {
       query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
     }
 
@@ -1038,14 +1177,34 @@ app.get("/get-project-managers", async (req, res) => {
 
     const users = await db.collection("users").find(query).toArray();
 
-    // Deduplicate users based on email address (username field contains email)
-    const uniqueUsers = [];
-    const seenEmails = new Set();
+    // Filter users based on the request
+    let filteredUsers = users;
+    if (projectId && projectId !== "null") {
+      if (userRole && userRole !== "null") {
+        // If userRole is specified, return users with that role who are in the project
+        filteredUsers = users.filter(user => {
+          const isInProject = user.projectsId && user.projectsId.includes(projectId);
+          const hasCorrectRole = user.userRole === userRole;
+          return isInProject && hasCorrectRole;
+        });
+      } else {
+        // If no userRole specified, return users who are in the project but NOT already project managers
+        filteredUsers = users.filter(user => {
+          const isInProject = user.projectsId && user.projectsId.includes(projectId);
+          const isAlreadyProjectManager = user.userRole === "Project Manager";
+          return isInProject && !isAlreadyProjectManager;
+        });
+      }
+    }
 
-    for (const user of users) {
-      const email = user.username || user.email || user._id;
-      if (!seenEmails.has(email)) {
-        seenEmails.add(email);
+    // Deduplicate users based on user ID (not email, since same person can have multiple roles)
+    const uniqueUsers = [];
+    const seenUserIds = new Set();
+
+    for (const user of filteredUsers) {
+      const userId = user._id;
+      if (!seenUserIds.has(userId)) {
+        seenUserIds.add(userId);
         uniqueUsers.push(user);
       }
     }
@@ -15564,6 +15723,94 @@ function generateRandomPassword() {
     password += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return password;
+}
+
+// Send user welcome email with generated password
+async function sendUserWelcomeEmail(email, username, generatedPassword) {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: "email-smtp.eu-north-1.amazonaws.com",
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+      logger: true,
+      debug: true,
+    });
+
+    const mailOptions = {
+      from: "info@assurement.dk",
+      to: email,
+      subject: "🔐 Welcome to Assurement - Your Account is Ready",
+      text: `Hello ${username},
+
+Welcome to Assurement! Your account has been created successfully.
+
+Your login credentials are:
+- Email: ${email}
+- Password: ${generatedPassword}
+
+You can now login with these credentials. We recommend changing your password after first login for security.
+
+Best regards,
+The Assurement Team`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h2 style="color: #2c3e50;">🔐 Welcome to Assurement!</h2>
+            <p style="color: #7f8c8d;">Your account has been created successfully</p>
+          </div>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #2c3e50; margin: 0 0 15px 0;">Your Login Credentials</h3>
+            <div style="background-color: white; padding: 15px; border-radius: 8px; border: 2px solid #3498db;">
+              <p style="margin: 5px 0;"><strong>Email:</strong> ${email}</p>
+              <p style="margin: 5px 0;"><strong>Password:</strong> <span style="font-family: monospace; background-color: #ecf0f1; padding: 2px 6px; border-radius: 4px;">${generatedPassword}</span></p>
+            </div>
+            <p style="color: #7f8c8d; margin: 15px 0 0 0; font-size: 14px;">You can now login with these credentials</p>
+          </div>
+          
+          <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffeaa7; margin: 20px 0;">
+            <p style="color: #856404; margin: 0; font-size: 14px;">
+              <strong>Security Note:</strong> We recommend changing your password after first login for security.
+            </p>
+          </div>
+          
+          <div style="margin: 30px 0;">
+            <p style="color: #2c3e50; line-height: 1.6;">
+              Hello <strong>${username}</strong>,<br><br>
+              Welcome to Assurement! Your account has been created successfully and is ready to use.
+            </p>
+          </div>
+          
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+          <p style="text-align: center; color: #7f8c8d; font-size: 12px;">
+            Sent from Assurement Backend Server<br>
+            If you didn't create this account, please contact support.
+          </p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(
+      "✅ User welcome email sent successfully to:",
+      email,
+      "Message ID:",
+      info.messageId
+    );
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error(
+      "❌ Failed to send user welcome email to:",
+      email,
+      "Error:",
+      error.message
+    );
+    throw error;
+  }
 }
 
 // Send verification email
