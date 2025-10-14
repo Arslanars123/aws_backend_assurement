@@ -2482,7 +2482,7 @@ app.get("/get-company-professions", async (req, res) => {
 
     if (companyId && companyId !== "null" && companyId !== "undefined") {
       query.companyId = companyId;
-      query.projectId = null
+      query.projectId = null;
     }
     if (projectId && projectId !== "null" && projectId !== "undefined") {
       query.projectId = projectId;
@@ -10037,7 +10037,7 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       signatureDate,
     } = req.body;
 
-    if (!companyId || !projectId || !subjectMatterId || !name || !profession) {
+    if (!companyId || !projectId || !name || !profession) {
       return res.status(400).json({
         error:
           "Missing required parameters: companyId, projectId, subjectMatterId, name, profession",
@@ -10050,7 +10050,7 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       .findOne({
         companyId: companyId,
         projectId: projectId,
-        subjectMatterId: subjectMatterId,
+        professionId,
       });
 
     if (existingSignature) {
