@@ -1047,11 +1047,12 @@ app.post("/get-filter-users", async (req, res) => {
     }
 
     if (professionsIds?.length) {
-      // Check both userProfession._id AND userProfession.professionID
+      // Check userProfession._id, userProfession.professionID, and userProfession.SubjectMatterId
       // This handles cases where the profession ID is stored in different fields
       query["$or"] = [
         { "userProfession._id": { $in: professionsIds } },
         { "userProfession.professionID": { $in: professionsIds } },
+        { "userProfession.SubjectMatterId": { $in: professionsIds } },
       ];
     }
     if (roles?.length) {
@@ -1153,16 +1154,17 @@ app.get("/get-project-managers", async (req, res) => {
   try {
     const { companyId, projectId, userRole, excludeAssigned } = req.query;
 
-    // Handle both string and array formats for isProjectManager
+    console.log("=== GET-PROJECT-MANAGERS DEBUG ===");
+    console.log("Query parameters:", { companyId, projectId, userRole, excludeAssigned });
+
+    // Only show users who are actually assigned as Project Managers (not just those with capability)
     const query = {
-      $or: [
-        { isProjectManager: "yes" }, // String format
-        { "isProjectManager._id": "yes" }, // Array format with _id
-        { "isProjectManager.name": "Yes" }, // Array format with name
-      ],
+      userRole: "Project Manager", // Only users with actual Project Manager role
     };
 
     if (companyId && companyId !== "null") query.companyId = companyId;
+    
+    console.log("Final query:", query);
 
     // If excludeAssigned is true, exclude users already assigned to this project
     if (excludeAssigned === "true" && projectId && projectId !== "null") {
@@ -1176,6 +1178,14 @@ app.get("/get-project-managers", async (req, res) => {
     if (userRole && userRole !== "null") query.userRole = userRole;
 
     const users = await db.collection("users").find(query).toArray();
+    
+    console.log("Found users with query:", users.length);
+    console.log("Sample users:", users.slice(0, 3).map(u => ({
+      name: u.name,
+      userRole: u.userRole,
+      isProjectManager: u.isProjectManager,
+      projectsId: u.projectsId
+    })));
 
     // Filter users based on the request
     let filteredUsers = users;
@@ -1196,6 +1206,14 @@ app.get("/get-project-managers", async (req, res) => {
         });
       }
     }
+
+    console.log("Filtered users:", filteredUsers.length);
+    console.log("Final filtered users:", filteredUsers.slice(0, 3).map(u => ({
+      name: u.name,
+      userRole: u.userRole,
+      isProjectManager: u.isProjectManager,
+      projectsId: u.projectsId
+    })));
 
     // Deduplicate users based on user ID (not email, since same person can have multiple roles)
     const uniqueUsers = [];
@@ -2979,6 +2997,17 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
     SubjectMatterIdArray.push(profession.SubjectMatterId);
 
     if (projectsId) {
+      // Store EuroCodes in separate collection
+      if (profession.projectEuroCodes && profession.projectEuroCodes.length > 0) {
+        await db.collection("projectprofessioneurocodes").insertOne({
+          projectId: projectsId,
+          subjectMatterId: profession.SubjectMatterId,
+          euroCodes: profession.projectEuroCodes,
+          companyId: companyId,
+          createdAt: new Date(),
+        });
+      }
+
       for (const euroCode of profession.projectEuroCodes) {
         const docs = await db
           .collection("controls of static report")
@@ -16479,6 +16508,63 @@ app.get("/get-eurocodes/:subjectMatterId", async (req, res) => {
     console.error("Error fetching eurocodes:", error);
     res.status(500).json({
       error: "Failed to fetch eurocodes",
+      details: error.message,
+    });
+  }
+});
+
+// Get EuroCodes for a specific project and profession
+app.get("/get-project-profession-eurocodes", async (req, res) => {
+  try {
+    const { projectId, subjectMatterId } = req.query;
+
+    console.log("=== GET-PROJECT-PROFESSION-EUROCODES DEBUG ===");
+    console.log("Query parameters:", { projectId, subjectMatterId });
+
+    if (!projectId || !subjectMatterId) {
+      return res.status(400).json({
+        error: "ProjectId and SubjectMatterId are required",
+      });
+    }
+
+    // Find the project-specific EuroCodes
+    const projectEuroCodes = await db.collection("projectprofessioneurocodes").findOne({
+      projectId: projectId,
+      subjectMatterId: subjectMatterId,
+    });
+
+    console.log("Found project EuroCodes document:", projectEuroCodes);
+
+    if (!projectEuroCodes) {
+      // Debug: Check what documents exist for this project
+      const allProjectDocs = await db.collection("projectprofessioneurocodes").find({
+        projectId: projectId
+      }).toArray();
+      console.log("All documents for projectId:", allProjectDocs);
+      
+      return res.status(404).json({
+        error: "No EuroCodes found for this project and profession combination",
+        projectId: projectId,
+        subjectMatterId: subjectMatterId,
+        availableDocs: allProjectDocs.map(doc => ({
+          subjectMatterId: doc.subjectMatterId,
+          euroCodes: doc.euroCodes
+        }))
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      projectId: projectId,
+      subjectMatterId: subjectMatterId,
+      euroCodes: projectEuroCodes.euroCodes || [],
+      count: projectEuroCodes.euroCodes ? projectEuroCodes.euroCodes.length : 0,
+      createdAt: projectEuroCodes.createdAt,
+    });
+  } catch (error) {
+    console.error("Error fetching project profession eurocodes:", error);
+    res.status(500).json({
+      error: "Failed to fetch project profession eurocodes",
       details: error.message,
     });
   }
