@@ -61,6 +61,7 @@ function createKsReportRoutes(db) {
         documents,
         draws,
         schemes,
+        supervisionDetails,
       ] = await Promise.all([
         // Company details
         db.collection("companies").findOne({ _id: new ObjectId(companyId) }),
@@ -159,6 +160,12 @@ function createKsReportRoutes(db) {
           .find({ companyId: companyId, projectsId: { $in: [projectId] } })
           .sort({ startDate: -1 })
           .toArray(),
+
+        // Supervision Details
+        db
+          .collection("project-supervision-check-list")
+          .find({ projectId: new ObjectId(projectId) })
+          .toArray(),
       ]);
 
       return res.status(200).json({
@@ -180,6 +187,7 @@ function createKsReportRoutes(db) {
           documents: documents || [],
           draws: draws || [],
           schemes: schemes || [],
+          supervisionDetails: supervisionDetails || [],
         },
         message: "Company and project details retrieved successfully",
       });
