@@ -60,6 +60,7 @@ function createKsReportRoutes(db) {
         inspectors,
         documents,
         draws,
+        schemes,
       ] = await Promise.all([
         // Company details
         db.collection("companies").findOne({ _id: new ObjectId(companyId) }),
@@ -151,6 +152,13 @@ function createKsReportRoutes(db) {
           .find({ companyId: companyId, projectsId: { $in: [projectId] } })
           .sort({ createdAt: -1 })
           .toArray(),
+
+        // Schemes
+        db
+          .collection("schemes")
+          .find({ companyId: companyId, projectsId: { $in: [projectId] } })
+          .sort({ startDate: -1 })
+          .toArray(),
       ]);
 
       return res.status(200).json({
@@ -171,6 +179,7 @@ function createKsReportRoutes(db) {
           },
           documents: documents || [],
           draws: draws || [],
+          schemes: schemes || [],
         },
         message: "Company and project details retrieved successfully",
       });
