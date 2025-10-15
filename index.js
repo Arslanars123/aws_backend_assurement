@@ -8061,7 +8061,9 @@ app.post(
         language: language,
         entries: processedData,
         uploadedAt: new Date(),
-        fileName: excelFile.filename,
+        ...excelFile, // Captures ALL file information including S3 details
+        uploadedAt: new Date(),
+        fileType: "excel-file",
         totalEntries: processedData.length,
       };
 
@@ -8093,7 +8095,9 @@ app.post(
           euroCode: euroCode || null,
           language: language,
           totalEntries: processedData.length,
-          fileName: excelFile.filename,
+          ...excelFile, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "excel-file",
         },
       });
     } catch (error) {
@@ -9484,14 +9488,15 @@ app.post(
         ? `professionAssociatedData.${professionKey}.staticReportRegistration`
         : null;
 
-      // Handle multiple annotated PDFs and convert to PNG
+      // Handle multiple annotated PDFs and convert to PNG with spread operator
       let annotatedPdfs = [];
       let annotatedPdfImages = [];
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-            filename: file.filename,
-            originalName: file.originalname,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "annotated-pdf",
           };
           annotatedPdfs.push(pdfInfo);
 
@@ -9535,11 +9540,12 @@ app.post(
           : [];
 
         mainPictures = req.files["mainPictures"].map((file, index) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
           description: mainPictureDescriptions[index] || "",
           createdDate:
             mainPictureCreatedDates[index] || new Date().toISOString(),
+          uploadedAt: new Date(),
+          fileType: "main-picture",
         }));
       }
 
@@ -9563,12 +9569,13 @@ app.post(
           : [];
 
         markPictures = req.files["markPictures"].map((file, index) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
           description: markPictureDescriptions[index] || "",
           createdDate:
             markPictureCreatedDates[index] || new Date().toISOString(),
           markNumber: markNumbers[index] || null,
+          uploadedAt: new Date(),
+          fileType: "mark-picture",
         }));
       }
 
@@ -11248,12 +11255,17 @@ app.post(
 
       let file = null;
 
-      // Handle Excel file upload
+      // Handle Excel file upload with spread operator to capture ALL file information
       if (req.files["file"] && req.files["file"].length > 0) {
-        file = req.files["file"][0]; // Get the uploaded file
+        const uploadedFile = req.files["file"][0];
+        file = {
+          ...uploadedFile, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "input-file",
+        };
 
         // Parse the Excel file
-        const workbook = xlsx.readFile(file.path); // `file.path` contains the path to the uploaded file
+        const workbook = xlsx.readFile(uploadedFile.path); // Use original file path for parsing
         const sheetName = workbook.SheetNames[6]; // Use the first sheet
         let excelRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]); // Convert sheet to JSON
 
@@ -11296,12 +11308,17 @@ app.post(
   async (req, res) => {
     try {
       let file = null;
-      // Handle Excel file upload
+      // Handle Excel file upload with spread operator to capture ALL file information
       if (req.files["file"] && req.files["file"].length > 0) {
-        file = req.files["file"][0]; // Get the uploaded file
+        const uploadedFile = req.files["file"][0];
+        file = {
+          ...uploadedFile, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "standard-file",
+        };
 
         // Parse the Excel file
-        const workbook = xlsx.readFile(file.path); // `file.path` contains the path to the uploaded file
+        const workbook = xlsx.readFile(uploadedFile.path); // Use original file path for parsing
         const sheetName = workbook.SheetNames[0]; // Use the first sheet
         let excelRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
           range: 4,
@@ -11580,24 +11597,43 @@ app.post(
         req.files["annotatedImage"] &&
         req.files["annotatedImage"].length > 0
       ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+        const file = req.files["annotatedImage"][0];
+        annotatedImage = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-image",
+        };
       }
 
       let originalPdfFilename = null;
       if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
-        originalPdfFilename = req.files["originalPdf"][0].filename;
+        const file = req.files["originalPdf"][0];
+        originalPdfFilename = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "original-pdf",
+        };
       }
 
       // Handle annotated PDF
       let annotatedPdfFilename = null;
       if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
-        annotatedPdfFilename = req.files["annotatedPdf"][0].filename;
+        const file = req.files["annotatedPdf"][0];
+        annotatedPdfFilename = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        };
       }
 
       // Handle multiple annotated PDFs
       let annotatedPdfs = [];
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
-        annotatedPdfs = req.files["annotatedPdfs"].map((file) => file.filename);
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        }));
       }
 
       // Handle general pictures
@@ -11606,9 +11642,11 @@ app.post(
         req.files["generalPictures"] &&
         req.files["generalPictures"].length > 0
       ) {
-        generalPictures = req.files["generalPictures"].map(
-          (file) => file.filename
-        );
+        generalPictures = req.files["generalPictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "general-picture",
+        }));
       }
 
       // Handle mark pictures
@@ -11771,12 +11809,16 @@ app.post(
             markPicturesFiles.push(file.filename);
           } else if (file.fieldname === "annotatedPdfs") {
             annotatedPdfs.push({
-              filename: file.filename,
+              ...file, // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "file",
               originalName: file.originalname,
             });
           } else if (file.fieldname === "annotatedPdfImages") {
             annotatedPdfImages.push({
-              filename: file.filename,
+              ...file, // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "file",
               originalName: file.originalname,
             });
           }
@@ -12973,7 +13015,11 @@ app.post(
       updateData.picture = picture2;
       // If an image is uploaded, include its path in the update
       if (req.file) {
-        updateData.picture = req.file.filename; // Store only the filename in the database
+        updateData.picture = {
+          ...req.file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "user-picture",
+        };
       }
 
       // Update the task document in the database
@@ -13045,7 +13091,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
@@ -13055,7 +13103,9 @@ app.post(
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
@@ -13292,11 +13342,20 @@ app.post(
         req.files["annotatedImage"] &&
         req.files["annotatedImage"].length > 0
       ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+        const file = req.files["annotatedImage"][0];
+        annotatedImage = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-image",
+        };
       }
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename);
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "picture",
+        }));
 
         if (pictureDescriptions) {
           if (!Array.isArray(pictureDescriptions)) {
@@ -13310,7 +13369,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
@@ -13320,7 +13381,9 @@ app.post(
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
@@ -13521,7 +13584,11 @@ app.post(
         : null;
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename);
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "picture",
+        }));
 
         if (pictureDescriptions) {
           if (!Array.isArray(pictureDescriptions)) {
@@ -13536,7 +13603,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-            filename: file.filename,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "file",
             originalName: file.originalname,
           };
           annotatedPdfs.push(pdfInfo);
@@ -13832,7 +13901,11 @@ app.post(
 
       // Handle multiple pictures upload with descriptions
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // For backward compatibility
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "picture",
+        })); // For backward compatibility
 
         // Create picture objects with descriptions
         const descriptions = Array.isArray(pictureDescriptions)
@@ -13840,7 +13913,9 @@ app.post(
           : [pictureDescriptions];
 
         pictureObjects = req.files["pictures"].map((file, index) => ({
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
           description: descriptions[index] || "",
           originalName: file.originalname,
         }));
@@ -13865,7 +13940,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-            filename: file.filename,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "file",
             originalName: file.originalname,
           };
           annotatedPdfs.push(pdfInfo);
@@ -13902,7 +13979,9 @@ app.post(
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
