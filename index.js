@@ -1191,7 +1191,6 @@ app.get("/get-project-managers", async (req, res) => {
     // If projectId is provided without excludeAssigned, include only users who are assigned to this project
     else if (projectId && projectId !== "null") {
       query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
-      query.userRole = "Project Manager";
     }
 
     if (userRole && userRole !== "null") query.userRole = userRole;
