@@ -415,8 +415,21 @@ app.post(
         });
       }
 
-      const picture = req.files?.picture?.[0]?.filename || null;
-      const contactPicture = req.files?.contactPicture?.[0]?.filename || null;
+      // Handle file uploads with spread operator to capture ALL file information
+      const picture = req.files?.picture?.[0]
+        ? {
+            ...req.files.picture[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "user-picture",
+          }
+        : null;
+      const contactPicture = req.files?.contactPicture?.[0]
+        ? {
+            ...req.files.contactPicture[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "contact-picture",
+          }
+        : null;
 
       let parsedUserProfession;
       if (req?.body?.userProfession) {
@@ -2572,10 +2585,28 @@ app.post(
         }
       }
 
-      // Handle signature file uploads
-      const signature1 = req.files?.signature1?.[0]?.filename || null;
-      const signature2 = req.files?.signature2?.[0]?.filename || null;
-      const signature3 = req.files?.signature3?.[0]?.filename || null;
+      // Handle signature file uploads with spread operator to capture ALL file information
+      const signature1 = req.files?.signature1?.[0]
+        ? {
+            ...req.files.signature1[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
+      const signature2 = req.files?.signature2?.[0]
+        ? {
+            ...req.files.signature2[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
+      const signature3 = req.files?.signature3?.[0]
+        ? {
+            ...req.files.signature3[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
 
       // Create signature document
       const signatureData = {
@@ -2681,13 +2712,28 @@ app.post(
         .collection("signatures")
         .findOne({ _id: new ObjectId(id) });
 
-      // Handle signature file uploads (only update if new files are provided)
-      const signature1 =
-        req.files?.signature1?.[0]?.filename || existingSignature.signature1;
-      const signature2 =
-        req.files?.signature2?.[0]?.filename || existingSignature.signature2;
-      const signature3 =
-        req.files?.signature3?.[0]?.filename || existingSignature.signature3;
+      // Handle signature file uploads with spread operator (only update if new files are provided)
+      const signature1 = req.files?.signature1?.[0]
+        ? {
+            ...req.files.signature1[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature1;
+      const signature2 = req.files?.signature2?.[0]
+        ? {
+            ...req.files.signature2[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature2;
+      const signature3 = req.files?.signature3?.[0]
+        ? {
+            ...req.files.signature3[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature3;
 
       // Build update object
       const updateData = {
@@ -2811,7 +2857,13 @@ app.post(
       }
 
       // Handle signature file upload
-      const signature = req.file?.filename || null;
+      const signature = req.file
+        ? {
+            ...req.file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
 
       // Create name and signature document
       const signatureData = {
@@ -2910,7 +2962,13 @@ app.put(
       }
 
       // Handle signature file upload (only update if new file is provided)
-      const signature = req.file?.filename || existingSignature.signature;
+      const signature = req.file
+        ? {
+            ...req.file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature;
 
       // Build update object
       const updateData = {
@@ -5337,9 +5395,13 @@ app.post(
         updateData.userProfession = parsedUserProfession;
       }
       updateData.picture = picture2;
-      // If an image is uploaded, include its path in the update
+      // If an image is uploaded, include its complete information in the update
       if (req.file) {
-        updateData.picture = req.file.filename; // Store only the filename in the database
+        updateData.picture = {
+          ...req.file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "user-picture",
+        };
       }
       if (type) updateData.type = type;
 
@@ -7648,14 +7710,23 @@ app.post(
       let picture = null;
       let pictures = [];
 
-      // Handle single picture upload
+      // Handle single picture upload with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
-      // Handle multiple pictures upload
+      // Handle multiple pictures upload with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -7723,9 +7794,9 @@ app.post(
       let markPictures = [];
       let markPictureObjects = [];
 
-      // Handle main pictures (separate from mark pictures)
+      // Handle main pictures (separate from mark pictures) with spread operator
       if (req.files["mainPictures"] && req.files["mainPictures"].length > 0) {
-        mainPictures = req.files["mainPictures"].map((file) => file.filename);
+        mainPictures = req.files["mainPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         const descriptions = Array.isArray(mainPictureDescriptions)
           ? mainPictureDescriptions
@@ -7736,18 +7807,17 @@ app.post(
           : [mainPictureCreatedDates];
 
         mainPictureObjects = req.files["mainPictures"].map((file, index) => ({
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
           description: descriptions[index] || "",
-          originalName: file.originalname,
           createdDate: createdDates[index] || new Date().toISOString(),
-          s3Location: file.s3Location || null,
-          s3Key: file.s3Key || null,
+          uploadedAt: new Date(),
+          fileType: "main-picture",
         }));
       }
 
-      // Handle mark-specific pictures
+      // Handle mark-specific pictures with spread operator
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         const descriptions = Array.isArray(markPictureDescriptions)
           ? markPictureDescriptions
@@ -7762,32 +7832,35 @@ app.post(
           : [markNumbers];
 
         markPictureObjects = req.files["markPictures"].map((file, index) => ({
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
           description: descriptions[index] || "",
-          originalName: file.originalname,
           createdDate: createdDates[index] || new Date().toISOString(),
           markNumber: parseInt(markNums[index]) || 1,
+          uploadedAt: new Date(),
+          fileType: "mark-picture",
         }));
       }
 
-      // Handle annotated PDFs
+      // Handle annotated PDFs with spread operator
       let annotatedPdfs = [];
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
         }));
       }
 
-      // Handle annotated PDF images (PNG versions)
+      // Handle annotated PDF images (PNG versions) with spread operator
       let annotatedPdfImages = [];
       if (
         req.files["annotatedPdfImages"] &&
         req.files["annotatedPdfImages"].length > 0
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf-image",
         }));
       }
 
@@ -10616,9 +10689,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -10631,9 +10709,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -10678,12 +10760,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -10731,9 +10822,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -10746,9 +10842,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -10790,12 +10890,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -10849,9 +10958,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -10864,9 +10978,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -11060,9 +11178,14 @@ app.post(
       }
       if (SubjectMatterId) updateData.SubjectMatterId = SubjectMatterId;
       if (ControlId) updateData.ControlId = ControlId;
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -11075,9 +11198,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -11441,7 +11568,11 @@ app.post(
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       let annotatedImage = null;
@@ -11483,7 +11614,7 @@ app.post(
       // Handle mark pictures
       let markPictures = [];
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
       }
 
       // Prepare data for insertion
@@ -11755,9 +11886,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -11770,9 +11906,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -11821,10 +11961,15 @@ app.post(
 
       console.log("Files:", req.files); // Log files to inspect
 
-      // Handle single picture upload (logo)
+      // Handle single picture upload (logo) with spread operator to capture ALL file information
       let picture = null;
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename;
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "company-logo",
+        };
       }
 
       // Prepare company document
@@ -11957,16 +12102,25 @@ app.post(
       if (address) updateData.address = address;
       if (contactPerson) updateData.contactPerson = contactPerson;
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "company-logo",
+        };
       }
 
       let picturesArray = [];
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "company-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12015,12 +12169,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -12078,9 +12241,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12092,9 +12260,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12153,14 +12325,23 @@ app.post(
       let picture = null;
       let pictures = [];
 
-      // Handle single picture upload
+      // Handle single picture upload with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "control-picture",
+        };
       }
 
-      // Handle multiple pictures upload
+      // Handle multiple pictures upload with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "control-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -12237,9 +12418,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12251,9 +12437,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12334,9 +12524,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12348,9 +12543,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12610,9 +12809,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12624,9 +12828,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12683,7 +12891,14 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
           : independentController;
     }
 
-    const picture = req.file ? req.file.filename : null;
+    // Handle file upload with spread operator to capture ALL file information
+    const picture = req.file
+      ? {
+          ...req.file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "gamma-picture",
+        }
+      : null;
 
     // Build the document object, only including fields that exist
     const documentToInsert = {
@@ -12812,7 +13027,11 @@ app.post(
       let markDescs = [];
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
 
         if (pictureDescriptions) {
           if (!Array.isArray(pictureDescriptions)) {
@@ -12842,7 +13061,7 @@ app.post(
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -12979,9 +13198,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12993,9 +13217,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13098,7 +13326,7 @@ app.post(
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -13195,9 +13423,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13209,9 +13442,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13331,7 +13568,7 @@ app.post(
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -13410,9 +13647,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13424,9 +13666,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13501,9 +13747,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13515,9 +13766,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13593,7 +13848,7 @@ app.post(
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -13726,9 +13981,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13740,9 +14000,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13808,9 +14072,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13822,9 +14091,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13868,12 +14141,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -13926,9 +14208,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13943,9 +14230,13 @@ app.post(
       const projectsArray = projectsId.split(",");
       updateData.projectsId = projectsArray;
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -14002,12 +14293,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Parse professionObject if it's a string
@@ -14105,9 +14405,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -14119,9 +14424,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
