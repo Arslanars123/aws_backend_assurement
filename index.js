@@ -12755,11 +12755,11 @@ app.post(
         const mainFile = mainFiles[mainDrawingIndex];
         if (!mainFile) continue;
 
-        // Create main drawing object
+        // Create main drawing object with spread operator to capture ALL file information including S3 details
         const mainDrawing = {
-          stored: mainFile.filename,
-          original: mainFile.originalname,
+          ...mainFile, // Captures ALL file information including S3 details
           uploadedAt: new Date(),
+          fileType: "main-drawing",
         };
 
         // Get associated child drawings
@@ -12769,10 +12769,10 @@ app.post(
             if (!childFile) return null;
 
             return {
-              stored: childFile.filename,
-              original: childFile.originalname,
+              ...childFile, // Captures ALL file information including S3 details
               parentMainIndex: mainDrawingIndex,
               uploadedAt: new Date(),
+              fileType: "child-drawing",
             };
           })
           .filter((child) => child !== null);
