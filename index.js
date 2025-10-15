@@ -291,6 +291,10 @@ async function startServer() {
     const createStaticReportControlsRoutes = require("./static-report-controls-routes");
     app.use("/", createStaticReportControlsRoutes(db));
 
+    // Register KS report routes after database connection is established
+    const createKsReportRoutes = require("./ks-report-routes");
+    app.use("/", createKsReportRoutes(db));
+
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
@@ -511,17 +515,19 @@ app.post(
           contactPicture,
           cvr,
           contactPerson,
-          contactPhone
+          contactPhone,
         };
 
         await db.collection("users").updateMany(
           { username: username },
           {
-            $set: commonDetails
+            $set: commonDetails,
           }
         );
 
-        console.log(`✅ Updated common details for all users with email: ${username}`);
+        console.log(
+          `✅ Updated common details for all users with email: ${username}`
+        );
       } catch (updateError) {
         console.error("❌ Failed to update common details:", updateError);
         // Don't fail the user creation if common details update fails
@@ -538,7 +544,8 @@ app.post(
 
           res.status(201).json({
             success: true,
-            message: "User created successfully! Login credentials sent via email.",
+            message:
+              "User created successfully! Login credentials sent via email.",
             userId: result.insertedId,
             emailSent: true,
             email: username,
@@ -554,7 +561,8 @@ app.post(
             userId: result.insertedId,
             emailSent: false,
             email: username,
-            warning: "Please contact support to resend login credentials email.",
+            warning:
+              "Please contact support to resend login credentials email.",
           });
         }
       } else {
@@ -582,22 +590,22 @@ app.post(
 // Helper function to find actual filename in uploads directory
 function findActualFilename(storedFilename) {
   if (!storedFilename) return null;
-  
+
   try {
-    const fs = require('fs');
-    const path = require('path');
-    const uploadsDir = path.join(__dirname, 'uploads');
-    
+    const fs = require("fs");
+    const path = require("path");
+    const uploadsDir = path.join(__dirname, "uploads");
+
     if (!fs.existsSync(uploadsDir)) return storedFilename;
-    
+
     const files = fs.readdirSync(uploadsDir);
-    
+
     // Look for files that end with the stored filename
-    const matchingFile = files.find(file => file.endsWith(storedFilename));
-    
+    const matchingFile = files.find((file) => file.endsWith(storedFilename));
+
     return matchingFile || storedFilename;
   } catch (error) {
-    console.error('Error finding actual filename:', error);
+    console.error("Error finding actual filename:", error);
     return storedFilename;
   }
 }
@@ -606,39 +614,42 @@ function findActualFilename(storedFilename) {
 app.get("/get-users-by-email/:email", async (req, res) => {
   try {
     const { email } = req.params;
-    
+
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
     }
 
-    const users = await db.collection("users").find({
-      username: email
-    }).toArray();
+    const users = await db
+      .collection("users")
+      .find({
+        username: email,
+      })
+      .toArray();
 
     if (users.length === 0) {
       return res.status(404).json({ error: "No users found with this email" });
     }
 
-           // Extract common basic details from the first user
-           const commonDetails = {
-             name: users[0].name,
-             phone: users[0].phone,
-             address: users[0].address,
-             postalCode: users[0].postalCode,
-             city: users[0].city,
-             startDate: users[0].startDate,
-             picture: findActualFilename(users[0].picture),
-             cvr: users[0].cvr
-           };
+    // Extract common basic details from the first user
+    const commonDetails = {
+      name: users[0].name,
+      phone: users[0].phone,
+      address: users[0].address,
+      postalCode: users[0].postalCode,
+      city: users[0].city,
+      startDate: users[0].startDate,
+      picture: findActualFilename(users[0].picture),
+      cvr: users[0].cvr,
+    };
 
     res.status(200).json({
       commonDetails,
-      existingUsers: users.map(user => ({
+      existingUsers: users.map((user) => ({
         _id: user._id,
         role: user.role,
         userRole: user.userRole,
-        isProjectManager: user.isProjectManager
-      }))
+        isProjectManager: user.isProjectManager,
+      })),
     });
   } catch (error) {
     console.error("Error fetching users by email:", error);
@@ -652,25 +663,27 @@ app.post("/update-common-user-details", async (req, res) => {
     const { email, commonDetails } = req.body;
 
     if (!email || !commonDetails) {
-      return res.status(400).json({ error: "Email and common details are required" });
+      return res
+        .status(400)
+        .json({ error: "Email and common details are required" });
     }
 
-           // Update all users with the same email
-           const result = await db.collection("users").updateMany(
-             { username: email },
-             {
-               $set: {
-                 name: commonDetails.name,
-                 phone: commonDetails.phone,
-                 address: commonDetails.address,
-                 postalCode: commonDetails.postalCode,
-                 city: commonDetails.city,
-                 startDate: commonDetails.startDate,
-                 picture: findActualFilename(commonDetails.picture),
-                 cvr: commonDetails.cvr
-               }
-             }
-           );
+    // Update all users with the same email
+    const result = await db.collection("users").updateMany(
+      { username: email },
+      {
+        $set: {
+          name: commonDetails.name,
+          phone: commonDetails.phone,
+          address: commonDetails.address,
+          postalCode: commonDetails.postalCode,
+          city: commonDetails.city,
+          startDate: commonDetails.startDate,
+          picture: findActualFilename(commonDetails.picture),
+          cvr: commonDetails.cvr,
+        },
+      }
+    );
 
     res.json({
       message: "Common details updated successfully",
@@ -936,7 +949,7 @@ app.get("/get-mains", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
 
-    const query = { role: "Main Constructor" };
+    const query = { role: "Main Contractor" };
     if (companyId && companyId !== "null") {
       query.companyId = companyId;
     }
@@ -1155,15 +1168,20 @@ app.get("/get-project-managers", async (req, res) => {
     const { companyId, projectId, userRole, excludeAssigned } = req.query;
 
     console.log("=== GET-PROJECT-MANAGERS DEBUG ===");
-    console.log("Query parameters:", { companyId, projectId, userRole, excludeAssigned });
+    console.log("Query parameters:", {
+      companyId,
+      projectId,
+      userRole,
+      excludeAssigned,
+    });
 
     // Only show users who are actually assigned as Project Managers (not just those with capability)
     const query = {
-      userRole: "Project Manager", // Only users with actual Project Manager role
+      isProjectManager: "yes",
     };
 
     if (companyId && companyId !== "null") query.companyId = companyId;
-    
+
     console.log("Final query:", query);
 
     // If excludeAssigned is true, exclude users already assigned to this project
@@ -1173,34 +1191,40 @@ app.get("/get-project-managers", async (req, res) => {
     // If projectId is provided without excludeAssigned, include only users who are assigned to this project
     else if (projectId && projectId !== "null") {
       query.projectsId = { $in: projectId.split(",").map((id) => id.trim()) };
+      query.userRole = "Project Manager";
     }
 
     if (userRole && userRole !== "null") query.userRole = userRole;
 
     const users = await db.collection("users").find(query).toArray();
-    
+
     console.log("Found users with query:", users.length);
-    console.log("Sample users:", users.slice(0, 3).map(u => ({
-      name: u.name,
-      userRole: u.userRole,
-      isProjectManager: u.isProjectManager,
-      projectsId: u.projectsId
-    })));
+    console.log(
+      "Sample users:",
+      users.slice(0, 3).map((u) => ({
+        name: u.name,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId,
+      }))
+    );
 
     // Filter users based on the request
     let filteredUsers = users;
     if (projectId && projectId !== "null") {
       if (userRole && userRole !== "null") {
         // If userRole is specified, return users with that role who are in the project
-        filteredUsers = users.filter(user => {
-          const isInProject = user.projectsId && user.projectsId.includes(projectId);
+        filteredUsers = users.filter((user) => {
+          const isInProject =
+            user.projectsId && user.projectsId.includes(projectId);
           const hasCorrectRole = user.userRole === userRole;
           return isInProject && hasCorrectRole;
         });
       } else {
         // If no userRole specified, return users who are in the project but NOT already project managers
-        filteredUsers = users.filter(user => {
-          const isInProject = user.projectsId && user.projectsId.includes(projectId);
+        filteredUsers = users.filter((user) => {
+          const isInProject =
+            user.projectsId && user.projectsId.includes(projectId);
           const isAlreadyProjectManager = user.userRole === "Project Manager";
           return isInProject && !isAlreadyProjectManager;
         });
@@ -1208,12 +1232,15 @@ app.get("/get-project-managers", async (req, res) => {
     }
 
     console.log("Filtered users:", filteredUsers.length);
-    console.log("Final filtered users:", filteredUsers.slice(0, 3).map(u => ({
-      name: u.name,
-      userRole: u.userRole,
-      isProjectManager: u.isProjectManager,
-      projectsId: u.projectsId
-    })));
+    console.log(
+      "Final filtered users:",
+      filteredUsers.slice(0, 3).map((u) => ({
+        name: u.name,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId,
+      }))
+    );
 
     // Deduplicate users based on user ID (not email, since same person can have multiple roles)
     const uniqueUsers = [];
@@ -2998,7 +3025,10 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
 
     if (projectsId) {
       // Store EuroCodes in separate collection
-      if (profession.projectEuroCodes && profession.projectEuroCodes.length > 0) {
+      if (
+        profession.projectEuroCodes &&
+        profession.projectEuroCodes.length > 0
+      ) {
         await db.collection("projectprofessioneurocodes").insertOne({
           projectId: projectsId,
           subjectMatterId: profession.SubjectMatterId,
@@ -16528,28 +16558,33 @@ app.get("/get-project-profession-eurocodes", async (req, res) => {
     }
 
     // Find the project-specific EuroCodes
-    const projectEuroCodes = await db.collection("projectprofessioneurocodes").findOne({
-      projectId: projectId,
-      subjectMatterId: subjectMatterId,
-    });
+    const projectEuroCodes = await db
+      .collection("projectprofessioneurocodes")
+      .findOne({
+        projectId: projectId,
+        subjectMatterId: subjectMatterId,
+      });
 
     console.log("Found project EuroCodes document:", projectEuroCodes);
 
     if (!projectEuroCodes) {
       // Debug: Check what documents exist for this project
-      const allProjectDocs = await db.collection("projectprofessioneurocodes").find({
-        projectId: projectId
-      }).toArray();
+      const allProjectDocs = await db
+        .collection("projectprofessioneurocodes")
+        .find({
+          projectId: projectId,
+        })
+        .toArray();
       console.log("All documents for projectId:", allProjectDocs);
-      
+
       return res.status(404).json({
         error: "No EuroCodes found for this project and profession combination",
         projectId: projectId,
         subjectMatterId: subjectMatterId,
-        availableDocs: allProjectDocs.map(doc => ({
+        availableDocs: allProjectDocs.map((doc) => ({
           subjectMatterId: doc.subjectMatterId,
-          euroCodes: doc.euroCodes
-        }))
+          euroCodes: doc.euroCodes,
+        })),
       });
     }
 
