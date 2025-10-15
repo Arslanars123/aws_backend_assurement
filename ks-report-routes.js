@@ -40,36 +40,15 @@ function createKsReportRoutes(db) {
         });
       }
 
-      // Find company by ID
-      const companyDetails = await db
-        .collection("companies")
-        .findOne({ _id: new ObjectId(companyId) });
-
-      if (!companyDetails) {
-        return res.status(404).json({
-          success: false,
-          message: "Company not found",
-        });
-      }
-
-      // Find project by ID
-      const projectDetail = await db
-        .collection("projects")
-        .findOne({ _id: new ObjectId(projectId) });
-
-      if (!projectDetail) {
-        return res.status(404).json({
-          success: false,
-          message: "Project not found",
-        });
-      }
-
       const baseMatch = {
         companyId: companyId,
         projectsId: { $in: [projectId] },
       };
 
+      // Fetch all data in parallel
       const [
+        companyDetails,
+        projectDetail,
         workers,
         projectManagers,
         subcontractors,
@@ -79,7 +58,15 @@ function createKsReportRoutes(db) {
         safetyManagers,
         advisors,
         inspectors,
+        documents,
+        draws,
       ] = await Promise.all([
+        // Company details
+        db.collection("companies").findOne({ _id: new ObjectId(companyId) }),
+
+        // Project details
+        db.collection("projects").findOne({ _id: new ObjectId(projectId) }),
+
         // Worker
         db
           .collection("users")
@@ -150,24 +137,40 @@ function createKsReportRoutes(db) {
           .collection("users")
           .find({ ...baseMatch, role: "Inspector" })
           .toArray(),
+
+        // Documents
+        db
+          .collection("documents")
+          .find({ companyId: companyId, projectId: projectId })
+          .sort({ uploadedAt: -1 })
+          .toArray(),
+
+        // Draws
+        db
+          .collection("draws")
+          .find({ companyId: companyId, projectsId: { $in: [projectId] } })
+          .sort({ createdAt: -1 })
+          .toArray(),
       ]);
 
       return res.status(200).json({
         success: true,
         data: {
-          companyDetails,
-          projectDetail,
+          companyDetails: companyDetails || {},
+          projectDetail: projectDetail || {},
           users: {
-            workers,
-            projectManagers,
-            subcontractors,
-            independentControllers,
-            mainContractorsCustomers,
-            constructionManagers,
-            safetyManagers,
-            advisors,
-            inspectors,
+            workers: workers || [],
+            projectManagers: projectManagers || [],
+            subcontractors: subcontractors || [],
+            independentControllers: independentControllers || [],
+            mainContractorsCustomers: mainContractorsCustomers || [],
+            constructionManagers: constructionManagers || [],
+            safetyManagers: safetyManagers || [],
+            advisors: advisors || [],
+            inspectors: inspectors || [],
           },
+          documents: documents || [],
+          draws: draws || [],
         },
         message: "Company and project details retrieved successfully",
       });
