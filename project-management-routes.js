@@ -139,6 +139,54 @@ function createProjectManagementRoutes(db) {
     }
   }
 
+  // Simple test endpoint
+  router.post("/test-add-project", async (req, res) => {
+    try {
+      console.log("=== TEST ENDPOINT REACHED ===");
+      console.log("Request body:", req.body);
+      
+      const { basicDetails, companyId } = req.body;
+      
+      if (!basicDetails?.name) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      
+      if (!companyId) {
+        return res.status(400).json({ error: "Company ID is required" });
+      }
+      
+      // Test ObjectId conversion
+      try {
+        const testObjectId = new ObjectId(companyId);
+        console.log("ObjectId conversion successful:", testObjectId);
+      } catch (objectIdError) {
+        console.log("ObjectId conversion failed:", objectIdError);
+        return res.status(400).json({ error: "Invalid company ID format" });
+      }
+      
+      // Test database insertion
+      const testResult = await db.collection("projects").insertOne({
+        name: basicDetails.name,
+        companyId: new ObjectId(companyId),
+        createdAt: new Date(),
+        test: true
+      });
+      
+      console.log("Test insert result:", testResult);
+      
+      res.status(201).json({ 
+        success: true, 
+        message: "Test project created successfully",
+        projectId: testResult.insertedId
+      });
+      
+    } catch (error) {
+      console.log("=== TEST ENDPOINT ERROR ===");
+      console.log("Error details:", error);
+      res.status(500).json({ error: "Test failed", details: error.message });
+    }
+  });
+
   router.post(
     "/add-project",
     upload.fields([
@@ -149,6 +197,9 @@ function createProjectManagementRoutes(db) {
     ]),
     async (req, res) => {
       try {
+        console.log("=== ADD PROJECT ENDPOINT REACHED ===");
+        console.log("Request body:", JSON.stringify(req.body, null, 2));
+        
         const {
           basicDetails,
           professions,
@@ -197,18 +248,43 @@ function createProjectManagementRoutes(db) {
           createdAt: new Date(),
         }));
 
-        const result = await db.collection("projects").insertOne({
+        console.log("=== PROJECT CREATION DEBUG ===");
+        console.log("Company ID:", companyId);
+        console.log("Company ID type:", typeof companyId);
+        console.log("Parsed Basic Details:", parsedBasicDetails);
+        console.log("Checks with Created At:", checksWithCreatedAt.length);
+        
+        // Test ObjectId conversion
+        try {
+          const testObjectId = new ObjectId(companyId);
+          console.log("ObjectId conversion successful:", testObjectId);
+        } catch (objectIdError) {
+          console.log("ObjectId conversion failed:", objectIdError);
+          return res.status(400).json({ error: "Invalid company ID format" });
+        }
+        
+        const projectData = {
           ...parsedBasicDetails,
-          companyId,
+          companyId: new ObjectId(companyId),
           checks: checksWithCreatedAt,
           createdAt: new Date(),
-        });
+        };
+        
+        console.log("Project data to insert:", JSON.stringify(projectData, null, 2));
+
+        const result = await db.collection("projects").insertOne(projectData);
+
+        console.log("Insert result:", result);
+        console.log("Inserted ID:", result.insertedId);
 
         const newProjectId = result.insertedId?.toString();
 
         if (!newProjectId) {
-          return res.status(500).json({ error: "Failed to create project" });
+          console.log("ERROR: No project ID returned from insert");
+          return res.status(500).json({ error: "Failed to create project - no ID returned" });
         }
+        
+        console.log("Project created successfully with ID:", newProjectId);
 
         const supervisionchecklist = await db
           .collection("supervision-check-list")
