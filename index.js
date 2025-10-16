@@ -936,7 +936,13 @@ app.get("/get-mains", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
 
-    const query = { role: "Main Constructor" };
+    // Handle both "Main Constructor" and "Main Contractor" role names
+    const query = { 
+      $or: [
+        { role: "Main Constructor" },
+        { role: "Main Contractor" }
+      ]
+    };
     if (companyId && companyId !== "null") {
       query.companyId = companyId;
     }
@@ -1154,17 +1160,16 @@ app.get("/get-project-managers", async (req, res) => {
   try {
     const { companyId, projectId, userRole, excludeAssigned } = req.query;
 
-    console.log("=== GET-PROJECT-MANAGERS DEBUG ===");
-    console.log("Query parameters:", { companyId, projectId, userRole, excludeAssigned });
-
-    // Only show users who are actually assigned as Project Managers (not just those with capability)
+    // Handle both string and array formats for isProjectManager
     const query = {
-      userRole: "Project Manager", // Only users with actual Project Manager role
+      $or: [
+        { isProjectManager: "yes" }, // String format
+        { "isProjectManager._id": "yes" }, // Array format with _id
+        { "isProjectManager.name": "Yes" }, // Array format with name
+      ],
     };
 
     if (companyId && companyId !== "null") query.companyId = companyId;
-    
-    console.log("Final query:", query);
 
     // If excludeAssigned is true, exclude users already assigned to this project
     if (excludeAssigned === "true" && projectId && projectId !== "null") {
@@ -1178,14 +1183,6 @@ app.get("/get-project-managers", async (req, res) => {
     if (userRole && userRole !== "null") query.userRole = userRole;
 
     const users = await db.collection("users").find(query).toArray();
-    
-    console.log("Found users with query:", users.length);
-    console.log("Sample users:", users.slice(0, 3).map(u => ({
-      name: u.name,
-      userRole: u.userRole,
-      isProjectManager: u.isProjectManager,
-      projectsId: u.projectsId
-    })));
 
     // Filter users based on the request
     let filteredUsers = users;
@@ -1206,14 +1203,6 @@ app.get("/get-project-managers", async (req, res) => {
         });
       }
     }
-
-    console.log("Filtered users:", filteredUsers.length);
-    console.log("Final filtered users:", filteredUsers.slice(0, 3).map(u => ({
-      name: u.name,
-      userRole: u.userRole,
-      isProjectManager: u.isProjectManager,
-      projectsId: u.projectsId
-    })));
 
     // Deduplicate users based on user ID (not email, since same person can have multiple roles)
     const uniqueUsers = [];
@@ -2482,7 +2471,7 @@ app.get("/get-company-professions", async (req, res) => {
 
     if (companyId && companyId !== "null" && companyId !== "undefined") {
       query.companyId = companyId;
-      query.projectId = null;
+      query.projectId = null
     }
     if (projectId && projectId !== "null" && projectId !== "undefined") {
       query.projectId = projectId;
@@ -5328,7 +5317,7 @@ app.post(
       const roleSpecificFields = {};
 
       // For Worker and Subcontractor, professions and isProjectManager should only update the specific user
-      if (user.role === "Worker" || user.role === "Sub Contractor") {
+      if ((user.role && user.role.toLowerCase() === "worker") || (user.role && user.role.toLowerCase() === "sub contractor")) {
         if (updateData.userProfession !== undefined) {
           roleSpecificFields.userProfession = updateData.userProfession;
           delete commonFields.userProfession;
@@ -5383,22 +5372,73 @@ app.post(
   }
 );
 
-// 5. Delete a user by ID
+// 5. Remove user from company (not delete from database)
 app.post(
   "/delete-user/:id",
   //authenticateToken,
   //authorizeRoles(["admin"]),
   async (req, res) => {
     try {
-      const result = await db
-        .collection("users")
-        .deleteOne({ _id: new ObjectId(req.params.id) });
-      if (result.deletedCount === 0) {
+      const userId = req.params.id;
+      const { companyId } = req.body;
+
+      if (!companyId) {
+        return res.status(400).json({ error: "Company ID is required" });
+      }
+
+      console.log("=== REMOVING USER FROM COMPANY ===");
+      console.log("User ID:", userId);
+      console.log("Company ID:", companyId);
+
+      // Get the user to check their current data
+      const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+      if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      res.status(200).json(result);
+
+      console.log("Current user data:", {
+        _id: user._id,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        companyId: user.companyId,
+        projectsId: user.projectsId
+      });
+
+      // Check if user belongs to this company
+      if (user.companyId !== companyId) {
+        return res.status(400).json({ 
+          error: "User does not belong to this company",
+          userCompanyId: user.companyId,
+          requestedCompanyId: companyId
+        });
+      }
+
+      // Remove user from the company by setting companyId to null and clearing projects
+      const result = await db.collection("users").updateOne(
+        { _id: new ObjectId(userId) },
+        {
+          $set: {
+            companyId: null,
+            projectsId: [],
+            userRole: null,
+            isProjectManager: null
+          }
+        }
+      );
+
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log("User removed from company successfully");
+      res.status(200).json({
+        message: "User removed from company successfully",
+        result: result
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete user" });
+      console.error("Error removing user from company:", error);
+      res.status(500).json({ error: "Failed to remove user from company" });
     }
   }
 );
@@ -5429,7 +5469,7 @@ app.post("/users/login", async (req, res) => {
     }
 
     // Check if company is deactivated (for admin users)
-    if (user.role === "Admin" && user.companyId) {
+    if (user.role && user.role.toLowerCase() === "admin" && user.companyId) {
       try {
         const company = await db.collection("companies").findOne({
           _id: new ObjectId(user.companyId),
@@ -5625,7 +5665,7 @@ app.post("/get-project-users", async (req, res) => {
 // 6.5. Determine user roles based on email
 app.post("/determine-user-roles", async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, projectId } = req.body;
 
     if (!email) {
       return res.status(400).json({
@@ -5634,7 +5674,7 @@ app.post("/determine-user-roles", async (req, res) => {
       });
     }
 
-    console.log("Determining roles for email:", email);
+    console.log("Determining roles for email:", email, "in project:", projectId);
 
     // Query all collections where email might appear
     const [users, companies] = await Promise.all([
@@ -5684,8 +5724,8 @@ app.post("/determine-user-roles", async (req, res) => {
     const roles = [];
     const roleDetails = {};
 
-    // Check for Admin role - check all user records
-    const adminUsers = users.filter((user) => user.role === "Admin");
+    // Check for Admin role - check all user records (case-insensitive)
+    const adminUsers = users.filter((user) => user.role && user.role.toLowerCase() === "admin");
     const adminCompany = companies.find(
       (company) =>
         company.admin &&
@@ -5703,24 +5743,37 @@ app.post("/determine-user-roles", async (req, res) => {
       };
     }
 
-    // Check for Project Manager role - user must be assigned to at least one project
+    // Check for Project Manager role - user must be assigned to the specific project (if provided)
     const projectManagerUser = users.find((user) => {
-      // Check if user has projectsId array with valid project IDs
-      const hasValidProjects =
-        user.projectsId &&
-        Array.isArray(user.projectsId) &&
-        user.projectsId.some(
-          (projectId) =>
-            projectId && projectId !== "undefined" && projectId !== "null"
-        );
+      // If projectId is provided, check if user is assigned to that specific project
+      if (projectId) {
+        const isInSpecificProject = user.projectsId &&
+          Array.isArray(user.projectsId) &&
+          user.projectsId.includes(projectId);
 
-      // User must be a project manager AND assigned to projects
-      return (
-        (user.isProjectManager === "yes" ||
-          user.role === "Project Manager" ||
-          user.userRole === "Project Manager") &&
-        hasValidProjects
-      );
+        // User must be a project manager AND assigned to the specific project
+        return (
+          (user.role && user.role.toLowerCase() === "project manager" ||
+            user.userRole && user.userRole.toLowerCase() === "project manager") &&
+          isInSpecificProject
+        );
+      } else {
+        // If no projectId provided, check if user has any valid projects (legacy behavior)
+        const hasValidProjects =
+          user.projectsId &&
+          Array.isArray(user.projectsId) &&
+          user.projectsId.some(
+            (pid) =>
+              pid && pid !== "undefined" && pid !== "null"
+          );
+
+        // User must be a project manager AND assigned to projects
+        return (
+          (user.role && user.role.toLowerCase() === "project manager" ||
+            user.userRole && user.userRole.toLowerCase() === "project manager") &&
+          hasValidProjects
+        );
+      }
     });
 
     if (projectManagerUser) {
@@ -5739,14 +5792,34 @@ app.post("/determine-user-roles", async (req, res) => {
       };
     }
 
-    // Check for Worker role - check all user records
-    const workerUsers = users.filter((user) => user.role === "Worker");
+    // Check for Worker role - check all user records (case-insensitive)
+    const workerUsers = users.filter((user) => user.role && user.role.toLowerCase() === "worker");
     const subcontractorUsers = users.filter(
-      (user) => user.role === "Subcontractor"
+      (user) => user.role && user.role.toLowerCase() === "subcontractor"
     );
 
-    // Worker gets Worker role (even if they're also a project manager)
-    if (workerUsers.length > 0) {
+    // Worker gets Worker role only if they have valid project assignments
+    // Filter out workers who only have 'undefined' project IDs
+    const validWorkerUsers = workerUsers.filter((user) => {
+      if (!user.projectsId || !Array.isArray(user.projectsId)) {
+        return false;
+      }
+      
+      // Check if there are any valid project IDs (not 'undefined', 'null', or empty)
+      const validProjects = user.projectsId.filter(
+        (projectId) => 
+          projectId && 
+          projectId !== "undefined" && 
+          projectId !== "null" && 
+          projectId !== null && 
+          projectId !== undefined &&
+          projectId.toString().trim() !== ""
+      );
+      
+      return validProjects.length > 0;
+    });
+
+    if (validWorkerUsers.length > 0) {
       roles.push("Worker");
       roleDetails["Worker"] = {
         title: "Worker",
@@ -5757,13 +5830,13 @@ app.post("/determine-user-roles", async (req, res) => {
       };
     }
 
-    // Check for Independent Controller role
+    // Check for Independent Controller role (case-insensitive)
     const independentControllerUsers = users.filter(
       (user) =>
-        user.role === "Independent Controller" ||
-        user.role === "Inspector" ||
-        user.userRole === "Independent Controller" ||
-        user.userRole === "Inspector"
+        (user.role && user.role.toLowerCase() === "independent controller") ||
+        (user.role && user.role.toLowerCase() === "inspector") ||
+        (user.userRole && user.userRole.toLowerCase() === "independent controller") ||
+        (user.userRole && user.userRole.toLowerCase() === "inspector")
     );
 
     if (independentControllerUsers.length > 0) {
@@ -5843,7 +5916,7 @@ app.post("/check-admin", async (req, res) => {
     }
 
     // Check if user is admin of any company
-    const isAdmin = user.role === "Admin";
+    const isAdmin = user.role && user.role.toLowerCase() === "admin";
 
     // Get company details if admin
     let companyInfo = null;
@@ -5966,7 +6039,7 @@ app.post("/check-worker", async (req, res) => {
     }
 
     // Check if user is worker in any project
-    const isWorker = user.role === "Worker";
+    const isWorker = user.role && user.role.toLowerCase() === "worker";
 
     // Get project and profession details if worker
     let projectInfo = [];
@@ -6144,6 +6217,17 @@ app.post("/get-user-companies-projects", async (req, res) => {
     }
 
     console.log(`Found ${users.length} users with email: ${email}`);
+    
+    // Debug: Log all users found
+    console.log("All users found for email:", users.map(u => ({
+      _id: u._id,
+      username: u.username,
+      role: u.role,
+      userRole: u.userRole,
+      isProjectManager: u.isProjectManager,
+      projectsId: u.projectsId,
+      companyId: u.companyId
+    })));
 
     // Filter users based on selected role
     let filteredUsers = users;
@@ -6161,12 +6245,24 @@ app.post("/get-user-companies-projects", async (req, res) => {
           (normalizedSelectedRole === "independent controller" &&
             normalizedUserRole === "inspector") ||
           (normalizedSelectedRole === "project manager" &&
-            user.isProjectManager === "yes")
+            (user.userRole === "Project Manager" ||
+             (user.role && user.role.toLowerCase() === "admin" && user.projectsId && user.projectsId.length > 0 && user.projectsId.some(p => p && p !== "null" && p !== "undefined" && p !== null))))
         );
       });
       console.log(
         `Filtered to ${filteredUsers.length} users with role: ${selectedRole}`
       );
+      
+      // Debug: Log filtered users
+      console.log("Filtered users:", filteredUsers.map(u => ({
+        _id: u._id,
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId,
+        companyId: u.companyId
+      })));
     }
 
     // Group users by company and collect project IDs
@@ -6193,7 +6289,9 @@ app.post("/get-user-companies-projects", async (req, res) => {
         userId: user._id,
         name: user.name,
         role: user.role,
+        userRole: user.userRole,
         isProjectManager: user.isProjectManager,
+        projectsId: user.projectsId,
       });
 
       // Add project IDs from this user (filter out invalid IDs)
@@ -6266,13 +6364,54 @@ app.post("/get-user-companies-projects", async (req, res) => {
           }
         }
 
-        // Include companies that have valid projects OR if user is Admin
-        const hasValidProjects = projects.length > 0;
+        // Include companies if user is Admin, Project Manager, Worker, OR Independent Controller for that company
         const hasAdminUser = companyData.users.some(
-          (user) => user.role === "Admin"
+          (user) => (user.role || "").toLowerCase() === "admin"
+        );
+        
+        const hasProjectManagerUser = companyData.users.some(
+          (user) => {
+            // Check if user is a Project Manager AND has projects assigned
+            const isProjectManager = user.userRole === "Project Manager";
+            const hasProjects = user.projectsId && Array.isArray(user.projectsId) && user.projectsId.length > 0;
+            return isProjectManager && hasProjects;
+          }
         );
 
-        if (hasValidProjects || hasAdminUser) {
+        const hasWorkerUser = companyData.users.some(
+          (user) => {
+            // Check if user is a Worker AND has projects assigned
+            const isWorker = user.role && user.role.toLowerCase() === "worker";
+            const hasProjects = user.projectsId && Array.isArray(user.projectsId) && user.projectsId.length > 0;
+            return isWorker && hasProjects;
+          }
+        );
+
+        const hasIndependentControllerUser = companyData.users.some(
+          (user) => {
+            // Check if user is an Independent Controller AND has projects assigned
+            const isIndependentController = (user.role && user.role.toLowerCase() === "independent controller") || (user.role && user.role.toLowerCase() === "inspector");
+            const hasProjects = user.projectsId && Array.isArray(user.projectsId) && user.projectsId.length > 0;
+            return isIndependentController && hasProjects;
+          }
+        );
+
+        console.log(`Company ${companyId} processing:`, {
+          companyName: company.name,
+          usersCount: companyData.users.length,
+          hasAdminUser: hasAdminUser,
+          hasProjectManagerUser: hasProjectManagerUser,
+          hasWorkerUser: hasWorkerUser,
+          hasIndependentControllerUser: hasIndependentControllerUser,
+          users: companyData.users.map(u => ({
+            username: u.username,
+            role: u.role,
+            userRole: u.userRole,
+            isProjectManager: u.isProjectManager
+          }))
+        });
+
+        if (hasAdminUser || hasProjectManagerUser || hasWorkerUser || hasIndependentControllerUser) {
           result.push({
             company: {
               companyId: company._id,
@@ -6287,7 +6426,7 @@ app.post("/get-user-companies-projects", async (req, res) => {
           });
         } else {
           console.log(
-            `Skipping company ${companyId} - no valid projects found and no admin users`
+            `Skipping company ${companyId} - user is not admin, project manager, worker, or independent controller in this company`
           );
         }
       } catch (error) {
@@ -6304,6 +6443,57 @@ app.post("/get-user-companies-projects", async (req, res) => {
   } catch (error) {
     console.error("Get user companies projects error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Also expose a simpler endpoint to fetch ALL companies for a user email (any role)
+app.post("/get-user-companies-by-email", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ success: false, error: "Email is required" });
+    }
+
+    // Find all user records by username/email
+    const users = await db
+      .collection("users")
+      .find({ $or: [{ username: email }, { email: email }] })
+      .toArray();
+
+    if (!users || users.length === 0) {
+      return res.status(200).json({ success: true, companies: [], count: 0 });
+    }
+
+    // Collect unique company ObjectIds
+    const companyIds = Array.from(
+      new Set(
+        users
+          .map((u) => u.companyId)
+          .filter(Boolean)
+          .map((id) => {
+            try {
+              return typeof id === "string" ? new ObjectId(id) : new ObjectId(id);
+            } catch {
+              return null;
+            }
+          })
+          .filter((id) => id !== null)
+      )
+    );
+
+    if (companyIds.length === 0) {
+      return res.status(200).json({ success: true, companies: [], count: 0 });
+    }
+
+    const companies = await db
+      .collection("companies")
+      .find({ _id: { $in: companyIds } })
+      .toArray();
+
+    return res.status(200).json({ success: true, companies, count: companies.length });
+  } catch (error) {
+    console.error("get-user-companies-by-email error:", error);
+    return res.status(500).json({ success: false, error: "Failed to fetch user companies by email" });
   }
 });
 
@@ -6357,7 +6547,7 @@ app.post("/check-user-project-role", async (req, res) => {
     }
 
     // Check user roles in this specific project
-    const isWorker = user.role === "Worker";
+    const isWorker = user.role && user.role.toLowerCase() === "worker";
 
     // Check isProjectManager - handle both string and array formats
     let isProjectManager = false;
@@ -6373,7 +6563,7 @@ app.post("/check-user-project-role", async (req, res) => {
       );
     }
 
-    const isIndependentController = user.role === "Independent Controller";
+    const isIndependentController = user.role && user.role.toLowerCase() === "independent controller";
 
     console.log("Debug - User role:", user.role);
     console.log("Debug - User isProjectManager field:", user.isProjectManager);
@@ -6405,6 +6595,370 @@ app.post("/check-user-project-role", async (req, res) => {
     });
   } catch (error) {
     console.error("Check user project role error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Fix user project assignment
+app.post("/fix-user-project-assignment", async (req, res) => {
+  try {
+    const { email, projectId, userRole } = req.body;
+
+    if (!email || !projectId) {
+      return res.status(400).json({ error: "Email and projectId are required" });
+    }
+
+    console.log(`Fixing project assignment for ${email} to project ${projectId}`);
+
+    // Find the user
+    const user = await db.collection("users").findOne({ username: email });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log("Current user data:", {
+      _id: user._id,
+      username: user.username,
+      role: user.role,
+      userRole: user.userRole,
+      isProjectManager: user.isProjectManager,
+      projectsId: user.projectsId
+    });
+
+    // Update the user
+    const updateData = {
+      $addToSet: { projectsId: projectId },
+      updatedAt: new Date()
+    };
+
+    if (userRole) {
+      updateData.$set = { userRole: userRole };
+    }
+
+    const result = await db.collection("users").updateOne(
+      { _id: user._id },
+      updateData
+    );
+
+    console.log("Update result:", result);
+
+    res.status(200).json({ 
+      success: true, 
+      message: `User project assignment fixed`,
+      updated: result.modifiedCount > 0,
+      user: {
+        _id: user._id,
+        username: user.username,
+        role: user.role,
+        userRole: userRole || user.userRole,
+        projectsId: [...(user.projectsId || []), projectId]
+      }
+    });
+  } catch (error) {
+    console.error("Fix user project assignment error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Debug: Test filtering logic for specific user
+app.post("/debug-user-filtering", async (req, res) => {
+  try {
+    const { email, selectedRole } = req.body;
+    
+    console.log(`=== DEBUG USER FILTERING ===`);
+    console.log(`Email: ${email}, SelectedRole: ${selectedRole}`);
+    
+    // Find all users with this email
+    const users = await db.collection("users").find({
+      username: email,
+    }).toArray();
+    
+    console.log(`Found ${users.length} users with email: ${email}`);
+    
+    // Log all users
+    users.forEach((user, index) => {
+      console.log(`User ${index + 1}:`, {
+        _id: user._id,
+        username: user.username,
+        role: user.role,
+        userRole: user.userRole,
+        isProjectManager: user.isProjectManager,
+        projectsId: user.projectsId,
+        companyId: user.companyId
+      });
+    });
+    
+    // Test filtering logic
+    if (selectedRole) {
+      const roleLower = selectedRole.toLowerCase();
+      const filteredUsers = users.filter((user) => {
+        const userRole = user.role?.toLowerCase();
+        const normalizedSelectedRole = roleLower.replace(/_/g, " ");
+        const normalizedUserRole = userRole?.replace(/_/g, " ");
+        
+        const result = (
+          normalizedUserRole === normalizedSelectedRole ||
+          (normalizedSelectedRole === "independent controller" &&
+            normalizedUserRole === "inspector") ||
+          (normalizedSelectedRole === "project manager" &&
+            (user.userRole === "Project Manager" ||
+             (user.role && user.role.toLowerCase() === "admin" && user.projectsId && user.projectsId.length > 0 && user.projectsId.some(p => p && p !== "null" && p !== "undefined" && p !== null))))
+        );
+        
+        console.log(`User ${user._id} filtering result:`, {
+          username: user.username,
+          role: user.role,
+          userRole: user.userRole,
+          isProjectManager: user.isProjectManager,
+          normalizedSelectedRole,
+          normalizedUserRole,
+          result
+        });
+        
+        return result;
+      });
+      
+      console.log(`Filtered to ${filteredUsers.length} users`);
+      
+      res.status(200).json({
+        success: true,
+        totalUsers: users.length,
+        filteredUsers: filteredUsers.length,
+        users: users.map(u => ({
+          _id: u._id,
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+          companyId: u.companyId
+        })),
+        filtered: filteredUsers.map(u => ({
+          _id: u._id,
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+          companyId: u.companyId
+        }))
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        totalUsers: users.length,
+        users: users.map(u => ({
+          _id: u._id,
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+          companyId: u.companyId
+        }))
+      });
+    }
+  } catch (error) {
+    console.error("Debug user filtering error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Debug: Check if company exists
+app.get("/debug-company/:companyId", async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    console.log(`=== DEBUG COMPANY ===`);
+    console.log(`Company ID: ${companyId}`);
+    
+    const company = await db.collection("companies").findOne({
+      _id: new ObjectId(companyId)
+    });
+    
+    if (company) {
+      console.log("Company found:", {
+        _id: company._id,
+        name: company.name,
+        companyName: company.companyName
+      });
+      
+      res.status(200).json({
+        success: true,
+        found: true,
+        company: {
+          _id: company._id,
+          name: company.name,
+          companyName: company.companyName,
+          address: company.address,
+          city: company.city
+        }
+      });
+    } else {
+      console.log("Company not found");
+      res.status(200).json({
+        success: true,
+        found: false,
+        message: "Company not found"
+      });
+    }
+  } catch (error) {
+    console.error("Debug company error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Debug: Get all project managers
+app.get("/debug-project-managers", async (req, res) => {
+  try {
+    console.log("=== DEBUG: Finding all project managers ===");
+    
+    // Find users with isProjectManager = "yes"
+    const isProjectManagerUsers = await db.collection("users").find({
+      isProjectManager: "yes"
+    }).toArray();
+    
+    // Find users with userRole = "Project Manager"
+    const userRoleProjectManagers = await db.collection("users").find({
+      userRole: "Project Manager"
+    }).toArray();
+    
+    // Find users with role = "Project Manager"
+    const roleProjectManagers = await db.collection("users").find({
+      role: "Project Manager"
+    }).toArray();
+    
+    // Find users with projectsId array that has valid project IDs
+    const usersWithProjects = await db.collection("users").find({
+      projectsId: { 
+        $exists: true, 
+        $ne: [], 
+        $not: { $all: [null] }
+      }
+    }).toArray();
+    
+    console.log("Users with isProjectManager = 'yes':", isProjectManagerUsers.length);
+    console.log("Users with userRole = 'Project Manager':", userRoleProjectManagers.length);
+    console.log("Users with role = 'Project Manager':", roleProjectManagers.length);
+    console.log("Users with valid projectsId:", usersWithProjects.length);
+    
+    // Log details of each category
+    if (isProjectManagerUsers.length > 0) {
+      console.log("isProjectManager users:", isProjectManagerUsers.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      })));
+    }
+    
+    if (userRoleProjectManagers.length > 0) {
+      console.log("userRole Project Managers:", userRoleProjectManagers.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      })));
+    }
+    
+    if (roleProjectManagers.length > 0) {
+      console.log("role Project Managers:", roleProjectManagers.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      })));
+    }
+    
+    if (usersWithProjects.length > 0) {
+      console.log("Users with projects:", usersWithProjects.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      })));
+    }
+    
+    res.status(200).json({
+      success: true,
+      summary: {
+        isProjectManagerUsers: isProjectManagerUsers.length,
+        userRoleProjectManagers: userRoleProjectManagers.length,
+        roleProjectManagers: roleProjectManagers.length,
+        usersWithProjects: usersWithProjects.length
+      },
+      isProjectManagerUsers: isProjectManagerUsers.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      })),
+      userRoleProjectManagers: userRoleProjectManagers.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      })),
+      roleProjectManagers: roleProjectManagers.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      })),
+      usersWithProjects: usersWithProjects.map(u => ({
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId
+      }))
+    });
+  } catch (error) {
+    console.error("Debug project managers error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Update user project manager status
+app.post("/update-user-project-manager", async (req, res) => {
+  try {
+    const { userId, isProjectManager } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    if (typeof isProjectManager !== "boolean") {
+      return res.status(400).json({ error: "isProjectManager must be a boolean" });
+    }
+
+    const result = await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      { 
+        $set: { 
+          isProjectManager: isProjectManager ? "yes" : "no",
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: `User project manager status updated to ${isProjectManager ? "yes" : "no"}`,
+      updated: result.modifiedCount > 0
+    });
+  } catch (error) {
+    console.error("Update user project manager error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -8255,7 +8809,7 @@ app.get(
           // Filter by type if specified
           if (type && type !== "null") {
             const userType =
-              task.user.role === "Independent Controller"
+              task.user.role && task.user.role.toLowerCase() === "independent controller"
                 ? "Independent Controller"
                 : "Worker";
             if (userType !== type) {
@@ -8324,7 +8878,7 @@ app.get(
           }
 
           // Track by individual users
-          if (task.user.role === "Independent Controller") {
+          if (task.user.role && task.user.role.toLowerCase() === "independent controller") {
             const controllerId = task.user._id;
             if (!analyticsData.independentControllers.has(controllerId)) {
               analyticsData.independentControllers.set(controllerId, {
@@ -9361,6 +9915,7 @@ app.post(
         ? JSON.parse(req.body.controlPlan)
         : null;
       const drawing = req.body.drawing ? JSON.parse(req.body.drawing) : null;
+      const buildingParts = req.body.buildingParts ? JSON.parse(req.body.buildingParts) : null;
       const submittedStaticReportItem = req.body.staticReportItem
         ? JSON.parse(req.body.staticReportItem)
         : null;
@@ -9370,6 +9925,7 @@ app.post(
       console.log("  - selectedWorkers:", selectedWorkers.length, "items");
       console.log("  - controlPlan:", controlPlan ? "Present" : "Null");
       console.log("  - drawing:", drawing ? "Present" : "Null");
+      console.log("  - buildingParts:", buildingParts ? "Present" : "Null");
       console.log(
         "  - independentController:",
         independentController ? "Present" : "Null"
@@ -9519,6 +10075,7 @@ app.post(
         if (comment !== null) updateFields[`${updatePath}.$.comment`] = comment;
         if (date !== null) updateFields[`${updatePath}.$.selectedDate`] = date;
         if (drawing !== null) updateFields[`${updatePath}.$.drawing`] = drawing;
+        if (buildingParts !== null) updateFields[`${updatePath}.$.buildingParts`] = buildingParts;
         if (independentController !== null)
           updateFields[`${updatePath}.$.independentController`] =
             independentController;
@@ -9605,6 +10162,7 @@ app.post(
       if (comment !== null) staticReportEntry.comment = comment;
       if (date !== null) staticReportEntry.date = date;
       if (drawing !== null) staticReportEntry.drawing = drawing;
+      if (buildingParts !== null) staticReportEntry.buildingParts = buildingParts;
 
       // Save to the new StaticReportRegistrationEntries collection
       await db
@@ -10037,7 +10595,7 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       signatureDate,
     } = req.body;
 
-    if (!companyId || !projectId || !name || !profession) {
+    if (!companyId || !projectId || !subjectMatterId || !name || !profession) {
       return res.status(400).json({
         error:
           "Missing required parameters: companyId, projectId, subjectMatterId, name, profession",
@@ -10050,7 +10608,7 @@ app.post("/create-quality-assurance-signature", async (req, res) => {
       .findOne({
         companyId: companyId,
         projectId: projectId,
-        professionId,
+        subjectMatterId: subjectMatterId,
       });
 
     if (existingSignature) {
@@ -11819,7 +12377,18 @@ app.post(
       const companyId = result.insertedId;
 
       try {
-        const adminPassword = generateRandomPassword();
+        // Reuse existing password if a user with this email already exists
+        let adminPassword;
+        const existingUser = await db
+          .collection("users")
+          .findOne({ $or: [{ username: email }, { email: email }] });
+
+        if (existingUser && existingUser.password) {
+          adminPassword = existingUser.password; // reuse first user's password as-is (hashed or plain as stored)
+        } else {
+          adminPassword = generateRandomPassword();
+        }
+
         const verificationCode = generateVerificationCode();
 
         const adminUserData = {
@@ -14563,13 +15132,44 @@ app.post("/remove-user-from-project", async (req, res) => {
       });
     }
 
-    // Build update operation
-    const updateOperation = {
-      $pull: { projectsId: projectId },
-    };
+    // Get the current user data to understand their roles
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log("=== REMOVING USER FROM PROJECT ===");
+    console.log("Request parameters:", {
+      userId,
+      projectId,
+      isRemovedProjectManagerRole,
+    });
+    console.log("Current user data:", {
+      _id: user._id,
+      username: user.username,
+      name: user.name,
+      currentUserRole: user.userRole,
+      currentRole: user.role,
+      projectsId: user.projectsId,
+      isProjectManager: user.isProjectManager
+    });
+
+    let updateOperation = {};
 
     if (isRemovedProjectManagerRole) {
-      updateOperation.$set = { userRole: null };
+      // Only removing PM role, keep user in project
+      // Set userRole to their base role (Worker, Subcontractor, etc.)
+      const baseRole = user.role || "Worker"; // Fallback to Worker if no base role
+      updateOperation = {
+        $set: { userRole: baseRole }
+      };
+      console.log(`Removing PM role, setting userRole to: ${baseRole}`);
+    } else {
+      // Completely removing user from project
+      updateOperation = {
+        $pull: { projectsId: projectId }
+      };
+      console.log("Completely removing user from project");
     }
 
     // Update user document
@@ -14587,8 +15187,12 @@ app.post("/remove-user-from-project", async (req, res) => {
       });
     }
 
+    const message = isRemovedProjectManagerRole 
+      ? "Project Manager role removed successfully, user remains in project"
+      : "User removed from project successfully";
+
     res.status(200).json({
-      message: "User removed from project successfully",
+      message,
       result,
     });
   } catch (error) {
