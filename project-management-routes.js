@@ -354,10 +354,14 @@ function createProjectManagementRoutes(db) {
           });
         }
 
-        // Handle plan pictures
+        // Handle plan pictures with spread operator to capture ALL file information including S3 details
         const planPictures =
           req.files && req.files["planPictures"]
-            ? req.files["planPictures"].map((file) => file.filename)
+            ? req.files["planPictures"].map((file) => ({
+                ...file, // Captures ALL file information including S3 details
+                uploadedAt: new Date(),
+                fileType: "plan-picture",
+              }))
             : [];
 
         let planId = "";
@@ -393,11 +397,11 @@ function createProjectManagementRoutes(db) {
             const mainFile = mainFiles[mainDrawingIndex];
             if (!mainFile) continue;
 
-            // Create main drawing object
+            // Create main drawing object with spread operator to capture ALL file information including S3 details
             const mainDrawing = {
-              stored: mainFile.filename,
-              original: mainFile.originalname,
+              ...mainFile, // Captures ALL file information including S3 details
               uploadedAt: new Date(),
+              fileType: "main-drawing",
             };
 
             // Get associated child drawings
@@ -407,10 +411,10 @@ function createProjectManagementRoutes(db) {
                 if (!childFile) return null;
 
                 return {
-                  stored: childFile.filename,
-                  original: childFile.originalname,
+                  ...childFile, // Captures ALL file information including S3 details
                   parentMainIndex: mainDrawingIndex,
                   uploadedAt: new Date(),
+                  fileType: "child-drawing",
                 };
               })
               .filter((child) => child !== null);
@@ -442,10 +446,9 @@ function createProjectManagementRoutes(db) {
         // Handle documents (similar to store-documents API)
         const documentFiles = req.files["documents"] || [];
         if (documentFiles.length > 0) {
-          // Create document entries for each uploaded file
+          // Create document entries for each uploaded file with spread operator to capture ALL file information including S3 details
           const documentEntries = documentFiles.map((file) => ({
-            originalName: file.originalname,
-            storedName: file.filename,
+            ...file, // Captures ALL file information including S3 details
             category: parsedAddDrawing?.category || "general",
             description: parsedAddDrawing?.description || "",
             uploadedAt: new Date(),

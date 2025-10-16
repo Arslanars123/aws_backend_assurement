@@ -291,6 +291,10 @@ async function startServer() {
     const createStaticReportControlsRoutes = require("./static-report-controls-routes");
     app.use("/", createStaticReportControlsRoutes(db));
 
+    // Register KS report routes after database connection is established
+    const createKsReportRoutes = require("./ks-report-routes");
+    app.use("/", createKsReportRoutes(db));
+
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
@@ -411,8 +415,21 @@ app.post(
         });
       }
 
-      const picture = req.files?.picture?.[0]?.filename || null;
-      const contactPicture = req.files?.contactPicture?.[0]?.filename || null;
+      // Handle file uploads with spread operator to capture ALL file information
+      const picture = req.files?.picture?.[0]
+        ? {
+            ...req.files.picture[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "user-picture",
+          }
+        : null;
+      const contactPicture = req.files?.contactPicture?.[0]
+        ? {
+            ...req.files.contactPicture[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "contact-picture",
+          }
+        : null;
 
       let parsedUserProfession;
       if (req?.body?.userProfession) {
@@ -511,17 +528,19 @@ app.post(
           contactPicture,
           cvr,
           contactPerson,
-          contactPhone
+          contactPhone,
         };
 
         await db.collection("users").updateMany(
           { username: username },
           {
-            $set: commonDetails
+            $set: commonDetails,
           }
         );
 
-        console.log(`✅ Updated common details for all users with email: ${username}`);
+        console.log(
+          `✅ Updated common details for all users with email: ${username}`
+        );
       } catch (updateError) {
         console.error("❌ Failed to update common details:", updateError);
         // Don't fail the user creation if common details update fails
@@ -538,7 +557,8 @@ app.post(
 
           res.status(201).json({
             success: true,
-            message: "User created successfully! Login credentials sent via email.",
+            message:
+              "User created successfully! Login credentials sent via email.",
             userId: result.insertedId,
             emailSent: true,
             email: username,
@@ -554,7 +574,8 @@ app.post(
             userId: result.insertedId,
             emailSent: false,
             email: username,
-            warning: "Please contact support to resend login credentials email.",
+            warning:
+              "Please contact support to resend login credentials email.",
           });
         }
       } else {
@@ -582,22 +603,22 @@ app.post(
 // Helper function to find actual filename in uploads directory
 function findActualFilename(storedFilename) {
   if (!storedFilename) return null;
-  
+
   try {
-    const fs = require('fs');
-    const path = require('path');
-    const uploadsDir = path.join(__dirname, 'uploads');
-    
+    const fs = require("fs");
+    const path = require("path");
+    const uploadsDir = path.join(__dirname, "uploads");
+
     if (!fs.existsSync(uploadsDir)) return storedFilename;
-    
+
     const files = fs.readdirSync(uploadsDir);
-    
+
     // Look for files that end with the stored filename
-    const matchingFile = files.find(file => file.endsWith(storedFilename));
-    
+    const matchingFile = files.find((file) => file.endsWith(storedFilename));
+
     return matchingFile || storedFilename;
   } catch (error) {
-    console.error('Error finding actual filename:', error);
+    console.error("Error finding actual filename:", error);
     return storedFilename;
   }
 }
@@ -606,39 +627,42 @@ function findActualFilename(storedFilename) {
 app.get("/get-users-by-email/:email", async (req, res) => {
   try {
     const { email } = req.params;
-    
+
     if (!email) {
       return res.status(400).json({ error: "Email is required" });
     }
 
-    const users = await db.collection("users").find({
-      username: email
-    }).toArray();
+    const users = await db
+      .collection("users")
+      .find({
+        username: email,
+      })
+      .toArray();
 
     if (users.length === 0) {
       return res.status(404).json({ error: "No users found with this email" });
     }
 
-           // Extract common basic details from the first user
-           const commonDetails = {
-             name: users[0].name,
-             phone: users[0].phone,
-             address: users[0].address,
-             postalCode: users[0].postalCode,
-             city: users[0].city,
-             startDate: users[0].startDate,
-             picture: findActualFilename(users[0].picture),
-             cvr: users[0].cvr
-           };
+    // Extract common basic details from the first user
+    const commonDetails = {
+      name: users[0].name,
+      phone: users[0].phone,
+      address: users[0].address,
+      postalCode: users[0].postalCode,
+      city: users[0].city,
+      startDate: users[0].startDate,
+      picture: findActualFilename(users[0].picture),
+      cvr: users[0].cvr,
+    };
 
     res.status(200).json({
       commonDetails,
-      existingUsers: users.map(user => ({
+      existingUsers: users.map((user) => ({
         _id: user._id,
         role: user.role,
         userRole: user.userRole,
-        isProjectManager: user.isProjectManager
-      }))
+        isProjectManager: user.isProjectManager,
+      })),
     });
   } catch (error) {
     console.error("Error fetching users by email:", error);
@@ -652,25 +676,27 @@ app.post("/update-common-user-details", async (req, res) => {
     const { email, commonDetails } = req.body;
 
     if (!email || !commonDetails) {
-      return res.status(400).json({ error: "Email and common details are required" });
+      return res
+        .status(400)
+        .json({ error: "Email and common details are required" });
     }
 
-           // Update all users with the same email
-           const result = await db.collection("users").updateMany(
-             { username: email },
-             {
-               $set: {
-                 name: commonDetails.name,
-                 phone: commonDetails.phone,
-                 address: commonDetails.address,
-                 postalCode: commonDetails.postalCode,
-                 city: commonDetails.city,
-                 startDate: commonDetails.startDate,
-                 picture: findActualFilename(commonDetails.picture),
-                 cvr: commonDetails.cvr
-               }
-             }
-           );
+    // Update all users with the same email
+    const result = await db.collection("users").updateMany(
+      { username: email },
+      {
+        $set: {
+          name: commonDetails.name,
+          phone: commonDetails.phone,
+          address: commonDetails.address,
+          postalCode: commonDetails.postalCode,
+          city: commonDetails.city,
+          startDate: commonDetails.startDate,
+          picture: findActualFilename(commonDetails.picture),
+          cvr: commonDetails.cvr,
+        },
+      }
+    );
 
     res.json({
       message: "Common details updated successfully",
@@ -937,11 +963,8 @@ app.get("/get-mains", async (req, res) => {
     const { companyId, projectId } = req.query;
 
     // Handle both "Main Constructor" and "Main Contractor" role names
-    const query = { 
-      $or: [
-        { role: "Main Constructor" },
-        { role: "Main Contractor" }
-      ]
+    const query = {
+      $or: [{ role: "Main Constructor" }, { role: "Main Contractor" }],
     };
     if (companyId && companyId !== "null") {
       query.companyId = companyId;
@@ -1189,15 +1212,17 @@ app.get("/get-project-managers", async (req, res) => {
     if (projectId && projectId !== "null") {
       if (userRole && userRole !== "null") {
         // If userRole is specified, return users with that role who are in the project
-        filteredUsers = users.filter(user => {
-          const isInProject = user.projectsId && user.projectsId.includes(projectId);
+        filteredUsers = users.filter((user) => {
+          const isInProject =
+            user.projectsId && user.projectsId.includes(projectId);
           const hasCorrectRole = user.userRole === userRole;
           return isInProject && hasCorrectRole;
         });
       } else {
         // If no userRole specified, return users who are in the project but NOT already project managers
-        filteredUsers = users.filter(user => {
-          const isInProject = user.projectsId && user.projectsId.includes(projectId);
+        filteredUsers = users.filter((user) => {
+          const isInProject =
+            user.projectsId && user.projectsId.includes(projectId);
           const isAlreadyProjectManager = user.userRole === "Project Manager";
           return isInProject && !isAlreadyProjectManager;
         });
@@ -2471,7 +2496,7 @@ app.get("/get-company-professions", async (req, res) => {
 
     if (companyId && companyId !== "null" && companyId !== "undefined") {
       query.companyId = companyId;
-      query.projectId = null
+      query.projectId = null;
     }
     if (projectId && projectId !== "null" && projectId !== "undefined") {
       query.projectId = projectId;
@@ -2535,10 +2560,28 @@ app.post(
         }
       }
 
-      // Handle signature file uploads
-      const signature1 = req.files?.signature1?.[0]?.filename || null;
-      const signature2 = req.files?.signature2?.[0]?.filename || null;
-      const signature3 = req.files?.signature3?.[0]?.filename || null;
+      // Handle signature file uploads with spread operator to capture ALL file information
+      const signature1 = req.files?.signature1?.[0]
+        ? {
+            ...req.files.signature1[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
+      const signature2 = req.files?.signature2?.[0]
+        ? {
+            ...req.files.signature2[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
+      const signature3 = req.files?.signature3?.[0]
+        ? {
+            ...req.files.signature3[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
 
       // Create signature document
       const signatureData = {
@@ -2644,13 +2687,28 @@ app.post(
         .collection("signatures")
         .findOne({ _id: new ObjectId(id) });
 
-      // Handle signature file uploads (only update if new files are provided)
-      const signature1 =
-        req.files?.signature1?.[0]?.filename || existingSignature.signature1;
-      const signature2 =
-        req.files?.signature2?.[0]?.filename || existingSignature.signature2;
-      const signature3 =
-        req.files?.signature3?.[0]?.filename || existingSignature.signature3;
+      // Handle signature file uploads with spread operator (only update if new files are provided)
+      const signature1 = req.files?.signature1?.[0]
+        ? {
+            ...req.files.signature1[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature1;
+      const signature2 = req.files?.signature2?.[0]
+        ? {
+            ...req.files.signature2[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature2;
+      const signature3 = req.files?.signature3?.[0]
+        ? {
+            ...req.files.signature3[0], // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature3;
 
       // Build update object
       const updateData = {
@@ -2774,7 +2832,13 @@ app.post(
       }
 
       // Handle signature file upload
-      const signature = req.file?.filename || null;
+      const signature = req.file
+        ? {
+            ...req.file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : null;
 
       // Create name and signature document
       const signatureData = {
@@ -2873,7 +2937,13 @@ app.put(
       }
 
       // Handle signature file upload (only update if new file is provided)
-      const signature = req.file?.filename || existingSignature.signature;
+      const signature = req.file
+        ? {
+            ...req.file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "signature",
+          }
+        : existingSignature.signature;
 
       // Build update object
       const updateData = {
@@ -2987,7 +3057,10 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
 
     if (projectsId) {
       // Store EuroCodes in separate collection
-      if (profession.projectEuroCodes && profession.projectEuroCodes.length > 0) {
+      if (
+        profession.projectEuroCodes &&
+        profession.projectEuroCodes.length > 0
+      ) {
         await db.collection("projectprofessioneurocodes").insertOne({
           projectId: projectsId,
           subjectMatterId: profession.SubjectMatterId,
@@ -5297,9 +5370,13 @@ app.post(
         updateData.userProfession = parsedUserProfession;
       }
       updateData.picture = picture2;
-      // If an image is uploaded, include its path in the update
+      // If an image is uploaded, include its complete information in the update
       if (req.file) {
-        updateData.picture = req.file.filename; // Store only the filename in the database
+        updateData.picture = {
+          ...req.file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "user-picture",
+        };
       }
       if (type) updateData.type = type;
 
@@ -5317,7 +5394,10 @@ app.post(
       const roleSpecificFields = {};
 
       // For Worker and Subcontractor, professions and isProjectManager should only update the specific user
-      if ((user.role && user.role.toLowerCase() === "worker") || (user.role && user.role.toLowerCase() === "sub contractor")) {
+      if (
+        (user.role && user.role.toLowerCase() === "worker") ||
+        (user.role && user.role.toLowerCase() === "sub contractor")
+      ) {
         if (updateData.userProfession !== undefined) {
           roleSpecificFields.userProfession = updateData.userProfession;
           delete commonFields.userProfession;
@@ -5391,7 +5471,9 @@ app.post(
       console.log("Company ID:", companyId);
 
       // Get the user to check their current data
-      const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+      const user = await db
+        .collection("users")
+        .findOne({ _id: new ObjectId(userId) });
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -5402,15 +5484,15 @@ app.post(
         name: user.name,
         role: user.role,
         companyId: user.companyId,
-        projectsId: user.projectsId
+        projectsId: user.projectsId,
       });
 
       // Check if user belongs to this company
       if (user.companyId !== companyId) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "User does not belong to this company",
           userCompanyId: user.companyId,
-          requestedCompanyId: companyId
+          requestedCompanyId: companyId,
         });
       }
 
@@ -5422,8 +5504,8 @@ app.post(
             companyId: null,
             projectsId: [],
             userRole: null,
-            isProjectManager: null
-          }
+            isProjectManager: null,
+          },
         }
       );
 
@@ -5434,7 +5516,7 @@ app.post(
       console.log("User removed from company successfully");
       res.status(200).json({
         message: "User removed from company successfully",
-        result: result
+        result: result,
       });
     } catch (error) {
       console.error("Error removing user from company:", error);
@@ -5674,7 +5756,12 @@ app.post("/determine-user-roles", async (req, res) => {
       });
     }
 
-    console.log("Determining roles for email:", email, "in project:", projectId);
+    console.log(
+      "Determining roles for email:",
+      email,
+      "in project:",
+      projectId
+    );
 
     // Query all collections where email might appear
     const [users, companies] = await Promise.all([
@@ -5725,7 +5812,9 @@ app.post("/determine-user-roles", async (req, res) => {
     const roleDetails = {};
 
     // Check for Admin role - check all user records (case-insensitive)
-    const adminUsers = users.filter((user) => user.role && user.role.toLowerCase() === "admin");
+    const adminUsers = users.filter(
+      (user) => user.role && user.role.toLowerCase() === "admin"
+    );
     const adminCompany = companies.find(
       (company) =>
         company.admin &&
@@ -5747,14 +5836,16 @@ app.post("/determine-user-roles", async (req, res) => {
     const projectManagerUser = users.find((user) => {
       // If projectId is provided, check if user is assigned to that specific project
       if (projectId) {
-        const isInSpecificProject = user.projectsId &&
+        const isInSpecificProject =
+          user.projectsId &&
           Array.isArray(user.projectsId) &&
           user.projectsId.includes(projectId);
 
         // User must be a project manager AND assigned to the specific project
         return (
-          (user.role && user.role.toLowerCase() === "project manager" ||
-            user.userRole && user.userRole.toLowerCase() === "project manager") &&
+          ((user.role && user.role.toLowerCase() === "project manager") ||
+            (user.userRole &&
+              user.userRole.toLowerCase() === "project manager")) &&
           isInSpecificProject
         );
       } else {
@@ -5763,14 +5854,14 @@ app.post("/determine-user-roles", async (req, res) => {
           user.projectsId &&
           Array.isArray(user.projectsId) &&
           user.projectsId.some(
-            (pid) =>
-              pid && pid !== "undefined" && pid !== "null"
+            (pid) => pid && pid !== "undefined" && pid !== "null"
           );
 
         // User must be a project manager AND assigned to projects
         return (
-          (user.role && user.role.toLowerCase() === "project manager" ||
-            user.userRole && user.userRole.toLowerCase() === "project manager") &&
+          ((user.role && user.role.toLowerCase() === "project manager") ||
+            (user.userRole &&
+              user.userRole.toLowerCase() === "project manager")) &&
           hasValidProjects
         );
       }
@@ -5793,7 +5884,9 @@ app.post("/determine-user-roles", async (req, res) => {
     }
 
     // Check for Worker role - check all user records (case-insensitive)
-    const workerUsers = users.filter((user) => user.role && user.role.toLowerCase() === "worker");
+    const workerUsers = users.filter(
+      (user) => user.role && user.role.toLowerCase() === "worker"
+    );
     const subcontractorUsers = users.filter(
       (user) => user.role && user.role.toLowerCase() === "subcontractor"
     );
@@ -5804,18 +5897,18 @@ app.post("/determine-user-roles", async (req, res) => {
       if (!user.projectsId || !Array.isArray(user.projectsId)) {
         return false;
       }
-      
+
       // Check if there are any valid project IDs (not 'undefined', 'null', or empty)
       const validProjects = user.projectsId.filter(
-        (projectId) => 
-          projectId && 
-          projectId !== "undefined" && 
-          projectId !== "null" && 
-          projectId !== null && 
+        (projectId) =>
+          projectId &&
+          projectId !== "undefined" &&
+          projectId !== "null" &&
+          projectId !== null &&
           projectId !== undefined &&
           projectId.toString().trim() !== ""
       );
-      
+
       return validProjects.length > 0;
     });
 
@@ -5835,7 +5928,8 @@ app.post("/determine-user-roles", async (req, res) => {
       (user) =>
         (user.role && user.role.toLowerCase() === "independent controller") ||
         (user.role && user.role.toLowerCase() === "inspector") ||
-        (user.userRole && user.userRole.toLowerCase() === "independent controller") ||
+        (user.userRole &&
+          user.userRole.toLowerCase() === "independent controller") ||
         (user.userRole && user.userRole.toLowerCase() === "inspector")
     );
 
@@ -6217,17 +6311,20 @@ app.post("/get-user-companies-projects", async (req, res) => {
     }
 
     console.log(`Found ${users.length} users with email: ${email}`);
-    
+
     // Debug: Log all users found
-    console.log("All users found for email:", users.map(u => ({
-      _id: u._id,
-      username: u.username,
-      role: u.role,
-      userRole: u.userRole,
-      isProjectManager: u.isProjectManager,
-      projectsId: u.projectsId,
-      companyId: u.companyId
-    })));
+    console.log(
+      "All users found for email:",
+      users.map((u) => ({
+        _id: u._id,
+        username: u.username,
+        role: u.role,
+        userRole: u.userRole,
+        isProjectManager: u.isProjectManager,
+        projectsId: u.projectsId,
+        companyId: u.companyId,
+      }))
+    );
 
     // Filter users based on selected role
     let filteredUsers = users;
@@ -6246,23 +6343,32 @@ app.post("/get-user-companies-projects", async (req, res) => {
             normalizedUserRole === "inspector") ||
           (normalizedSelectedRole === "project manager" &&
             (user.userRole === "Project Manager" ||
-             (user.role && user.role.toLowerCase() === "admin" && user.projectsId && user.projectsId.length > 0 && user.projectsId.some(p => p && p !== "null" && p !== "undefined" && p !== null))))
+              (user.role &&
+                user.role.toLowerCase() === "admin" &&
+                user.projectsId &&
+                user.projectsId.length > 0 &&
+                user.projectsId.some(
+                  (p) => p && p !== "null" && p !== "undefined" && p !== null
+                ))))
         );
       });
       console.log(
         `Filtered to ${filteredUsers.length} users with role: ${selectedRole}`
       );
-      
+
       // Debug: Log filtered users
-      console.log("Filtered users:", filteredUsers.map(u => ({
-        _id: u._id,
-        username: u.username,
-        role: u.role,
-        userRole: u.userRole,
-        isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId,
-        companyId: u.companyId
-      })));
+      console.log(
+        "Filtered users:",
+        filteredUsers.map((u) => ({
+          _id: u._id,
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+          companyId: u.companyId,
+        }))
+      );
     }
 
     // Group users by company and collect project IDs
@@ -6368,33 +6474,39 @@ app.post("/get-user-companies-projects", async (req, res) => {
         const hasAdminUser = companyData.users.some(
           (user) => (user.role || "").toLowerCase() === "admin"
         );
-        
-        const hasProjectManagerUser = companyData.users.some(
-          (user) => {
-            // Check if user is a Project Manager AND has projects assigned
-            const isProjectManager = user.userRole === "Project Manager";
-            const hasProjects = user.projectsId && Array.isArray(user.projectsId) && user.projectsId.length > 0;
-            return isProjectManager && hasProjects;
-          }
-        );
 
-        const hasWorkerUser = companyData.users.some(
-          (user) => {
-            // Check if user is a Worker AND has projects assigned
-            const isWorker = user.role && user.role.toLowerCase() === "worker";
-            const hasProjects = user.projectsId && Array.isArray(user.projectsId) && user.projectsId.length > 0;
-            return isWorker && hasProjects;
-          }
-        );
+        const hasProjectManagerUser = companyData.users.some((user) => {
+          // Check if user is a Project Manager AND has projects assigned
+          const isProjectManager = user.userRole === "Project Manager";
+          const hasProjects =
+            user.projectsId &&
+            Array.isArray(user.projectsId) &&
+            user.projectsId.length > 0;
+          return isProjectManager && hasProjects;
+        });
 
-        const hasIndependentControllerUser = companyData.users.some(
-          (user) => {
-            // Check if user is an Independent Controller AND has projects assigned
-            const isIndependentController = (user.role && user.role.toLowerCase() === "independent controller") || (user.role && user.role.toLowerCase() === "inspector");
-            const hasProjects = user.projectsId && Array.isArray(user.projectsId) && user.projectsId.length > 0;
-            return isIndependentController && hasProjects;
-          }
-        );
+        const hasWorkerUser = companyData.users.some((user) => {
+          // Check if user is a Worker AND has projects assigned
+          const isWorker = user.role && user.role.toLowerCase() === "worker";
+          const hasProjects =
+            user.projectsId &&
+            Array.isArray(user.projectsId) &&
+            user.projectsId.length > 0;
+          return isWorker && hasProjects;
+        });
+
+        const hasIndependentControllerUser = companyData.users.some((user) => {
+          // Check if user is an Independent Controller AND has projects assigned
+          const isIndependentController =
+            (user.role &&
+              user.role.toLowerCase() === "independent controller") ||
+            (user.role && user.role.toLowerCase() === "inspector");
+          const hasProjects =
+            user.projectsId &&
+            Array.isArray(user.projectsId) &&
+            user.projectsId.length > 0;
+          return isIndependentController && hasProjects;
+        });
 
         console.log(`Company ${companyId} processing:`, {
           companyName: company.name,
@@ -6403,15 +6515,20 @@ app.post("/get-user-companies-projects", async (req, res) => {
           hasProjectManagerUser: hasProjectManagerUser,
           hasWorkerUser: hasWorkerUser,
           hasIndependentControllerUser: hasIndependentControllerUser,
-          users: companyData.users.map(u => ({
+          users: companyData.users.map((u) => ({
             username: u.username,
             role: u.role,
             userRole: u.userRole,
-            isProjectManager: u.isProjectManager
-          }))
+            isProjectManager: u.isProjectManager,
+          })),
         });
 
-        if (hasAdminUser || hasProjectManagerUser || hasWorkerUser || hasIndependentControllerUser) {
+        if (
+          hasAdminUser ||
+          hasProjectManagerUser ||
+          hasWorkerUser ||
+          hasIndependentControllerUser
+        ) {
           result.push({
             company: {
               companyId: company._id,
@@ -6451,7 +6568,9 @@ app.post("/get-user-companies-by-email", async (req, res) => {
   try {
     const { email } = req.body || {};
     if (!email) {
-      return res.status(400).json({ success: false, error: "Email is required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Email is required" });
     }
 
     // Find all user records by username/email
@@ -6472,7 +6591,9 @@ app.post("/get-user-companies-by-email", async (req, res) => {
           .filter(Boolean)
           .map((id) => {
             try {
-              return typeof id === "string" ? new ObjectId(id) : new ObjectId(id);
+              return typeof id === "string"
+                ? new ObjectId(id)
+                : new ObjectId(id);
             } catch {
               return null;
             }
@@ -6490,10 +6611,17 @@ app.post("/get-user-companies-by-email", async (req, res) => {
       .find({ _id: { $in: companyIds } })
       .toArray();
 
-    return res.status(200).json({ success: true, companies, count: companies.length });
+    return res
+      .status(200)
+      .json({ success: true, companies, count: companies.length });
   } catch (error) {
     console.error("get-user-companies-by-email error:", error);
-    return res.status(500).json({ success: false, error: "Failed to fetch user companies by email" });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to fetch user companies by email",
+      });
   }
 });
 
@@ -6563,7 +6691,8 @@ app.post("/check-user-project-role", async (req, res) => {
       );
     }
 
-    const isIndependentController = user.role && user.role.toLowerCase() === "independent controller";
+    const isIndependentController =
+      user.role && user.role.toLowerCase() === "independent controller";
 
     console.log("Debug - User role:", user.role);
     console.log("Debug - User isProjectManager field:", user.isProjectManager);
@@ -6605,10 +6734,14 @@ app.post("/fix-user-project-assignment", async (req, res) => {
     const { email, projectId, userRole } = req.body;
 
     if (!email || !projectId) {
-      return res.status(400).json({ error: "Email and projectId are required" });
+      return res
+        .status(400)
+        .json({ error: "Email and projectId are required" });
     }
 
-    console.log(`Fixing project assignment for ${email} to project ${projectId}`);
+    console.log(
+      `Fixing project assignment for ${email} to project ${projectId}`
+    );
 
     // Find the user
     const user = await db.collection("users").findOne({ username: email });
@@ -6622,28 +6755,27 @@ app.post("/fix-user-project-assignment", async (req, res) => {
       role: user.role,
       userRole: user.userRole,
       isProjectManager: user.isProjectManager,
-      projectsId: user.projectsId
+      projectsId: user.projectsId,
     });
 
     // Update the user
     const updateData = {
       $addToSet: { projectsId: projectId },
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     if (userRole) {
       updateData.$set = { userRole: userRole };
     }
 
-    const result = await db.collection("users").updateOne(
-      { _id: user._id },
-      updateData
-    );
+    const result = await db
+      .collection("users")
+      .updateOne({ _id: user._id }, updateData);
 
     console.log("Update result:", result);
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: `User project assignment fixed`,
       updated: result.modifiedCount > 0,
       user: {
@@ -6651,8 +6783,8 @@ app.post("/fix-user-project-assignment", async (req, res) => {
         username: user.username,
         role: user.role,
         userRole: userRole || user.userRole,
-        projectsId: [...(user.projectsId || []), projectId]
-      }
+        projectsId: [...(user.projectsId || []), projectId],
+      },
     });
   } catch (error) {
     console.error("Fix user project assignment error:", error);
@@ -6664,17 +6796,20 @@ app.post("/fix-user-project-assignment", async (req, res) => {
 app.post("/debug-user-filtering", async (req, res) => {
   try {
     const { email, selectedRole } = req.body;
-    
+
     console.log(`=== DEBUG USER FILTERING ===`);
     console.log(`Email: ${email}, SelectedRole: ${selectedRole}`);
-    
+
     // Find all users with this email
-    const users = await db.collection("users").find({
-      username: email,
-    }).toArray();
-    
+    const users = await db
+      .collection("users")
+      .find({
+        username: email,
+      })
+      .toArray();
+
     console.log(`Found ${users.length} users with email: ${email}`);
-    
+
     // Log all users
     users.forEach((user, index) => {
       console.log(`User ${index + 1}:`, {
@@ -6684,10 +6819,10 @@ app.post("/debug-user-filtering", async (req, res) => {
         userRole: user.userRole,
         isProjectManager: user.isProjectManager,
         projectsId: user.projectsId,
-        companyId: user.companyId
+        companyId: user.companyId,
       });
     });
-    
+
     // Test filtering logic
     if (selectedRole) {
       const roleLower = selectedRole.toLowerCase();
@@ -6695,16 +6830,21 @@ app.post("/debug-user-filtering", async (req, res) => {
         const userRole = user.role?.toLowerCase();
         const normalizedSelectedRole = roleLower.replace(/_/g, " ");
         const normalizedUserRole = userRole?.replace(/_/g, " ");
-        
-        const result = (
+
+        const result =
           normalizedUserRole === normalizedSelectedRole ||
           (normalizedSelectedRole === "independent controller" &&
             normalizedUserRole === "inspector") ||
           (normalizedSelectedRole === "project manager" &&
             (user.userRole === "Project Manager" ||
-             (user.role && user.role.toLowerCase() === "admin" && user.projectsId && user.projectsId.length > 0 && user.projectsId.some(p => p && p !== "null" && p !== "undefined" && p !== null))))
-        );
-        
+              (user.role &&
+                user.role.toLowerCase() === "admin" &&
+                user.projectsId &&
+                user.projectsId.length > 0 &&
+                user.projectsId.some(
+                  (p) => p && p !== "null" && p !== "undefined" && p !== null
+                ))));
+
         console.log(`User ${user._id} filtering result:`, {
           username: user.username,
           role: user.role,
@@ -6712,50 +6852,50 @@ app.post("/debug-user-filtering", async (req, res) => {
           isProjectManager: user.isProjectManager,
           normalizedSelectedRole,
           normalizedUserRole,
-          result
+          result,
         });
-        
+
         return result;
       });
-      
+
       console.log(`Filtered to ${filteredUsers.length} users`);
-      
+
       res.status(200).json({
         success: true,
         totalUsers: users.length,
         filteredUsers: filteredUsers.length,
-        users: users.map(u => ({
+        users: users.map((u) => ({
           _id: u._id,
           username: u.username,
           role: u.role,
           userRole: u.userRole,
           isProjectManager: u.isProjectManager,
           projectsId: u.projectsId,
-          companyId: u.companyId
+          companyId: u.companyId,
         })),
-        filtered: filteredUsers.map(u => ({
+        filtered: filteredUsers.map((u) => ({
           _id: u._id,
           username: u.username,
           role: u.role,
           userRole: u.userRole,
           isProjectManager: u.isProjectManager,
           projectsId: u.projectsId,
-          companyId: u.companyId
-        }))
+          companyId: u.companyId,
+        })),
       });
     } else {
       res.status(200).json({
         success: true,
         totalUsers: users.length,
-        users: users.map(u => ({
+        users: users.map((u) => ({
           _id: u._id,
           username: u.username,
           role: u.role,
           userRole: u.userRole,
           isProjectManager: u.isProjectManager,
           projectsId: u.projectsId,
-          companyId: u.companyId
-        }))
+          companyId: u.companyId,
+        })),
       });
     }
   } catch (error) {
@@ -6770,18 +6910,18 @@ app.get("/debug-company/:companyId", async (req, res) => {
     const { companyId } = req.params;
     console.log(`=== DEBUG COMPANY ===`);
     console.log(`Company ID: ${companyId}`);
-    
+
     const company = await db.collection("companies").findOne({
-      _id: new ObjectId(companyId)
+      _id: new ObjectId(companyId),
     });
-    
+
     if (company) {
       console.log("Company found:", {
         _id: company._id,
         name: company.name,
-        companyName: company.companyName
+        companyName: company.companyName,
       });
-      
+
       res.status(200).json({
         success: true,
         found: true,
@@ -6790,15 +6930,15 @@ app.get("/debug-company/:companyId", async (req, res) => {
           name: company.name,
           companyName: company.companyName,
           address: company.address,
-          city: company.city
-        }
+          city: company.city,
+        },
       });
     } else {
       console.log("Company not found");
       res.status(200).json({
         success: true,
         found: false,
-        message: "Company not found"
+        message: "Company not found",
       });
     }
   } catch (error) {
@@ -6811,113 +6951,146 @@ app.get("/debug-company/:companyId", async (req, res) => {
 app.get("/debug-project-managers", async (req, res) => {
   try {
     console.log("=== DEBUG: Finding all project managers ===");
-    
+
     // Find users with isProjectManager = "yes"
-    const isProjectManagerUsers = await db.collection("users").find({
-      isProjectManager: "yes"
-    }).toArray();
-    
+    const isProjectManagerUsers = await db
+      .collection("users")
+      .find({
+        isProjectManager: "yes",
+      })
+      .toArray();
+
     // Find users with userRole = "Project Manager"
-    const userRoleProjectManagers = await db.collection("users").find({
-      userRole: "Project Manager"
-    }).toArray();
-    
+    const userRoleProjectManagers = await db
+      .collection("users")
+      .find({
+        userRole: "Project Manager",
+      })
+      .toArray();
+
     // Find users with role = "Project Manager"
-    const roleProjectManagers = await db.collection("users").find({
-      role: "Project Manager"
-    }).toArray();
-    
+    const roleProjectManagers = await db
+      .collection("users")
+      .find({
+        role: "Project Manager",
+      })
+      .toArray();
+
     // Find users with projectsId array that has valid project IDs
-    const usersWithProjects = await db.collection("users").find({
-      projectsId: { 
-        $exists: true, 
-        $ne: [], 
-        $not: { $all: [null] }
-      }
-    }).toArray();
-    
-    console.log("Users with isProjectManager = 'yes':", isProjectManagerUsers.length);
-    console.log("Users with userRole = 'Project Manager':", userRoleProjectManagers.length);
-    console.log("Users with role = 'Project Manager':", roleProjectManagers.length);
+    const usersWithProjects = await db
+      .collection("users")
+      .find({
+        projectsId: {
+          $exists: true,
+          $ne: [],
+          $not: { $all: [null] },
+        },
+      })
+      .toArray();
+
+    console.log(
+      "Users with isProjectManager = 'yes':",
+      isProjectManagerUsers.length
+    );
+    console.log(
+      "Users with userRole = 'Project Manager':",
+      userRoleProjectManagers.length
+    );
+    console.log(
+      "Users with role = 'Project Manager':",
+      roleProjectManagers.length
+    );
     console.log("Users with valid projectsId:", usersWithProjects.length);
-    
+
     // Log details of each category
     if (isProjectManagerUsers.length > 0) {
-      console.log("isProjectManager users:", isProjectManagerUsers.map(u => ({
-        username: u.username,
-        role: u.role,
-        userRole: u.userRole,
-        isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
-      })));
+      console.log(
+        "isProjectManager users:",
+        isProjectManagerUsers.map((u) => ({
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+        }))
+      );
     }
-    
+
     if (userRoleProjectManagers.length > 0) {
-      console.log("userRole Project Managers:", userRoleProjectManagers.map(u => ({
-        username: u.username,
-        role: u.role,
-        userRole: u.userRole,
-        isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
-      })));
+      console.log(
+        "userRole Project Managers:",
+        userRoleProjectManagers.map((u) => ({
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+        }))
+      );
     }
-    
+
     if (roleProjectManagers.length > 0) {
-      console.log("role Project Managers:", roleProjectManagers.map(u => ({
-        username: u.username,
-        role: u.role,
-        userRole: u.userRole,
-        isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
-      })));
+      console.log(
+        "role Project Managers:",
+        roleProjectManagers.map((u) => ({
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+        }))
+      );
     }
-    
+
     if (usersWithProjects.length > 0) {
-      console.log("Users with projects:", usersWithProjects.map(u => ({
-        username: u.username,
-        role: u.role,
-        userRole: u.userRole,
-        isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
-      })));
+      console.log(
+        "Users with projects:",
+        usersWithProjects.map((u) => ({
+          username: u.username,
+          role: u.role,
+          userRole: u.userRole,
+          isProjectManager: u.isProjectManager,
+          projectsId: u.projectsId,
+        }))
+      );
     }
-    
+
     res.status(200).json({
       success: true,
       summary: {
         isProjectManagerUsers: isProjectManagerUsers.length,
         userRoleProjectManagers: userRoleProjectManagers.length,
         roleProjectManagers: roleProjectManagers.length,
-        usersWithProjects: usersWithProjects.length
+        usersWithProjects: usersWithProjects.length,
       },
-      isProjectManagerUsers: isProjectManagerUsers.map(u => ({
+      isProjectManagerUsers: isProjectManagerUsers.map((u) => ({
         username: u.username,
         role: u.role,
         userRole: u.userRole,
         isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
+        projectsId: u.projectsId,
       })),
-      userRoleProjectManagers: userRoleProjectManagers.map(u => ({
+      userRoleProjectManagers: userRoleProjectManagers.map((u) => ({
         username: u.username,
         role: u.role,
         userRole: u.userRole,
         isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
+        projectsId: u.projectsId,
       })),
-      roleProjectManagers: roleProjectManagers.map(u => ({
+      roleProjectManagers: roleProjectManagers.map((u) => ({
         username: u.username,
         role: u.role,
         userRole: u.userRole,
         isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
+        projectsId: u.projectsId,
       })),
-      usersWithProjects: usersWithProjects.map(u => ({
+      usersWithProjects: usersWithProjects.map((u) => ({
         username: u.username,
         role: u.role,
         userRole: u.userRole,
         isProjectManager: u.isProjectManager,
-        projectsId: u.projectsId
-      }))
+        projectsId: u.projectsId,
+      })),
     });
   } catch (error) {
     console.error("Debug project managers error:", error);
@@ -6935,16 +7108,18 @@ app.post("/update-user-project-manager", async (req, res) => {
     }
 
     if (typeof isProjectManager !== "boolean") {
-      return res.status(400).json({ error: "isProjectManager must be a boolean" });
+      return res
+        .status(400)
+        .json({ error: "isProjectManager must be a boolean" });
     }
 
     const result = await db.collection("users").updateOne(
       { _id: new ObjectId(userId) },
-      { 
-        $set: { 
+      {
+        $set: {
           isProjectManager: isProjectManager ? "yes" : "no",
-          updatedAt: new Date()
-        } 
+          updatedAt: new Date(),
+        },
       }
     );
 
@@ -6952,10 +7127,12 @@ app.post("/update-user-project-manager", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.status(200).json({ 
-      success: true, 
-      message: `User project manager status updated to ${isProjectManager ? "yes" : "no"}`,
-      updated: result.modifiedCount > 0
+    res.status(200).json({
+      success: true,
+      message: `User project manager status updated to ${
+        isProjectManager ? "yes" : "no"
+      }`,
+      updated: result.modifiedCount > 0,
     });
   } catch (error) {
     console.error("Update user project manager error:", error);
@@ -8173,14 +8350,23 @@ app.post(
       let picture = null;
       let pictures = [];
 
-      // Handle single picture upload
+      // Handle single picture upload with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
-      // Handle multiple pictures upload
+      // Handle multiple pictures upload with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -8248,9 +8434,9 @@ app.post(
       let markPictures = [];
       let markPictureObjects = [];
 
-      // Handle main pictures (separate from mark pictures)
+      // Handle main pictures (separate from mark pictures) with spread operator
       if (req.files["mainPictures"] && req.files["mainPictures"].length > 0) {
-        mainPictures = req.files["mainPictures"].map((file) => file.filename);
+        mainPictures = req.files["mainPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         const descriptions = Array.isArray(mainPictureDescriptions)
           ? mainPictureDescriptions
@@ -8261,18 +8447,17 @@ app.post(
           : [mainPictureCreatedDates];
 
         mainPictureObjects = req.files["mainPictures"].map((file, index) => ({
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
           description: descriptions[index] || "",
-          originalName: file.originalname,
           createdDate: createdDates[index] || new Date().toISOString(),
-          s3Location: file.s3Location || null,
-          s3Key: file.s3Key || null,
+          uploadedAt: new Date(),
+          fileType: "main-picture",
         }));
       }
 
-      // Handle mark-specific pictures
+      // Handle mark-specific pictures with spread operator
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         const descriptions = Array.isArray(markPictureDescriptions)
           ? markPictureDescriptions
@@ -8287,32 +8472,35 @@ app.post(
           : [markNumbers];
 
         markPictureObjects = req.files["markPictures"].map((file, index) => ({
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
           description: descriptions[index] || "",
-          originalName: file.originalname,
           createdDate: createdDates[index] || new Date().toISOString(),
           markNumber: parseInt(markNums[index]) || 1,
+          uploadedAt: new Date(),
+          fileType: "mark-picture",
         }));
       }
 
-      // Handle annotated PDFs
+      // Handle annotated PDFs with spread operator
       let annotatedPdfs = [];
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
         }));
       }
 
-      // Handle annotated PDF images (PNG versions)
+      // Handle annotated PDF images (PNG versions) with spread operator
       let annotatedPdfImages = [];
       if (
         req.files["annotatedPdfImages"] &&
         req.files["annotatedPdfImages"].length > 0
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf-image",
         }));
       }
 
@@ -8513,7 +8701,9 @@ app.post(
         language: language,
         entries: processedData,
         uploadedAt: new Date(),
-        fileName: excelFile.filename,
+        ...excelFile, // Captures ALL file information including S3 details
+        uploadedAt: new Date(),
+        fileType: "excel-file",
         totalEntries: processedData.length,
       };
 
@@ -8545,7 +8735,9 @@ app.post(
           euroCode: euroCode || null,
           language: language,
           totalEntries: processedData.length,
-          fileName: excelFile.filename,
+          ...excelFile, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "excel-file",
         },
       });
     } catch (error) {
@@ -8809,7 +9001,8 @@ app.get(
           // Filter by type if specified
           if (type && type !== "null") {
             const userType =
-              task.user.role && task.user.role.toLowerCase() === "independent controller"
+              task.user.role &&
+              task.user.role.toLowerCase() === "independent controller"
                 ? "Independent Controller"
                 : "Worker";
             if (userType !== type) {
@@ -8878,7 +9071,10 @@ app.get(
           }
 
           // Track by individual users
-          if (task.user.role && task.user.role.toLowerCase() === "independent controller") {
+          if (
+            task.user.role &&
+            task.user.role.toLowerCase() === "independent controller"
+          ) {
             const controllerId = task.user._id;
             if (!analyticsData.independentControllers.has(controllerId)) {
               analyticsData.independentControllers.set(controllerId, {
@@ -9915,7 +10111,9 @@ app.post(
         ? JSON.parse(req.body.controlPlan)
         : null;
       const drawing = req.body.drawing ? JSON.parse(req.body.drawing) : null;
-      const buildingParts = req.body.buildingParts ? JSON.parse(req.body.buildingParts) : null;
+      const buildingParts = req.body.buildingParts
+        ? JSON.parse(req.body.buildingParts)
+        : null;
       const submittedStaticReportItem = req.body.staticReportItem
         ? JSON.parse(req.body.staticReportItem)
         : null;
@@ -9938,14 +10136,15 @@ app.post(
         ? `professionAssociatedData.${professionKey}.staticReportRegistration`
         : null;
 
-      // Handle multiple annotated PDFs and convert to PNG
+      // Handle multiple annotated PDFs and convert to PNG with spread operator
       let annotatedPdfs = [];
       let annotatedPdfImages = [];
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-            filename: file.filename,
-            originalName: file.originalname,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "annotated-pdf",
           };
           annotatedPdfs.push(pdfInfo);
 
@@ -9989,11 +10188,12 @@ app.post(
           : [];
 
         mainPictures = req.files["mainPictures"].map((file, index) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
           description: mainPictureDescriptions[index] || "",
           createdDate:
             mainPictureCreatedDates[index] || new Date().toISOString(),
+          uploadedAt: new Date(),
+          fileType: "main-picture",
         }));
       }
 
@@ -10017,12 +10217,13 @@ app.post(
           : [];
 
         markPictures = req.files["markPictures"].map((file, index) => ({
-          filename: file.filename,
-          originalName: file.originalname,
+          ...file, // Captures ALL file information including S3 details
           description: markPictureDescriptions[index] || "",
           createdDate:
             markPictureCreatedDates[index] || new Date().toISOString(),
           markNumber: markNumbers[index] || null,
+          uploadedAt: new Date(),
+          fileType: "mark-picture",
         }));
       }
 
@@ -10075,7 +10276,8 @@ app.post(
         if (comment !== null) updateFields[`${updatePath}.$.comment`] = comment;
         if (date !== null) updateFields[`${updatePath}.$.selectedDate`] = date;
         if (drawing !== null) updateFields[`${updatePath}.$.drawing`] = drawing;
-        if (buildingParts !== null) updateFields[`${updatePath}.$.buildingParts`] = buildingParts;
+        if (buildingParts !== null)
+          updateFields[`${updatePath}.$.buildingParts`] = buildingParts;
         if (independentController !== null)
           updateFields[`${updatePath}.$.independentController`] =
             independentController;
@@ -10162,7 +10364,8 @@ app.post(
       if (comment !== null) staticReportEntry.comment = comment;
       if (date !== null) staticReportEntry.date = date;
       if (drawing !== null) staticReportEntry.drawing = drawing;
-      if (buildingParts !== null) staticReportEntry.buildingParts = buildingParts;
+      if (buildingParts !== null)
+        staticReportEntry.buildingParts = buildingParts;
 
       // Save to the new StaticReportRegistrationEntries collection
       await db
@@ -11145,9 +11348,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -11160,9 +11368,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -11207,12 +11419,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -11260,9 +11481,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -11275,9 +11501,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -11319,12 +11549,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -11378,9 +11617,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -11393,9 +11637,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -11589,9 +11837,14 @@ app.post(
       }
       if (SubjectMatterId) updateData.SubjectMatterId = SubjectMatterId;
       if (ControlId) updateData.ControlId = ControlId;
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -11604,9 +11857,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -11650,12 +11907,17 @@ app.post(
 
       let file = null;
 
-      // Handle Excel file upload
+      // Handle Excel file upload with spread operator to capture ALL file information
       if (req.files["file"] && req.files["file"].length > 0) {
-        file = req.files["file"][0]; // Get the uploaded file
+        const uploadedFile = req.files["file"][0];
+        file = {
+          ...uploadedFile, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "input-file",
+        };
 
         // Parse the Excel file
-        const workbook = xlsx.readFile(file.path); // `file.path` contains the path to the uploaded file
+        const workbook = xlsx.readFile(uploadedFile.path); // Use original file path for parsing
         const sheetName = workbook.SheetNames[6]; // Use the first sheet
         let excelRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]); // Convert sheet to JSON
 
@@ -11698,12 +11960,17 @@ app.post(
   async (req, res) => {
     try {
       let file = null;
-      // Handle Excel file upload
+      // Handle Excel file upload with spread operator to capture ALL file information
       if (req.files["file"] && req.files["file"].length > 0) {
-        file = req.files["file"][0]; // Get the uploaded file
+        const uploadedFile = req.files["file"][0];
+        file = {
+          ...uploadedFile, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "standard-file",
+        };
 
         // Parse the Excel file
-        const workbook = xlsx.readFile(file.path); // `file.path` contains the path to the uploaded file
+        const workbook = xlsx.readFile(uploadedFile.path); // Use original file path for parsing
         const sheetName = workbook.SheetNames[0]; // Use the first sheet
         let excelRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
           range: 4,
@@ -11970,7 +12237,11 @@ app.post(
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       let annotatedImage = null;
@@ -11978,24 +12249,43 @@ app.post(
         req.files["annotatedImage"] &&
         req.files["annotatedImage"].length > 0
       ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+        const file = req.files["annotatedImage"][0];
+        annotatedImage = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-image",
+        };
       }
 
       let originalPdfFilename = null;
       if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
-        originalPdfFilename = req.files["originalPdf"][0].filename;
+        const file = req.files["originalPdf"][0];
+        originalPdfFilename = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "original-pdf",
+        };
       }
 
       // Handle annotated PDF
       let annotatedPdfFilename = null;
       if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
-        annotatedPdfFilename = req.files["annotatedPdf"][0].filename;
+        const file = req.files["annotatedPdf"][0];
+        annotatedPdfFilename = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        };
       }
 
       // Handle multiple annotated PDFs
       let annotatedPdfs = [];
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
-        annotatedPdfs = req.files["annotatedPdfs"].map((file) => file.filename);
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        }));
       }
 
       // Handle general pictures
@@ -12004,15 +12294,17 @@ app.post(
         req.files["generalPictures"] &&
         req.files["generalPictures"].length > 0
       ) {
-        generalPictures = req.files["generalPictures"].map(
-          (file) => file.filename
-        );
+        generalPictures = req.files["generalPictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "general-picture",
+        }));
       }
 
       // Handle mark pictures
       let markPictures = [];
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
       }
 
       // Prepare data for insertion
@@ -12169,12 +12461,16 @@ app.post(
             markPicturesFiles.push(file.filename);
           } else if (file.fieldname === "annotatedPdfs") {
             annotatedPdfs.push({
-              filename: file.filename,
+              ...file, // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "file",
               originalName: file.originalname,
             });
           } else if (file.fieldname === "annotatedPdfImages") {
             annotatedPdfImages.push({
-              filename: file.filename,
+              ...file, // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "file",
               originalName: file.originalname,
             });
           }
@@ -12284,9 +12580,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12299,9 +12600,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12350,10 +12655,15 @@ app.post(
 
       console.log("Files:", req.files); // Log files to inspect
 
-      // Handle single picture upload (logo)
+      // Handle single picture upload (logo) with spread operator to capture ALL file information
       let picture = null;
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename;
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "company-logo",
+        };
       }
 
       // Prepare company document
@@ -12497,16 +12807,25 @@ app.post(
       if (address) updateData.address = address;
       if (contactPerson) updateData.contactPerson = contactPerson;
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "company-logo",
+        };
       }
 
       let picturesArray = [];
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "company-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12555,12 +12874,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -12618,9 +12946,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12632,9 +12965,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12693,14 +13030,23 @@ app.post(
       let picture = null;
       let pictures = [];
 
-      // Handle single picture upload
+      // Handle single picture upload with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "control-picture",
+        };
       }
 
-      // Handle multiple pictures upload
+      // Handle multiple pictures upload with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "control-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -12777,9 +13123,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12791,9 +13142,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -12874,9 +13229,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -12888,9 +13248,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13054,11 +13418,11 @@ app.post(
         const mainFile = mainFiles[mainDrawingIndex];
         if (!mainFile) continue;
 
-        // Create main drawing object
+        // Create main drawing object with spread operator to capture ALL file information including S3 details
         const mainDrawing = {
-          stored: mainFile.filename,
-          original: mainFile.originalname,
+          ...mainFile, // Captures ALL file information including S3 details
           uploadedAt: new Date(),
+          fileType: "main-drawing",
         };
 
         // Get associated child drawings
@@ -13068,10 +13432,10 @@ app.post(
             if (!childFile) return null;
 
             return {
-              stored: childFile.filename,
-              original: childFile.originalname,
+              ...childFile, // Captures ALL file information including S3 details
               parentMainIndex: mainDrawingIndex,
               uploadedAt: new Date(),
+              fileType: "child-drawing",
             };
           })
           .filter((child) => child !== null);
@@ -13150,9 +13514,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13164,9 +13533,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13223,7 +13596,14 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
           : independentController;
     }
 
-    const picture = req.file ? req.file.filename : null;
+    // Handle file upload with spread operator to capture ALL file information
+    const picture = req.file
+      ? {
+          ...req.file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "gamma-picture",
+        }
+      : null;
 
     // Build the document object, only including fields that exist
     const documentToInsert = {
@@ -13298,7 +13678,11 @@ app.post(
       updateData.picture = picture2;
       // If an image is uploaded, include its path in the update
       if (req.file) {
-        updateData.picture = req.file.filename; // Store only the filename in the database
+        updateData.picture = {
+          ...req.file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "user-picture",
+        };
       }
 
       // Update the task document in the database
@@ -13352,7 +13736,11 @@ app.post(
       let markDescs = [];
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
 
         if (pictureDescriptions) {
           if (!Array.isArray(pictureDescriptions)) {
@@ -13366,7 +13754,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
@@ -13376,13 +13766,15 @@ app.post(
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -13519,9 +13911,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13533,9 +13930,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13604,11 +14005,20 @@ app.post(
         req.files["annotatedImage"] &&
         req.files["annotatedImage"].length > 0
       ) {
-        annotatedImage = req.files["annotatedImage"][0].filename;
+        const file = req.files["annotatedImage"][0];
+        annotatedImage = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "annotated-image",
+        };
       }
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename);
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "picture",
+        }));
 
         if (pictureDescriptions) {
           if (!Array.isArray(pictureDescriptions)) {
@@ -13622,7 +14032,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
@@ -13632,13 +14044,15 @@ app.post(
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -13735,9 +14149,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13749,9 +14168,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -13824,7 +14247,11 @@ app.post(
         : null;
 
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename);
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "picture",
+        }));
 
         if (pictureDescriptions) {
           if (!Array.isArray(pictureDescriptions)) {
@@ -13839,7 +14266,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-            filename: file.filename,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "file",
             originalName: file.originalname,
           };
           annotatedPdfs.push(pdfInfo);
@@ -13871,7 +14300,7 @@ app.post(
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -13950,9 +14379,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -13964,9 +14398,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -14041,9 +14479,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -14055,9 +14498,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -14117,7 +14564,11 @@ app.post(
 
       // Handle multiple pictures upload with descriptions
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // For backward compatibility
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "picture",
+        })); // For backward compatibility
 
         // Create picture objects with descriptions
         const descriptions = Array.isArray(pictureDescriptions)
@@ -14125,7 +14576,9 @@ app.post(
           : [pictureDescriptions];
 
         pictureObjects = req.files["pictures"].map((file, index) => ({
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
           description: descriptions[index] || "",
           originalName: file.originalname,
         }));
@@ -14133,7 +14586,7 @@ app.post(
 
       // Handle mark pictures and descriptions
       if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
-        markPictures = req.files["markPictures"].map((file) => file.filename);
+        markPictures = req.files["markPictures"].map((file) => file.filename); // Keep filename for backward compatibility
 
         if (markDescriptions) {
           if (!Array.isArray(markDescriptions)) {
@@ -14150,7 +14603,9 @@ app.post(
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
         for (const file of req.files["annotatedPdfs"]) {
           const pdfInfo = {
-            filename: file.filename,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "file",
             originalName: file.originalname,
           };
           annotatedPdfs.push(pdfInfo);
@@ -14187,7 +14642,9 @@ app.post(
       ) {
         annotatedPdfImages = req.files["annotatedPdfImages"].map((file) => ({
           originalName: file.originalname,
-          filename: file.filename,
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "file",
         }));
       }
 
@@ -14266,9 +14723,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -14280,9 +14742,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -14348,9 +14814,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -14362,9 +14833,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -14408,12 +14883,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Insert the data into the database
@@ -14466,9 +14950,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -14483,9 +14972,13 @@ app.post(
       const projectsArray = projectsId.split(",");
       updateData.projectsId = projectsArray;
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -14542,12 +15035,21 @@ app.post(
 
       // Handle single picture upload
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        picture = req.files["picture"][0].filename; // Single file
+        const file = req.files["picture"][0];
+        picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        };
       }
 
       // Handle multiple pictures upload
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        pictures = req.files["pictures"].map((file) => file.filename); // Multiple files
+        pictures = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "profession-picture",
+        }));
       }
 
       // Parse professionObject if it's a string
@@ -14645,9 +15147,14 @@ app.post(
         updateData.picture = picture2; // Use the existing picture if provided in the request
       }
 
-      // Handle single file upload (picture)
+      // Handle single file upload (picture) with spread operator to capture ALL file information
       if (req.files["picture"] && req.files["picture"].length > 0) {
-        updateData.picture = req.files["picture"][0].filename; // Replace the existing picture
+        const file = req.files["picture"][0];
+        updateData.picture = {
+          ...file, // Captures ALL file information including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        };
       }
 
       let picturesArray = [];
@@ -14659,9 +15166,13 @@ app.post(
         updateData.pictures = picturesArray;
       }
 
-      // Handle multiple file uploads (pictures)
+      // Handle multiple file uploads (pictures) with spread operator to capture ALL file information
       if (req.files["pictures"] && req.files["pictures"].length > 0) {
-        const newFiles = req.files["pictures"].map((file) => file.filename);
+        const newFiles = req.files["pictures"].map((file) => ({
+          ...file, // Captures ALL file information for each file including S3 details
+          uploadedAt: new Date(),
+          fileType: "part-picture",
+        }));
 
         // Append new files to the existing files
         const existingFiles = picturesArray;
@@ -15133,7 +15644,9 @@ app.post("/remove-user-from-project", async (req, res) => {
     }
 
     // Get the current user data to understand their roles
-    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+    const user = await db
+      .collection("users")
+      .findOne({ _id: new ObjectId(userId) });
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -15151,7 +15664,7 @@ app.post("/remove-user-from-project", async (req, res) => {
       currentUserRole: user.userRole,
       currentRole: user.role,
       projectsId: user.projectsId,
-      isProjectManager: user.isProjectManager
+      isProjectManager: user.isProjectManager,
     });
 
     let updateOperation = {};
@@ -15161,13 +15674,13 @@ app.post("/remove-user-from-project", async (req, res) => {
       // Set userRole to their base role (Worker, Subcontractor, etc.)
       const baseRole = user.role || "Worker"; // Fallback to Worker if no base role
       updateOperation = {
-        $set: { userRole: baseRole }
+        $set: { userRole: baseRole },
       };
       console.log(`Removing PM role, setting userRole to: ${baseRole}`);
     } else {
       // Completely removing user from project
       updateOperation = {
-        $pull: { projectsId: projectId }
+        $pull: { projectsId: projectId },
       };
       console.log("Completely removing user from project");
     }
@@ -15187,7 +15700,7 @@ app.post("/remove-user-from-project", async (req, res) => {
       });
     }
 
-    const message = isRemovedProjectManagerRole 
+    const message = isRemovedProjectManagerRole
       ? "Project Manager role removed successfully, user remains in project"
       : "User removed from project successfully";
 
@@ -17132,28 +17645,33 @@ app.get("/get-project-profession-eurocodes", async (req, res) => {
     }
 
     // Find the project-specific EuroCodes
-    const projectEuroCodes = await db.collection("projectprofessioneurocodes").findOne({
-      projectId: projectId,
-      subjectMatterId: subjectMatterId,
-    });
+    const projectEuroCodes = await db
+      .collection("projectprofessioneurocodes")
+      .findOne({
+        projectId: projectId,
+        subjectMatterId: subjectMatterId,
+      });
 
     console.log("Found project EuroCodes document:", projectEuroCodes);
 
     if (!projectEuroCodes) {
       // Debug: Check what documents exist for this project
-      const allProjectDocs = await db.collection("projectprofessioneurocodes").find({
-        projectId: projectId
-      }).toArray();
+      const allProjectDocs = await db
+        .collection("projectprofessioneurocodes")
+        .find({
+          projectId: projectId,
+        })
+        .toArray();
       console.log("All documents for projectId:", allProjectDocs);
-      
+
       return res.status(404).json({
         error: "No EuroCodes found for this project and profession combination",
         projectId: projectId,
         subjectMatterId: subjectMatterId,
-        availableDocs: allProjectDocs.map(doc => ({
+        availableDocs: allProjectDocs.map((doc) => ({
           subjectMatterId: doc.subjectMatterId,
-          euroCodes: doc.euroCodes
-        }))
+          euroCodes: doc.euroCodes,
+        })),
       });
     }
 

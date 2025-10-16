@@ -1,0 +1,1 @@
+const s=e=>e.replace(/([A-Z])/g," $1").replace(/_/g," ").replace(/\b\w/g,t=>t.toUpperCase()),p=e=>typeof e=="string"&&/\.(jpg|jpeg|png|gif|webp)$/i.test(e),g=e=>typeof e=="string"&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(e);export{g as a,s as f,p as i};

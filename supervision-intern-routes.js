@@ -261,7 +261,7 @@ function createSupervisionInternRoutes(db) {
           parsedMarkPictureIndices = [];
         }
 
-        // Handle annotated image with S3 metadata
+        // Handle annotated image with spread operator to capture ALL file information
         let annotatedImage = null;
         if (
           req.files["annotatedImage"] &&
@@ -269,85 +269,67 @@ function createSupervisionInternRoutes(db) {
         ) {
           const file = req.files["annotatedImage"][0];
           annotatedImage = {
-            filename: file.filename,
-            originalName: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            s3Location: file.s3Location || null,
-            s3Key: file.s3Key || null,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "annotated-image",
           };
         }
 
-        // Handle original PDF with S3 metadata
+        // Handle original PDF with spread operator to capture ALL file information
         let originalPdf = null;
         if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
           const file = req.files["originalPdf"][0];
           originalPdf = {
-            filename: file.filename,
-            originalName: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            s3Location: file.s3Location || null,
-            s3Key: file.s3Key || null,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "original-pdf",
           };
         }
 
-        // Handle annotated PDF with S3 metadata
+        // Handle annotated PDF with spread operator to capture ALL file information
         let annotatedPdf = null;
         if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
           const file = req.files["annotatedPdf"][0];
           annotatedPdf = {
-            filename: file.filename,
-            originalName: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            s3Location: file.s3Location || null,
-            s3Key: file.s3Key || null,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "annotated-pdf",
           };
         }
 
-        // Handle multiple annotated PDFs with S3 metadata
+        // Handle multiple annotated PDFs with spread operator to capture ALL file information
         let annotatedPdfs = [];
         if (
           req.files["annotatedPdfs"] &&
           req.files["annotatedPdfs"].length > 0
         ) {
           annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
-            filename: file.filename,
-            originalName: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            s3Location: file.s3Location || null,
-            s3Key: file.s3Key || null,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "annotated-pdf",
           }));
         }
 
-        // Handle general pictures with S3 metadata
+        // Handle general pictures with spread operator to capture ALL file information
         let generalPictures = [];
         if (
           req.files["generalPictures"] &&
           req.files["generalPictures"].length > 0
         ) {
           generalPictures = req.files["generalPictures"].map((file) => ({
-            filename: file.filename,
-            originalName: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            s3Location: file.s3Location || null,
-            s3Key: file.s3Key || null,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "general-picture",
           }));
         }
 
-        // Handle mark pictures with S3 metadata
+        // Handle mark pictures with spread operator to capture ALL file information
         let markPictures = [];
         if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
           markPictures = req.files["markPictures"].map((file) => ({
-            filename: file.filename,
-            originalName: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-            s3Location: file.s3Location || null,
-            s3Key: file.s3Key || null,
+            ...file, // Captures ALL file information including S3 details
+            uploadedAt: new Date(),
+            fileType: "mark-picture",
           }));
         }
 
