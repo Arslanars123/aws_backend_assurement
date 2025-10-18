@@ -415,21 +415,61 @@ app.post(
         });
       }
 
+      // Helper function to standardize picture storage
+      const standardizePicture = (fileData) => {
+        if (!fileData) return null;
+        
+        // If it's already a string (filename), return as is
+        if (typeof fileData === 'string') {
+          return fileData;
+        }
+        
+        // If it's an object, extract the filename
+        if (typeof fileData === 'object' && fileData.filename) {
+          return fileData.filename;
+        }
+        
+        // If it's an object with other filename fields, try those
+        if (typeof fileData === 'object') {
+          return fileData.originalname || fileData.name || fileData.path || null;
+        }
+        
+        return null;
+      };
+
       // Handle file uploads with spread operator to capture ALL file information
-      const picture = req.files?.picture?.[0]
+      console.log('🔍 STORE-USER DEBUG:');
+      console.log('Request files:', req.files);
+      console.log('Picture file:', req.files?.picture?.[0]);
+      console.log('Role:', role);
+      console.log('Username:', username);
+      
+      const pictureFile = req.files?.picture?.[0];
+      const pictureObject = pictureFile
         ? {
-            ...req.files.picture[0], // Captures ALL file information including S3 details
+            ...pictureFile, // Captures ALL file information including S3 details
             uploadedAt: new Date(),
             fileType: "user-picture",
           }
         : null;
-      const contactPicture = req.files?.contactPicture?.[0]
+      
+      // Standardize picture to always be a simple string (filename)
+      const picture = standardizePicture(pictureObject);
+        
+      console.log('Original picture object:', pictureObject);
+      console.log('Standardized picture (string):', picture);
+      console.log('Picture will be stored:', !!picture);
+      const contactPictureFile = req.files?.contactPicture?.[0];
+      const contactPictureObject = contactPictureFile
         ? {
-            ...req.files.contactPicture[0], // Captures ALL file information including S3 details
+            ...contactPictureFile, // Captures ALL file information including S3 details
             uploadedAt: new Date(),
             fileType: "contact-picture",
           }
         : null;
+      
+      // Standardize contactPicture to always be a simple string (filename)
+      const contactPicture = standardizePicture(contactPictureObject);
 
       let parsedUserProfession;
       if (req?.body?.userProfession) {
@@ -445,7 +485,7 @@ app.post(
 
       if (duplicateCheck) {
         return res.status(400).json({
-          error: `User with email '${username}' already has '${role}' role in this company`,
+          error: `User with email '${username}' already has '${role}' role in this company. Please choose a different role or use a different email address.`,
           field: "username",
           duplicate: true,
           existingUser: {
@@ -495,8 +535,6 @@ app.post(
         postalCode,
         city,
         startDate,
-        picture,
-        contactPicture,
         contactPerson,
         contactPhone,
         cvr,
@@ -511,6 +549,19 @@ app.post(
         verificationSentAt,
         createdAt: new Date(),
       };
+      
+      // Only include pictures if they exist (not null)
+      if (picture) {
+        userData.picture = picture;
+        console.log('✅ Adding picture to userData:', picture);
+      } else {
+        console.log('❌ No picture to add to userData');
+      }
+      if (contactPicture) {
+        userData.contactPicture = contactPicture;
+      }
+
+      console.log('🔍 Final userData before insert:', JSON.stringify(userData, null, 2));
 
       // Insert user into database
       const result = await db.collection("users").insertOne(userData);
@@ -524,19 +575,53 @@ app.post(
           postalCode,
           city,
           startDate,
-          picture,
-          contactPicture,
           cvr,
           contactPerson,
           contactPhone,
         };
+        
+        // Intelligent picture synchronization logic
+        if (picture) {
+          // If new user has a picture, always update all users with same email
+          commonDetails.picture = picture;
+          console.log('🔄 STORE-USER: Updating picture for all users with email:', username);
+        } else {
+          // If new user has no picture, check existing users
+          const existingUsers = await db.collection("users").find({ username: username }).toArray();
+          console.log('🔍 STORE-USER: Found', existingUsers.length, 'existing users with email:', username);
+          
+          const usersWithPictures = existingUsers.filter(user => user.picture && user.picture !== null);
+          console.log('🔍 STORE-USER: Found', usersWithPictures.length, 'users with existing pictures');
+          
+          if (usersWithPictures.length > 0) {
+            // Existing users have pictures, don't overwrite with null
+            console.log('🔄 STORE-USER: Preserving existing pictures for users with email:', username);
+            console.log('🔄 STORE-USER: Existing pictures:', usersWithPictures.map(u => u.picture));
+          } else {
+            // No existing users have pictures, it's safe to set null (though we won't include it)
+            console.log('🔄 STORE-USER: No existing pictures found, skipping picture update');
+            console.log('🔄 STORE-USER: Will NOT include picture in commonDetails');
+          }
+        }
+        
+        if (contactPicture) {
+          commonDetails.contactPicture = contactPicture;
+        }
 
-        await db.collection("users").updateMany(
+        console.log('🔍 STORE-USER: Common details to sync:', commonDetails);
+        console.log('🔍 STORE-USER: Picture type:', typeof commonDetails.picture);
+        console.log('🔍 STORE-USER: Picture value:', commonDetails.picture);
+        console.log('🔍 STORE-USER: Common details keys:', Object.keys(commonDetails));
+        console.log('🔍 STORE-USER: Common details JSON:', JSON.stringify(commonDetails, null, 2));
+        
+        const syncResult = await db.collection("users").updateMany(
           { username: username },
           {
             $set: commonDetails,
           }
         );
+        
+        console.log(`🔄 Synchronized picture and details for ${syncResult.modifiedCount} users with email: ${username}`);
 
         console.log(
           `✅ Updated common details for all users with email: ${username}`
@@ -1407,6 +1492,12 @@ app.post("/update-existing-user", async (req, res) => {
   try {
     const { username, updatedData } = req.body;
 
+    console.log('🔍 UPDATE-EXISTING-USER DEBUG:');
+    console.log('Username:', username);
+    console.log('Updated data:', updatedData);
+    console.log('Picture in updatedData:', updatedData?.picture);
+    console.log('Picture type:', typeof updatedData?.picture);
+
     if (!username || !updatedData) {
       return res.status(400).json({
         error: "Username and updatedData are required",
@@ -1420,6 +1511,9 @@ app.post("/update-existing-user", async (req, res) => {
       .collection("users")
       .updateMany({ username: username }, { $set: updatedData });
     totalDocumentsUpdated += userUpdateResult.modifiedCount;
+    
+    console.log('🔍 UPDATE-EXISTING-USER: Users collection update result:', userUpdateResult);
+    console.log('🔍 UPDATE-EXISTING-USER: Modified count:', userUpdateResult.modifiedCount);
 
     // Update user data in all other collections that might contain user information
     const collectionsToUpdate = [
@@ -5362,21 +5456,72 @@ app.post(
       if (name) updateData.name = name;
       if (mainId) updateData.mainId = mainId;
       if (isProjectManager) {
-        const parsedProjectManager = JSON.parse(isProjectManager);
-        updateData.isProjectManager = parsedProjectManager;
+        // Handle both string and object formats
+        if (typeof isProjectManager === 'string') {
+          try {
+            const parsedProjectManager = JSON.parse(isProjectManager);
+            updateData.isProjectManager = parsedProjectManager;
+          } catch (e) {
+            console.log('Error parsing isProjectManager as JSON:', e);
+            updateData.isProjectManager = isProjectManager;
+          }
+        } else {
+          // Already an object, use directly
+          updateData.isProjectManager = isProjectManager;
+        }
       }
       if (userProfession) {
-        const parsedUserProfession = JSON.parse(userProfession);
-        updateData.userProfession = parsedUserProfession;
+        // Handle both string and object formats
+        if (typeof userProfession === 'string') {
+          try {
+            const parsedUserProfession = JSON.parse(userProfession);
+            updateData.userProfession = parsedUserProfession;
+          } catch (e) {
+            console.log('Error parsing userProfession as JSON:', e);
+            updateData.userProfession = userProfession;
+          }
+        } else {
+          // Already an object, use directly
+          updateData.userProfession = userProfession;
+        }
       }
       updateData.picture = picture2;
-      // If an image is uploaded, include its complete information in the update
+      
+      console.log('🔍 UPDATE-USER DEBUG:');
+      console.log('Request file:', req.file);
+      console.log('Request files:', req.files);
+      
+      // Helper function to standardize picture storage
+      const standardizePicture = (fileData) => {
+        if (!fileData) return null;
+        
+        // If it's already a string (filename), return as is
+        if (typeof fileData === 'string') {
+          return fileData;
+        }
+        
+        // If it's an object, extract the filename
+        if (typeof fileData === 'object' && fileData.filename) {
+          return fileData.filename;
+        }
+        
+        // If it's an object with other filename fields, try those
+        if (typeof fileData === 'object') {
+          return fileData.originalname || fileData.name || fileData.path || null;
+        }
+        
+        return null;
+      };
+      
+      // If an image is uploaded, standardize it to simple string format
       if (req.file) {
-        updateData.picture = {
+        const pictureObject = {
           ...req.file, // Captures ALL file information including S3 details
           uploadedAt: new Date(),
           fileType: "user-picture",
         };
+        updateData.picture = standardizePicture(pictureObject);
+        console.log('Updated picture from req.file (standardized):', updateData.picture);
       }
       if (type) updateData.type = type;
 
@@ -5392,20 +5537,43 @@ app.post(
       // Separate common fields from role-specific fields
       const commonFields = { ...updateData };
       const roleSpecificFields = {};
+      
+      // Remove role-specific fields from common fields to prevent cross-role synchronization
+      delete commonFields.role;
+      delete commonFields.userProfession;
+      delete commonFields.isProjectManager;
+      delete commonFields.projectsId;
+      delete commonFields.companyId;
+      delete commonFields.type;
+      
+      // Only include picture in common fields if it's not null/undefined
+      if (!commonFields.picture) {
+        delete commonFields.picture;
+      }
+      
+      console.log('🔍 UPDATE-USER: Common fields (will sync to all users):', Object.keys(commonFields));
+      console.log('🔍 UPDATE-USER: Role-specific fields (will sync to specific user):', Object.keys(roleSpecificFields));
+      console.log('🔍 UPDATE-USER: Picture in common fields:', commonFields.picture);
+      console.log('🔍 UPDATE-USER: Picture type:', typeof commonFields.picture);
 
-      // For Worker and Subcontractor, professions and isProjectManager should only update the specific user
-      if (
-        (user.role && user.role.toLowerCase() === "worker") ||
-        (user.role && user.role.toLowerCase() === "sub contractor")
-      ) {
-        if (updateData.userProfession !== undefined) {
-          roleSpecificFields.userProfession = updateData.userProfession;
-          delete commonFields.userProfession;
-        }
-        if (updateData.isProjectManager !== undefined) {
-          roleSpecificFields.isProjectManager = updateData.isProjectManager;
-          delete commonFields.isProjectManager;
-        }
+      // Add role-specific fields back to roleSpecificFields for specific user update
+      if (updateData.userProfession !== undefined) {
+        roleSpecificFields.userProfession = updateData.userProfession;
+      }
+      if (updateData.isProjectManager !== undefined) {
+        roleSpecificFields.isProjectManager = updateData.isProjectManager;
+      }
+      if (updateData.role !== undefined) {
+        roleSpecificFields.role = updateData.role;
+      }
+      if (updateData.projectsId !== undefined) {
+        roleSpecificFields.projectsId = updateData.projectsId;
+      }
+      if (updateData.companyId !== undefined) {
+        roleSpecificFields.companyId = updateData.companyId;
+      }
+      if (updateData.type !== undefined) {
+        roleSpecificFields.type = updateData.type;
       }
 
       let totalUpdated = 0;
@@ -5416,6 +5584,8 @@ app.post(
           .collection("users")
           .updateMany({ username: user.username }, { $set: commonFields });
         totalUpdated += commonResult.modifiedCount;
+        
+        console.log(`🔄 Updated common fields (including picture) for ${commonResult.modifiedCount} users with email: ${user.username}`);
       }
 
       // Update only the specific user with role-specific fields
@@ -5496,7 +5666,27 @@ app.post(
         });
       }
 
-      // Remove user from the company by setting companyId to null and clearing projects
+      // Special handling for Workers: Hard delete (completely remove from database)
+      if (user.role === "Worker") {
+        console.log("=== HARD DELETING WORKER ===");
+        const deleteResult = await db.collection("users").deleteOne(
+          { _id: new ObjectId(userId) }
+        );
+
+        if (deleteResult.deletedCount === 0) {
+          return res.status(404).json({ error: "Worker not found" });
+        }
+
+        console.log("Worker completely deleted from database");
+        res.status(200).json({
+          message: "Worker completely deleted from database",
+          result: deleteResult,
+        });
+        return;
+      }
+
+      // For all other roles: Soft delete (remove from company only)
+      console.log("=== SOFT DELETING USER (NON-WORKER) ===");
       const result = await db.collection("users").updateOne(
         { _id: new ObjectId(userId) },
         {
@@ -8265,17 +8455,31 @@ app.get(
   //authenticateToken,
   async (req, res) => {
     try {
+      const companyId = req.params.id;
+      console.log('🔍 GET-COMPANY-DETAIL: Fetching company with ID:', companyId);
+      
       const user = await db
         .collection("companies")
         .findOne(
-          { _id: new ObjectId(req.params.id) },
+          { _id: new ObjectId(companyId) },
           { projection: { password: 0 } }
         );
+        
       if (!user) {
+        console.log('🔍 GET-COMPANY-DETAIL: Company not found for ID:', companyId);
         return res.status(404).json({ error: "company not found" });
       }
+      
+      console.log('🔍 GET-COMPANY-DETAIL: Company found:', {
+        _id: user._id,
+        name: user.name,
+        picture: user.picture,
+        hasPicture: !!user.picture
+      });
+      
       res.status(200).json(user);
     } catch (error) {
+      console.log('🔍 GET-COMPANY-DETAIL: Error fetching company:', error);
       res.status(500).json({ error: "Failed to fetch company" });
     }
   }

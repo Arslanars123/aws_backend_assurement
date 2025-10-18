@@ -254,18 +254,9 @@ function createProjectManagementRoutes(db) {
         console.log("Parsed Basic Details:", parsedBasicDetails);
         console.log("Checks with Created At:", checksWithCreatedAt.length);
         
-        // Test ObjectId conversion
-        try {
-          const testObjectId = new ObjectId(companyId);
-          console.log("ObjectId conversion successful:", testObjectId);
-        } catch (objectIdError) {
-          console.log("ObjectId conversion failed:", objectIdError);
-          return res.status(400).json({ error: "Invalid company ID format" });
-        }
-        
         const projectData = {
           ...parsedBasicDetails,
-          companyId: new ObjectId(companyId),
+          companyId: companyId, // Store as string, not ObjectId
           checks: checksWithCreatedAt,
           createdAt: new Date(),
         };
