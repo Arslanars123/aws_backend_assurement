@@ -524,6 +524,34 @@ app.post(
         );
       }
 
+      // Standardize isProjectManager to always be a simple string
+      let standardizedPM = isProjectManager;
+      if (isProjectManager) {
+        if (typeof isProjectManager === 'string') {
+          try {
+            const parsed = JSON.parse(isProjectManager);
+            if (parsed && typeof parsed === 'object') {
+              standardizedPM = parsed._id || parsed.name || parsed;
+            } else {
+              standardizedPM = parsed;
+            }
+          } catch (e) {
+            standardizedPM = isProjectManager;
+          }
+        } else if (typeof isProjectManager === 'object' && isProjectManager !== null) {
+          standardizedPM = isProjectManager._id || isProjectManager.name || isProjectManager;
+        } else if (typeof isProjectManager === 'boolean') {
+          standardizedPM = isProjectManager ? 'yes' : 'no';
+        }
+        
+        // Normalize to lowercase 'yes' or 'no'
+        if (standardizedPM === 'Yes' || standardizedPM === 'yes' || standardizedPM === true) {
+          standardizedPM = 'yes';
+        } else if (standardizedPM === 'No' || standardizedPM === 'no' || standardizedPM === false) {
+          standardizedPM = 'no';
+        }
+      }
+
       // Create user document with generated password
       const userData = {
         username,
@@ -540,7 +568,7 @@ app.post(
         cvr,
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         companyId,
-        isProjectManager,
+        isProjectManager: standardizedPM,
         type,
         mainId,
         userProfession: parsedUserProfession,
@@ -5458,19 +5486,44 @@ app.post(
       if (name) updateData.name = name;
       if (mainId) updateData.mainId = mainId;
       if (isProjectManager) {
-        // Handle both string and object formats
+        // Standardize isProjectManager to always be a simple string
+        let standardizedPM = isProjectManager;
+        
         if (typeof isProjectManager === 'string') {
           try {
-            const parsedProjectManager = JSON.parse(isProjectManager);
-            updateData.isProjectManager = parsedProjectManager;
+            const parsed = JSON.parse(isProjectManager);
+            if (parsed && typeof parsed === 'object') {
+              // If it's an object, extract the value
+              standardizedPM = parsed._id || parsed.name || parsed;
+            } else {
+              standardizedPM = parsed;
+            }
           } catch (e) {
-            console.log('Error parsing isProjectManager as JSON:', e);
-            updateData.isProjectManager = isProjectManager;
+            // If parsing fails, use the string as-is
+            standardizedPM = isProjectManager;
           }
-        } else {
-          // Already an object, use directly
-          updateData.isProjectManager = isProjectManager;
+        } else if (typeof isProjectManager === 'object' && isProjectManager !== null) {
+          // If it's an object, extract the value
+          standardizedPM = isProjectManager._id || isProjectManager.name || isProjectManager;
+        } else if (typeof isProjectManager === 'boolean') {
+          // Convert boolean to string
+          standardizedPM = isProjectManager ? 'yes' : 'no';
         }
+        
+        // Normalize to lowercase 'yes' or 'no'
+        if (standardizedPM === 'Yes' || standardizedPM === 'yes' || standardizedPM === true) {
+          updateData.isProjectManager = 'yes';
+        } else if (standardizedPM === 'No' || standardizedPM === 'no' || standardizedPM === false) {
+          updateData.isProjectManager = 'no';
+        } else {
+          updateData.isProjectManager = standardizedPM;
+        }
+        
+        console.log('🔧 STANDARDIZED isProjectManager:', {
+          original: isProjectManager,
+          standardized: updateData.isProjectManager,
+          type: typeof updateData.isProjectManager
+        });
       }
       if (userProfession) {
         // Handle both string and object formats
@@ -7332,7 +7385,86 @@ app.post("/update-user-project-manager", async (req, res) => {
   }
 });
 
-// Forgot Password API Endpoint
+// Data migration endpoint to standardize isProjectManager field
+app.post("/migrate-isprojectmanager", async (req, res) => {
+  try {
+    console.log('🔄 Starting isProjectManager migration...');
+    
+    // Find all users with isProjectManager field
+    const users = await db.collection("users").find({
+      isProjectManager: { $exists: true }
+    }).toArray();
+    
+    console.log(`Found ${users.length} users with isProjectManager field`);
+    
+    let migratedCount = 0;
+    let skippedCount = 0;
+    
+    for (const user of users) {
+      const originalPM = user.isProjectManager;
+      let standardizedPM = originalPM;
+      
+      // Skip if already a simple string 'yes' or 'no'
+      if (originalPM === 'yes' || originalPM === 'no') {
+        skippedCount++;
+        continue;
+      }
+      
+      // Standardize the field
+      if (typeof originalPM === 'string') {
+        try {
+          const parsed = JSON.parse(originalPM);
+          if (parsed && typeof parsed === 'object') {
+            standardizedPM = parsed._id || parsed.name || parsed;
+          } else {
+            standardizedPM = parsed;
+          }
+        } catch (e) {
+          standardizedPM = originalPM;
+        }
+      } else if (typeof originalPM === 'object' && originalPM !== null) {
+        standardizedPM = originalPM._id || originalPM.name || originalPM;
+      } else if (typeof originalPM === 'boolean') {
+        standardizedPM = originalPM ? 'yes' : 'no';
+      }
+      
+      // Normalize to lowercase 'yes' or 'no'
+      if (standardizedPM === 'Yes' || standardizedPM === 'yes' || standardizedPM === true) {
+        standardizedPM = 'yes';
+      } else if (standardizedPM === 'No' || standardizedPM === 'no' || standardizedPM === false) {
+        standardizedPM = 'no';
+      }
+      
+      // Update the user if the value changed
+      if (standardizedPM !== originalPM) {
+        await db.collection("users").updateOne(
+          { _id: user._id },
+          { $set: { isProjectManager: standardizedPM } }
+        );
+        
+        console.log(`✅ Migrated user ${user.username}: ${originalPM} → ${standardizedPM}`);
+        migratedCount++;
+      } else {
+        skippedCount++;
+      }
+    }
+    
+    console.log(`🔄 Migration completed: ${migratedCount} migrated, ${skippedCount} skipped`);
+    
+    res.status(200).json({
+      success: true,
+      message: 'isProjectManager migration completed',
+      migrated: migratedCount,
+      skipped: skippedCount,
+      total: users.length
+    });
+    
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: 'Migration failed' });
+  }
+});
+
 app.post("/users/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
