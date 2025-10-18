@@ -1268,10 +1268,12 @@ app.get("/get-project-managers", async (req, res) => {
   try {
     const { companyId, projectId, userRole, excludeAssigned } = req.query;
 
-    // Handle both string and array formats for isProjectManager
+    // Handle multiple formats for isProjectManager
     const query = {
       $or: [
-        { isProjectManager: "yes" }, // String format
+        { isProjectManager: "yes" }, // String format lowercase
+        { isProjectManager: "Yes" }, // String format uppercase
+        { isProjectManager: true }, // Boolean format
         { "isProjectManager._id": "yes" }, // Array format with _id
         { "isProjectManager.name": "Yes" }, // Array format with name
       ],
