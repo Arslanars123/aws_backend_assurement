@@ -6954,7 +6954,9 @@ app.post("/check-user-project-role", async (req, res) => {
     } else if (isWorker) {
       userRole = "worker";
     } else if (isProjectManager) {
-      userRole = "project manager";
+      // Only check if user is capable of being project manager, don't auto-assign
+      // userRole = "project manager"; // Removed automatic assignment
+      userRole = "none"; // Keep as none until manually assigned
     }
 
     console.log("Debug - Final userRole:", userRole);
