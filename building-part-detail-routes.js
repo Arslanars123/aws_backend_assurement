@@ -11,7 +11,7 @@ function createBuildingPartDetailRoutes(db) {
     upload.single("image"),
     async (req, res) => {
       try {
-        const { buildingPartName, name, description } = req.body;
+        const { buildingPartName, buildingPartNumber, name, description } = req.body;
         const imageFile = req.file; // optional
 
         // Validate required fields
@@ -44,6 +44,7 @@ function createBuildingPartDetailRoutes(db) {
         // Create the building part detail document
         const buildingPartDetail = {
           buildingPartIds,
+          buildingPartNumber: buildingPartNumber || buildingPartName, // Store the building part number
           name,
           description,
           image: imageData,
@@ -61,6 +62,7 @@ function createBuildingPartDetailRoutes(db) {
           data: {
             id: result.insertedId,
             buildingPartIds,
+            buildingPartNumber: buildingPartNumber || buildingPartName,
             name,
             description,
             image: imageData,
@@ -213,7 +215,7 @@ function createBuildingPartDetailRoutes(db) {
     async (req, res) => {
       try {
         const { id } = req.params;
-        const { buildingPartId, name, description } = req.body;
+        const { buildingPartId, buildingPartNumber, name, description } = req.body;
         const imageFile = req.file; // optional
 
         // Validate ID format
@@ -243,6 +245,7 @@ function createBuildingPartDetailRoutes(db) {
 
         // Add fields if provided
         if (buildingPartId) updateData.buildingPartId = buildingPartId;
+        if (buildingPartNumber) updateData.buildingPartNumber = buildingPartNumber;
         if (name) updateData.name = name;
         if (description) updateData.description = description;
 

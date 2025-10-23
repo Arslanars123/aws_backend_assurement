@@ -1651,9 +1651,58 @@ app.post("/update-company-status/:id", async (req, res) => {
 
 app.get("/get-tasks", async (req, res) => {
   try {
+    // Fetch tasks data
     const tasks = await db.collection("tasks").find({}).toArray();
+    
+    // Fetch inputs data to get SubjectMatterId -> GroupName mapping
+    const inputs = await db.collection("inputs").find({}).toArray();
+    
+    // Create mapping of SubjectMatterId to GroupName
+    const subjectMatterMapping = {};
+    inputs.forEach(input => {
+      if (input.SubjectMatterId && input.GroupName) {
+        subjectMatterMapping[input.SubjectMatterId] = input.GroupName;
+      }
+    });
+    
+    // Transform tasks data
+    const transformedTasks = tasks.map(task => {
+      const transformedTask = { ...task };
+      
+      // Transform Index field if it exists
+      if (task.Index && task.SubjectMatterId) {
+        const groupName = subjectMatterMapping[task.SubjectMatterId];
+        if (groupName) {
+          // Extract number from Index (e.g., "KP00_2_ProcessEN" -> "2")
+          const match = task.Index.match(/_(\d+)_/);
+          if (match) {
+            const number = match[1];
+            transformedTask.Index = `${groupName}_${number}`;
+          }
+        }
+      }
+      
+      return transformedTask;
+    });
 
-    res.status(200).json(tasks);
+    // Sort tasks by Type: Receive -> Process -> Final
+    const typeOrder = { 'receive': 1, 'process': 2, 'final': 3 };
+    const sortedTasks = transformedTasks.sort((a, b) => {
+      const aType = (a.Type || '').toLowerCase();
+      const bType = (b.Type || '').toLowerCase();
+      
+      const aOrder = typeOrder[aType] || 999; // Unknown types go last
+      const bOrder = typeOrder[bType] || 999;
+      
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      
+      // If same type, sort by ControlId
+      return (a.ControlId || 0) - (b.ControlId || 0);
+    });
+
+    res.status(200).json(sortedTasks);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch tasks" });
@@ -2476,7 +2525,7 @@ app.get("/get-news", async (req, res) => {
     // 2. Get all news that match the filter
     const newsArray = await db.collection("news").find(query).toArray();
 
-    // 3. Iterate over each news item to find and attach project names
+    // 3. Iterate over each news item to find and attach project names and user information
     for (const item of newsArray) {
       const validProjectIds = (item.projectsId || []).filter(ObjectId.isValid);
       const objectIds = validProjectIds.map((id) => new ObjectId(id));
@@ -2490,6 +2539,20 @@ app.get("/get-news", async (req, res) => {
 
       const projectNames = projectsArray.map((proj) => proj.name).join(", ");
       item.projectNames = projectNames;
+
+      // Populate user information from projectManager if available
+      if (item.projectManager && item.projectManager._id) {
+        try {
+          const user = await db.collection("users").findOne({
+            _id: new ObjectId(item.projectManager._id)
+          });
+          if (user) {
+            item.users = user;
+          }
+        } catch (userError) {
+          console.log("Could not fetch user data:", userError);
+        }
+      }
     }
 
     // Finally return the enriched array
@@ -3365,6 +3428,60 @@ app.post("/get-project-detail", async (req, res) => {
           project.professionAssociatedData[key] = { ...full, ...base };
         }
       }
+    }
+
+    // Transform and sort tasks if they exist
+    if (project.tasks && Array.isArray(project.tasks)) {
+      // Fetch inputs data to get SubjectMatterId -> GroupName mapping
+      const inputs = await db.collection("inputs").find({}).toArray();
+      
+      // Create mapping of SubjectMatterId to GroupName
+      const subjectMatterMapping = {};
+      inputs.forEach(input => {
+        if (input.SubjectMatterId && input.GroupName) {
+          subjectMatterMapping[input.SubjectMatterId] = input.GroupName;
+        }
+      });
+      
+      // Transform tasks data
+      const transformedTasks = project.tasks.map(task => {
+        const transformedTask = { ...task };
+        
+        // Transform Index field if it exists
+        if (task.Index && task.SubjectMatterId) {
+          const groupName = subjectMatterMapping[task.SubjectMatterId];
+          if (groupName) {
+            // Extract number from Index (e.g., "KP00_2_ProcessEN" -> "2")
+            const match = task.Index.match(/_(\d+)_/);
+            if (match) {
+              const number = match[1];
+              transformedTask.Index = `${groupName}_${number}`;
+            }
+          }
+        }
+        
+        return transformedTask;
+      });
+
+      // Sort tasks by Type: Receive -> Process -> Final
+      const typeOrder = { 'receive': 1, 'process': 2, 'final': 3 };
+      const sortedTasks = transformedTasks.sort((a, b) => {
+        const aType = (a.Type || '').toLowerCase();
+        const bType = (b.Type || '').toLowerCase();
+        
+        const aOrder = typeOrder[aType] || 999; // Unknown types go last
+        const bOrder = typeOrder[bType] || 999;
+        
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
+        
+        // If same type, sort by ControlId
+        return (a.ControlId || 0) - (b.ControlId || 0);
+      });
+
+      // Update project with transformed and sorted tasks
+      project.tasks = sortedTasks;
     }
 
     res.status(200).json(project);
@@ -5376,8 +5493,16 @@ app.get("/get-parts", async (req, res) => {
       {
         $lookup: {
           from: "buildingpartsdetail",
-          localField: "_id",
-          foreignField: "buildingPartIds",
+          let: { partName: "$name" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ["$buildingPartNumber", { $toString: "$$partName" }]
+                }
+              }
+            }
+          ],
           as: "buildingPartDetail",
         },
       },
@@ -5387,6 +5512,24 @@ app.get("/get-parts", async (req, res) => {
           preserveNullAndEmptyArrays: true,
         },
       },
+      {
+        $addFields: {
+          buildingPartName: {
+            $cond: {
+              if: { $ne: ["$buildingPartDetail", null] },
+              then: "$buildingPartDetail.name",
+              else: null
+            }
+          },
+          buildingPartImage: {
+            $cond: {
+              if: { $ne: ["$buildingPartDetail", null] },
+              then: "$buildingPartDetail.image",
+              else: null
+            }
+          }
+        }
+      }
     ];
 
     const parts = await db.collection("parts").aggregate(pipeLine).toArray();
@@ -8043,16 +8186,71 @@ app.get(
   //authenticateToken,
   async (req, res) => {
     try {
-      const user = await db
+      const project = await db
         .collection("projects")
         .findOne(
           { _id: new ObjectId(req.params.id) },
           { projection: { password: 0 } }
         );
-      if (!user) {
+      if (!project) {
         return res.status(404).json({ error: "project not found" });
       }
-      res.status(200).json(user);
+
+      // Transform and sort tasks if they exist
+      if (project.tasks && Array.isArray(project.tasks)) {
+        // Fetch inputs data to get SubjectMatterId -> GroupName mapping
+        const inputs = await db.collection("inputs").find({}).toArray();
+        
+        // Create mapping of SubjectMatterId to GroupName
+        const subjectMatterMapping = {};
+        inputs.forEach(input => {
+          if (input.SubjectMatterId && input.GroupName) {
+            subjectMatterMapping[input.SubjectMatterId] = input.GroupName;
+          }
+        });
+        
+        // Transform tasks data
+        const transformedTasks = project.tasks.map(task => {
+          const transformedTask = { ...task };
+          
+          // Transform Index field if it exists
+          if (task.Index && task.SubjectMatterId) {
+            const groupName = subjectMatterMapping[task.SubjectMatterId];
+            if (groupName) {
+              // Extract number from Index (e.g., "KP00_2_ProcessEN" -> "2")
+              const match = task.Index.match(/_(\d+)_/);
+              if (match) {
+                const number = match[1];
+                transformedTask.Index = `${groupName}_${number}`;
+              }
+            }
+          }
+          
+          return transformedTask;
+        });
+
+        // Sort tasks by Type: Receive -> Process -> Final
+        const typeOrder = { 'receive': 1, 'process': 2, 'final': 3 };
+        const sortedTasks = transformedTasks.sort((a, b) => {
+          const aType = (a.Type || '').toLowerCase();
+          const bType = (b.Type || '').toLowerCase();
+          
+          const aOrder = typeOrder[aType] || 999; // Unknown types go last
+          const bOrder = typeOrder[bType] || 999;
+          
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
+          
+          // If same type, sort by ControlId
+          return (a.ControlId || 0) - (b.ControlId || 0);
+        });
+
+        // Update project with transformed and sorted tasks
+        project.tasks = sortedTasks;
+      }
+
+      res.status(200).json(project);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch project" });
     }
@@ -9274,6 +9472,140 @@ app.post("/approv-task", async (req, res) => {
   } catch (error) {
     console.error("Error updating check:", error);
     res.status(500).json({ error: "Failed to update check" });
+  }
+});
+
+app.post("/close-task", async (req, res) => {
+  try {
+    const { projectId, taskId } = req.body;
+
+    if (!taskId || !projectId) {
+      return res.status(400).json({ error: "Task ID and Project ID are required" });
+    }
+
+    // First get the current task to check its isClosed status
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId),
+      "tasks._id": new ObjectId(taskId),
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: "Project or task not found" });
+    }
+
+    const task = project.tasks.find(t => t._id.toString() === taskId);
+    const currentIsClosed = task?.isClosed || false;
+    const newIsClosed = !currentIsClosed;
+
+    const result = await db.collection("projects").findOneAndUpdate(
+      {
+        _id: new ObjectId(projectId),
+        "tasks._id": new ObjectId(taskId),
+      },
+      {
+        $set: {
+          "tasks.$.isClosed": newIsClosed,
+          "tasks.$.closedAt": newIsClosed ? new Date() : null,
+        },
+      },
+      { returnDocument: "after" }
+    );
+
+    res.status(200).json({
+      message: `Task ${newIsClosed ? 'closed' : 'opened'} successfully`,
+      task: result.value,
+    });
+  } catch (error) {
+    console.error("Error toggling task:", error);
+    res.status(500).json({ error: "Failed to toggle task" });
+  }
+});
+
+app.post("/close-static-control", async (req, res) => {
+  try {
+    const { projectId, posId, subjectMatterId } = req.body;
+
+    if (!posId || !subjectMatterId || !projectId) {
+      return res.status(400).json({ error: "Position ID, Subject Matter ID, and Project ID are required" });
+    }
+
+    // Check if this static control is already closed
+    const existingControl = await db.collection("closeStaticControl").findOne({
+      projectId: projectId,
+      posId: posId,
+      subjectMatterId: subjectMatterId,
+    });
+
+    const currentIsClosed = existingControl?.isClosed || false;
+    const newIsClosed = !currentIsClosed;
+
+    if (existingControl) {
+      // Update existing record
+      const result = await db.collection("closeStaticControl").findOneAndUpdate(
+        {
+          projectId: projectId,
+          posId: posId,
+          subjectMatterId: subjectMatterId,
+        },
+        {
+          $set: {
+            isClosed: newIsClosed,
+            closedAt: newIsClosed ? new Date() : null,
+            updatedAt: new Date(),
+          },
+        },
+        { returnDocument: "after" }
+      );
+
+      res.status(200).json({
+        message: `Static control ${newIsClosed ? 'closed' : 'opened'} successfully`,
+        control: result.value,
+      });
+    } else {
+      // Create new record
+      const newControl = {
+        projectId: projectId,
+        posId: posId,
+        subjectMatterId: subjectMatterId,
+        isClosed: newIsClosed,
+        closedAt: newIsClosed ? new Date() : null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const result = await db.collection("closeStaticControl").insertOne(newControl);
+      
+      res.status(200).json({
+        message: `Static control ${newIsClosed ? 'closed' : 'opened'} successfully`,
+        control: { ...newControl, _id: result.insertedId },
+      });
+    }
+  } catch (error) {
+    console.error("Error toggling static control:", error);
+    res.status(500).json({ error: "Failed to toggle static control" });
+  }
+});
+
+app.get("/get-static-control-status", async (req, res) => {
+  try {
+    const { projectId } = req.query;
+
+    if (!projectId) {
+      return res.status(400).json({ error: "Project ID is required" });
+    }
+
+    const closedControls = await db.collection("closeStaticControl").find({
+      projectId: projectId,
+      isClosed: true,
+    }).toArray();
+
+    res.status(200).json({
+      success: true,
+      closedControls: closedControls,
+    });
+  } catch (error) {
+    console.error("Error getting static control status:", error);
+    res.status(500).json({ error: "Failed to get static control status" });
   }
 });
 
@@ -14172,11 +14504,18 @@ app.post(
           : projectManager
         : null;
 
+      console.log('=== BACKEND SAFETY MENTION DEBUG ===');
+      console.log('Raw recipients:', recipients);
+      console.log('Recipients type:', typeof recipients);
+      
       const parsedRecipients = recipients
         ? typeof recipients === "string"
           ? JSON.parse(recipients)
           : recipients
         : null;
+        
+      console.log('Parsed recipients:', parsedRecipients);
+      console.log('=== END BACKEND SAFETY MENTION DEBUG ===');
       const parsedProfession = profession
         ? typeof profession === "string"
           ? JSON.parse(profession)
