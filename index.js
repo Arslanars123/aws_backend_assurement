@@ -15383,6 +15383,7 @@ app.post(
         buildingPart,
         selectedWorkers,
         markDescriptions,
+        markPictureDescriptions,
       } = req.body;
 
       let pictures = [];
@@ -15477,11 +15478,15 @@ app.post(
         }));
       }
 
+      const descriptions = Array.isArray(markPictureDescriptions)
+        ? markPictureDescriptions
+        : [markPictureDescriptions];
+
       const markPictureObjects =
         req.files["markPictures"] && req.files["markPictures"].length > 0
           ? req.files["markPictures"].map((file, index) => ({
               ...file, // Captures ALL file information including S3 details
-              description: markDescs[index] || "",
+              description: descriptions[index] || markDescs[index] || "",
               uploadedAt: new Date(),
             }))
           : [];
