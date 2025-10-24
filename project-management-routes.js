@@ -322,16 +322,33 @@ function createProjectManagementRoutes(db) {
           if (allUserIds?.length) {
             const objectIds = allUserIds.map((id) => new ObjectId(id));
 
-            const bulkOps = objectIds.map((userId) => ({
-              updateOne: {
-                filter: { _id: userId },
-                update: {
-                  $addToSet: {
-                    projectsId: newProjectId,
-                  },
+            // Get all users first to check their existing roles
+            const users = await db.collection("users").find({
+              _id: { $in: objectIds }
+            }).toArray();
+
+            const bulkOps = objectIds.map((userId) => {
+              const user = users.find(u => u._id.toString() === userId.toString());
+              const updateQuery = {
+                $addToSet: {
+                  projectsId: newProjectId,
                 },
-              },
-            }));
+              };
+
+              // Set userRole to the user's base role (Worker, Subcontractor, etc.)
+              // This prevents auto-assignment as project manager when adding to new projects
+              if (user) {
+                updateQuery.$set = { userRole: user.role || "Worker" };
+                console.log(`🔄 Adding user ${user.username} to project ${newProjectId} as ${user.role || "Worker"}`);
+              }
+
+              return {
+                updateOne: {
+                  filter: { _id: userId },
+                  update: updateQuery,
+                },
+              };
+            });
 
             await db.collection("users").bulkWrite(bulkOps);
           }
