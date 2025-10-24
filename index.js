@@ -418,32 +418,34 @@ app.post(
       // Helper function to standardize picture storage
       const standardizePicture = (fileData) => {
         if (!fileData) return null;
-        
+
         // If it's already a string (filename), return as is
-        if (typeof fileData === 'string') {
+        if (typeof fileData === "string") {
           return fileData;
         }
-        
+
         // If it's an object, extract the filename
-        if (typeof fileData === 'object' && fileData.filename) {
+        if (typeof fileData === "object" && fileData.filename) {
           return fileData.filename;
         }
-        
+
         // If it's an object with other filename fields, try those
-        if (typeof fileData === 'object') {
-          return fileData.originalname || fileData.name || fileData.path || null;
+        if (typeof fileData === "object") {
+          return (
+            fileData.originalname || fileData.name || fileData.path || null
+          );
         }
-        
+
         return null;
       };
 
       // Handle file uploads with spread operator to capture ALL file information
-      console.log('🔍 STORE-USER DEBUG:');
-      console.log('Request files:', req.files);
-      console.log('Picture file:', req.files?.picture?.[0]);
-      console.log('Role:', role);
-      console.log('Username:', username);
-      
+      console.log("🔍 STORE-USER DEBUG:");
+      console.log("Request files:", req.files);
+      console.log("Picture file:", req.files?.picture?.[0]);
+      console.log("Role:", role);
+      console.log("Username:", username);
+
       const pictureFile = req.files?.picture?.[0];
       const pictureObject = pictureFile
         ? {
@@ -452,13 +454,13 @@ app.post(
             fileType: "user-picture",
           }
         : null;
-      
+
       // Standardize picture to always be a simple string (filename)
       const picture = standardizePicture(pictureObject);
-        
-      console.log('Original picture object:', pictureObject);
-      console.log('Standardized picture (string):', picture);
-      console.log('Picture will be stored:', !!picture);
+
+      console.log("Original picture object:", pictureObject);
+      console.log("Standardized picture (string):", picture);
+      console.log("Picture will be stored:", !!picture);
       const contactPictureFile = req.files?.contactPicture?.[0];
       const contactPictureObject = contactPictureFile
         ? {
@@ -467,7 +469,7 @@ app.post(
             fileType: "contact-picture",
           }
         : null;
-      
+
       // Standardize contactPicture to always be a simple string (filename)
       const contactPicture = standardizePicture(contactPictureObject);
 
@@ -527,10 +529,10 @@ app.post(
       // Standardize isProjectManager to always be a simple string
       let standardizedPM = isProjectManager;
       if (isProjectManager) {
-        if (typeof isProjectManager === 'string') {
+        if (typeof isProjectManager === "string") {
           try {
             const parsed = JSON.parse(isProjectManager);
-            if (parsed && typeof parsed === 'object') {
+            if (parsed && typeof parsed === "object") {
               standardizedPM = parsed._id || parsed.name || parsed;
             } else {
               standardizedPM = parsed;
@@ -538,17 +540,29 @@ app.post(
           } catch (e) {
             standardizedPM = isProjectManager;
           }
-        } else if (typeof isProjectManager === 'object' && isProjectManager !== null) {
-          standardizedPM = isProjectManager._id || isProjectManager.name || isProjectManager;
-        } else if (typeof isProjectManager === 'boolean') {
-          standardizedPM = isProjectManager ? 'yes' : 'no';
+        } else if (
+          typeof isProjectManager === "object" &&
+          isProjectManager !== null
+        ) {
+          standardizedPM =
+            isProjectManager._id || isProjectManager.name || isProjectManager;
+        } else if (typeof isProjectManager === "boolean") {
+          standardizedPM = isProjectManager ? "yes" : "no";
         }
-        
+
         // Normalize to lowercase 'yes' or 'no'
-        if (standardizedPM === 'Yes' || standardizedPM === 'yes' || standardizedPM === true) {
-          standardizedPM = 'yes';
-        } else if (standardizedPM === 'No' || standardizedPM === 'no' || standardizedPM === false) {
-          standardizedPM = 'no';
+        if (
+          standardizedPM === "Yes" ||
+          standardizedPM === "yes" ||
+          standardizedPM === true
+        ) {
+          standardizedPM = "yes";
+        } else if (
+          standardizedPM === "No" ||
+          standardizedPM === "no" ||
+          standardizedPM === false
+        ) {
+          standardizedPM = "no";
         }
       }
 
@@ -577,19 +591,22 @@ app.post(
         verificationSentAt,
         createdAt: new Date(),
       };
-      
+
       // Only include pictures if they exist (not null)
       if (picture) {
         userData.picture = picture;
-        console.log('✅ Adding picture to userData:', picture);
+        console.log("✅ Adding picture to userData:", picture);
       } else {
-        console.log('❌ No picture to add to userData');
+        console.log("❌ No picture to add to userData");
       }
       if (contactPicture) {
         userData.contactPicture = contactPicture;
       }
 
-      console.log('🔍 Final userData before insert:', JSON.stringify(userData, null, 2));
+      console.log(
+        "🔍 Final userData before insert:",
+        JSON.stringify(userData, null, 2)
+      );
 
       // Insert user into database
       const result = await db.collection("users").insertOne(userData);
@@ -607,49 +624,87 @@ app.post(
           contactPerson,
           contactPhone,
         };
-        
+
         // Intelligent picture synchronization logic
         if (picture) {
           // If new user has a picture, always update all users with same email
           commonDetails.picture = picture;
-          console.log('🔄 STORE-USER: Updating picture for all users with email:', username);
+          console.log(
+            "🔄 STORE-USER: Updating picture for all users with email:",
+            username
+          );
         } else {
           // If new user has no picture, check existing users
-          const existingUsers = await db.collection("users").find({ username: username }).toArray();
-          console.log('🔍 STORE-USER: Found', existingUsers.length, 'existing users with email:', username);
-          
-          const usersWithPictures = existingUsers.filter(user => user.picture && user.picture !== null);
-          console.log('🔍 STORE-USER: Found', usersWithPictures.length, 'users with existing pictures');
-          
+          const existingUsers = await db
+            .collection("users")
+            .find({ username: username })
+            .toArray();
+          console.log(
+            "🔍 STORE-USER: Found",
+            existingUsers.length,
+            "existing users with email:",
+            username
+          );
+
+          const usersWithPictures = existingUsers.filter(
+            (user) => user.picture && user.picture !== null
+          );
+          console.log(
+            "🔍 STORE-USER: Found",
+            usersWithPictures.length,
+            "users with existing pictures"
+          );
+
           if (usersWithPictures.length > 0) {
             // Existing users have pictures, don't overwrite with null
-            console.log('🔄 STORE-USER: Preserving existing pictures for users with email:', username);
-            console.log('🔄 STORE-USER: Existing pictures:', usersWithPictures.map(u => u.picture));
+            console.log(
+              "🔄 STORE-USER: Preserving existing pictures for users with email:",
+              username
+            );
+            console.log(
+              "🔄 STORE-USER: Existing pictures:",
+              usersWithPictures.map((u) => u.picture)
+            );
           } else {
             // No existing users have pictures, it's safe to set null (though we won't include it)
-            console.log('🔄 STORE-USER: No existing pictures found, skipping picture update');
-            console.log('🔄 STORE-USER: Will NOT include picture in commonDetails');
+            console.log(
+              "🔄 STORE-USER: No existing pictures found, skipping picture update"
+            );
+            console.log(
+              "🔄 STORE-USER: Will NOT include picture in commonDetails"
+            );
           }
         }
-        
+
         if (contactPicture) {
           commonDetails.contactPicture = contactPicture;
         }
 
-        console.log('🔍 STORE-USER: Common details to sync:', commonDetails);
-        console.log('🔍 STORE-USER: Picture type:', typeof commonDetails.picture);
-        console.log('🔍 STORE-USER: Picture value:', commonDetails.picture);
-        console.log('🔍 STORE-USER: Common details keys:', Object.keys(commonDetails));
-        console.log('🔍 STORE-USER: Common details JSON:', JSON.stringify(commonDetails, null, 2));
-        
+        console.log("🔍 STORE-USER: Common details to sync:", commonDetails);
+        console.log(
+          "🔍 STORE-USER: Picture type:",
+          typeof commonDetails.picture
+        );
+        console.log("🔍 STORE-USER: Picture value:", commonDetails.picture);
+        console.log(
+          "🔍 STORE-USER: Common details keys:",
+          Object.keys(commonDetails)
+        );
+        console.log(
+          "🔍 STORE-USER: Common details JSON:",
+          JSON.stringify(commonDetails, null, 2)
+        );
+
         const syncResult = await db.collection("users").updateMany(
           { username: username },
           {
             $set: commonDetails,
           }
         );
-        
-        console.log(`🔄 Synchronized picture and details for ${syncResult.modifiedCount} users with email: ${username}`);
+
+        console.log(
+          `🔄 Synchronized picture and details for ${syncResult.modifiedCount} users with email: ${username}`
+        );
 
         console.log(
           `✅ Updated common details for all users with email: ${username}`
@@ -1522,11 +1577,11 @@ app.post("/update-existing-user", async (req, res) => {
   try {
     const { username, updatedData } = req.body;
 
-    console.log('🔍 UPDATE-EXISTING-USER DEBUG:');
-    console.log('Username:', username);
-    console.log('Updated data:', updatedData);
-    console.log('Picture in updatedData:', updatedData?.picture);
-    console.log('Picture type:', typeof updatedData?.picture);
+    console.log("🔍 UPDATE-EXISTING-USER DEBUG:");
+    console.log("Username:", username);
+    console.log("Updated data:", updatedData);
+    console.log("Picture in updatedData:", updatedData?.picture);
+    console.log("Picture type:", typeof updatedData?.picture);
 
     if (!username || !updatedData) {
       return res.status(400).json({
@@ -1541,9 +1596,15 @@ app.post("/update-existing-user", async (req, res) => {
       .collection("users")
       .updateMany({ username: username }, { $set: updatedData });
     totalDocumentsUpdated += userUpdateResult.modifiedCount;
-    
-    console.log('🔍 UPDATE-EXISTING-USER: Users collection update result:', userUpdateResult);
-    console.log('🔍 UPDATE-EXISTING-USER: Modified count:', userUpdateResult.modifiedCount);
+
+    console.log(
+      "🔍 UPDATE-EXISTING-USER: Users collection update result:",
+      userUpdateResult
+    );
+    console.log(
+      "🔍 UPDATE-EXISTING-USER: Modified count:",
+      userUpdateResult.modifiedCount
+    );
 
     // Update user data in all other collections that might contain user information
     const collectionsToUpdate = [
@@ -1653,22 +1714,22 @@ app.get("/get-tasks", async (req, res) => {
   try {
     // Fetch tasks data
     const tasks = await db.collection("tasks").find({}).toArray();
-    
+
     // Fetch inputs data to get SubjectMatterId -> GroupName mapping
     const inputs = await db.collection("inputs").find({}).toArray();
-    
+
     // Create mapping of SubjectMatterId to GroupName
     const subjectMatterMapping = {};
-    inputs.forEach(input => {
+    inputs.forEach((input) => {
       if (input.SubjectMatterId && input.GroupName) {
         subjectMatterMapping[input.SubjectMatterId] = input.GroupName;
       }
     });
-    
+
     // Transform tasks data
-    const transformedTasks = tasks.map(task => {
+    const transformedTasks = tasks.map((task) => {
       const transformedTask = { ...task };
-      
+
       // Transform Index field if it exists
       if (task.Index && task.SubjectMatterId) {
         const groupName = subjectMatterMapping[task.SubjectMatterId];
@@ -1681,23 +1742,23 @@ app.get("/get-tasks", async (req, res) => {
           }
         }
       }
-      
+
       return transformedTask;
     });
 
     // Sort tasks by Type: Receive -> Process -> Final
-    const typeOrder = { 'receive': 1, 'process': 2, 'final': 3 };
+    const typeOrder = { receive: 1, process: 2, final: 3 };
     const sortedTasks = transformedTasks.sort((a, b) => {
-      const aType = (a.Type || '').toLowerCase();
-      const bType = (b.Type || '').toLowerCase();
-      
+      const aType = (a.Type || "").toLowerCase();
+      const bType = (b.Type || "").toLowerCase();
+
       const aOrder = typeOrder[aType] || 999; // Unknown types go last
       const bOrder = typeOrder[bType] || 999;
-      
+
       if (aOrder !== bOrder) {
         return aOrder - bOrder;
       }
-      
+
       // If same type, sort by ControlId
       return (a.ControlId || 0) - (b.ControlId || 0);
     });
@@ -2544,7 +2605,7 @@ app.get("/get-news", async (req, res) => {
       if (item.projectManager && item.projectManager._id) {
         try {
           const user = await db.collection("users").findOne({
-            _id: new ObjectId(item.projectManager._id)
+            _id: new ObjectId(item.projectManager._id),
           });
           if (user) {
             item.users = user;
@@ -3434,19 +3495,19 @@ app.post("/get-project-detail", async (req, res) => {
     if (project.tasks && Array.isArray(project.tasks)) {
       // Fetch inputs data to get SubjectMatterId -> GroupName mapping
       const inputs = await db.collection("inputs").find({}).toArray();
-      
+
       // Create mapping of SubjectMatterId to GroupName
       const subjectMatterMapping = {};
-      inputs.forEach(input => {
+      inputs.forEach((input) => {
         if (input.SubjectMatterId && input.GroupName) {
           subjectMatterMapping[input.SubjectMatterId] = input.GroupName;
         }
       });
-      
+
       // Transform tasks data
-      const transformedTasks = project.tasks.map(task => {
+      const transformedTasks = project.tasks.map((task) => {
         const transformedTask = { ...task };
-        
+
         // Transform Index field if it exists
         if (task.Index && task.SubjectMatterId) {
           const groupName = subjectMatterMapping[task.SubjectMatterId];
@@ -3459,23 +3520,23 @@ app.post("/get-project-detail", async (req, res) => {
             }
           }
         }
-        
+
         return transformedTask;
       });
 
       // Sort tasks by Type: Receive -> Process -> Final
-      const typeOrder = { 'receive': 1, 'process': 2, 'final': 3 };
+      const typeOrder = { receive: 1, process: 2, final: 3 };
       const sortedTasks = transformedTasks.sort((a, b) => {
-        const aType = (a.Type || '').toLowerCase();
-        const bType = (b.Type || '').toLowerCase();
-        
+        const aType = (a.Type || "").toLowerCase();
+        const bType = (b.Type || "").toLowerCase();
+
         const aOrder = typeOrder[aType] || 999; // Unknown types go last
         const bOrder = typeOrder[bType] || 999;
-        
+
         if (aOrder !== bOrder) {
           return aOrder - bOrder;
         }
-        
+
         // If same type, sort by ControlId
         return (a.ControlId || 0) - (b.ControlId || 0);
       });
@@ -5498,10 +5559,10 @@ app.get("/get-parts", async (req, res) => {
             {
               $match: {
                 $expr: {
-                  $eq: ["$buildingPartNumber", { $toString: "$$partName" }]
-                }
-              }
-            }
+                  $eq: ["$buildingPartNumber", { $toString: "$$partName" }],
+                },
+              },
+            },
           ],
           as: "buildingPartDetail",
         },
@@ -5518,18 +5579,18 @@ app.get("/get-parts", async (req, res) => {
             $cond: {
               if: { $ne: ["$buildingPartDetail", null] },
               then: "$buildingPartDetail.name",
-              else: null
-            }
+              else: null,
+            },
           },
           buildingPartImage: {
             $cond: {
               if: { $ne: ["$buildingPartDetail", null] },
               then: "$buildingPartDetail.image",
-              else: null
-            }
-          }
-        }
-      }
+              else: null,
+            },
+          },
+        },
+      },
     ];
 
     const parts = await db.collection("parts").aggregate(pipeLine).toArray();
@@ -5631,11 +5692,11 @@ app.post(
       if (isProjectManager) {
         // Standardize isProjectManager to always be a simple string
         let standardizedPM = isProjectManager;
-        
-        if (typeof isProjectManager === 'string') {
+
+        if (typeof isProjectManager === "string") {
           try {
             const parsed = JSON.parse(isProjectManager);
-            if (parsed && typeof parsed === 'object') {
+            if (parsed && typeof parsed === "object") {
               // If it's an object, extract the value
               standardizedPM = parsed._id || parsed.name || parsed;
             } else {
@@ -5645,37 +5706,49 @@ app.post(
             // If parsing fails, use the string as-is
             standardizedPM = isProjectManager;
           }
-        } else if (typeof isProjectManager === 'object' && isProjectManager !== null) {
+        } else if (
+          typeof isProjectManager === "object" &&
+          isProjectManager !== null
+        ) {
           // If it's an object, extract the value
-          standardizedPM = isProjectManager._id || isProjectManager.name || isProjectManager;
-        } else if (typeof isProjectManager === 'boolean') {
+          standardizedPM =
+            isProjectManager._id || isProjectManager.name || isProjectManager;
+        } else if (typeof isProjectManager === "boolean") {
           // Convert boolean to string
-          standardizedPM = isProjectManager ? 'yes' : 'no';
+          standardizedPM = isProjectManager ? "yes" : "no";
         }
-        
+
         // Normalize to lowercase 'yes' or 'no'
-        if (standardizedPM === 'Yes' || standardizedPM === 'yes' || standardizedPM === true) {
-          updateData.isProjectManager = 'yes';
-        } else if (standardizedPM === 'No' || standardizedPM === 'no' || standardizedPM === false) {
-          updateData.isProjectManager = 'no';
+        if (
+          standardizedPM === "Yes" ||
+          standardizedPM === "yes" ||
+          standardizedPM === true
+        ) {
+          updateData.isProjectManager = "yes";
+        } else if (
+          standardizedPM === "No" ||
+          standardizedPM === "no" ||
+          standardizedPM === false
+        ) {
+          updateData.isProjectManager = "no";
         } else {
           updateData.isProjectManager = standardizedPM;
         }
-        
-        console.log('🔧 STANDARDIZED isProjectManager:', {
+
+        console.log("🔧 STANDARDIZED isProjectManager:", {
           original: isProjectManager,
           standardized: updateData.isProjectManager,
-          type: typeof updateData.isProjectManager
+          type: typeof updateData.isProjectManager,
         });
       }
       if (userProfession) {
         // Handle both string and object formats
-        if (typeof userProfession === 'string') {
+        if (typeof userProfession === "string") {
           try {
             const parsedUserProfession = JSON.parse(userProfession);
             updateData.userProfession = parsedUserProfession;
           } catch (e) {
-            console.log('Error parsing userProfession as JSON:', e);
+            console.log("Error parsing userProfession as JSON:", e);
             updateData.userProfession = userProfession;
           }
         } else {
@@ -5684,33 +5757,35 @@ app.post(
         }
       }
       updateData.picture = picture2;
-      
-      console.log('🔍 UPDATE-USER DEBUG:');
-      console.log('Request file:', req.file);
-      console.log('Request files:', req.files);
-      
+
+      console.log("🔍 UPDATE-USER DEBUG:");
+      console.log("Request file:", req.file);
+      console.log("Request files:", req.files);
+
       // Helper function to standardize picture storage
       const standardizePicture = (fileData) => {
         if (!fileData) return null;
-        
+
         // If it's already a string (filename), return as is
-        if (typeof fileData === 'string') {
+        if (typeof fileData === "string") {
           return fileData;
         }
-        
+
         // If it's an object, extract the filename
-        if (typeof fileData === 'object' && fileData.filename) {
+        if (typeof fileData === "object" && fileData.filename) {
           return fileData.filename;
         }
-        
+
         // If it's an object with other filename fields, try those
-        if (typeof fileData === 'object') {
-          return fileData.originalname || fileData.name || fileData.path || null;
+        if (typeof fileData === "object") {
+          return (
+            fileData.originalname || fileData.name || fileData.path || null
+          );
         }
-        
+
         return null;
       };
-      
+
       // If an image is uploaded, standardize it to simple string format
       if (req.file) {
         const pictureObject = {
@@ -5719,7 +5794,10 @@ app.post(
           fileType: "user-picture",
         };
         updateData.picture = standardizePicture(pictureObject);
-        console.log('Updated picture from req.file (standardized):', updateData.picture);
+        console.log(
+          "Updated picture from req.file (standardized):",
+          updateData.picture
+        );
       }
       if (type) updateData.type = type;
 
@@ -5735,7 +5813,7 @@ app.post(
       // Separate common fields from role-specific fields
       const commonFields = { ...updateData };
       const roleSpecificFields = {};
-      
+
       // Remove role-specific fields from common fields to prevent cross-role synchronization
       delete commonFields.role;
       delete commonFields.userProfession;
@@ -5743,16 +5821,25 @@ app.post(
       delete commonFields.projectsId;
       delete commonFields.companyId;
       delete commonFields.type;
-      
+
       // Only include picture in common fields if it's not null/undefined
       if (!commonFields.picture) {
         delete commonFields.picture;
       }
-      
-      console.log('🔍 UPDATE-USER: Common fields (will sync to all users):', Object.keys(commonFields));
-      console.log('🔍 UPDATE-USER: Role-specific fields (will sync to specific user):', Object.keys(roleSpecificFields));
-      console.log('🔍 UPDATE-USER: Picture in common fields:', commonFields.picture);
-      console.log('🔍 UPDATE-USER: Picture type:', typeof commonFields.picture);
+
+      console.log(
+        "🔍 UPDATE-USER: Common fields (will sync to all users):",
+        Object.keys(commonFields)
+      );
+      console.log(
+        "🔍 UPDATE-USER: Role-specific fields (will sync to specific user):",
+        Object.keys(roleSpecificFields)
+      );
+      console.log(
+        "🔍 UPDATE-USER: Picture in common fields:",
+        commonFields.picture
+      );
+      console.log("🔍 UPDATE-USER: Picture type:", typeof commonFields.picture);
 
       // Add role-specific fields back to roleSpecificFields for specific user update
       if (updateData.userProfession !== undefined) {
@@ -5782,8 +5869,10 @@ app.post(
           .collection("users")
           .updateMany({ username: user.username }, { $set: commonFields });
         totalUpdated += commonResult.modifiedCount;
-        
-        console.log(`🔄 Updated common fields (including picture) for ${commonResult.modifiedCount} users with email: ${user.username}`);
+
+        console.log(
+          `🔄 Updated common fields (including picture) for ${commonResult.modifiedCount} users with email: ${user.username}`
+        );
       }
 
       // Update only the specific user with role-specific fields
@@ -5867,9 +5956,9 @@ app.post(
       // Special handling for Workers: Hard delete (completely remove from database)
       if (user.role === "Worker") {
         console.log("=== HARD DELETING WORKER ===");
-        const deleteResult = await db.collection("users").deleteOne(
-          { _id: new ObjectId(userId) }
-        );
+        const deleteResult = await db
+          .collection("users")
+          .deleteOne({ _id: new ObjectId(userId) });
 
         if (deleteResult.deletedCount === 0) {
           return res.status(404).json({ error: "Worker not found" });
@@ -7004,12 +7093,10 @@ app.post("/get-user-companies-by-email", async (req, res) => {
       .json({ success: true, companies, count: companies.length });
   } catch (error) {
     console.error("get-user-companies-by-email error:", error);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to fetch user companies by email",
-      });
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch user companies by email",
+    });
   }
 });
 
@@ -7533,33 +7620,36 @@ app.post("/update-user-project-manager", async (req, res) => {
 // Data migration endpoint to standardize isProjectManager field
 app.post("/migrate-isprojectmanager", async (req, res) => {
   try {
-    console.log('🔄 Starting isProjectManager migration...');
-    
+    console.log("🔄 Starting isProjectManager migration...");
+
     // Find all users with isProjectManager field
-    const users = await db.collection("users").find({
-      isProjectManager: { $exists: true }
-    }).toArray();
-    
+    const users = await db
+      .collection("users")
+      .find({
+        isProjectManager: { $exists: true },
+      })
+      .toArray();
+
     console.log(`Found ${users.length} users with isProjectManager field`);
-    
+
     let migratedCount = 0;
     let skippedCount = 0;
-    
+
     for (const user of users) {
       const originalPM = user.isProjectManager;
       let standardizedPM = originalPM;
-      
+
       // Skip if already a simple string 'yes' or 'no'
-      if (originalPM === 'yes' || originalPM === 'no') {
+      if (originalPM === "yes" || originalPM === "no") {
         skippedCount++;
         continue;
       }
-      
+
       // Standardize the field
-      if (typeof originalPM === 'string') {
+      if (typeof originalPM === "string") {
         try {
           const parsed = JSON.parse(originalPM);
-          if (parsed && typeof parsed === 'object') {
+          if (parsed && typeof parsed === "object") {
             standardizedPM = parsed._id || parsed.name || parsed;
           } else {
             standardizedPM = parsed;
@@ -7567,46 +7657,59 @@ app.post("/migrate-isprojectmanager", async (req, res) => {
         } catch (e) {
           standardizedPM = originalPM;
         }
-      } else if (typeof originalPM === 'object' && originalPM !== null) {
+      } else if (typeof originalPM === "object" && originalPM !== null) {
         standardizedPM = originalPM._id || originalPM.name || originalPM;
-      } else if (typeof originalPM === 'boolean') {
-        standardizedPM = originalPM ? 'yes' : 'no';
+      } else if (typeof originalPM === "boolean") {
+        standardizedPM = originalPM ? "yes" : "no";
       }
-      
+
       // Normalize to lowercase 'yes' or 'no'
-      if (standardizedPM === 'Yes' || standardizedPM === 'yes' || standardizedPM === true) {
-        standardizedPM = 'yes';
-      } else if (standardizedPM === 'No' || standardizedPM === 'no' || standardizedPM === false) {
-        standardizedPM = 'no';
+      if (
+        standardizedPM === "Yes" ||
+        standardizedPM === "yes" ||
+        standardizedPM === true
+      ) {
+        standardizedPM = "yes";
+      } else if (
+        standardizedPM === "No" ||
+        standardizedPM === "no" ||
+        standardizedPM === false
+      ) {
+        standardizedPM = "no";
       }
-      
+
       // Update the user if the value changed
       if (standardizedPM !== originalPM) {
-        await db.collection("users").updateOne(
-          { _id: user._id },
-          { $set: { isProjectManager: standardizedPM } }
+        await db
+          .collection("users")
+          .updateOne(
+            { _id: user._id },
+            { $set: { isProjectManager: standardizedPM } }
+          );
+
+        console.log(
+          `✅ Migrated user ${user.username}: ${originalPM} → ${standardizedPM}`
         );
-        
-        console.log(`✅ Migrated user ${user.username}: ${originalPM} → ${standardizedPM}`);
         migratedCount++;
       } else {
         skippedCount++;
       }
     }
-    
-    console.log(`🔄 Migration completed: ${migratedCount} migrated, ${skippedCount} skipped`);
-    
+
+    console.log(
+      `🔄 Migration completed: ${migratedCount} migrated, ${skippedCount} skipped`
+    );
+
     res.status(200).json({
       success: true,
-      message: 'isProjectManager migration completed',
+      message: "isProjectManager migration completed",
       migrated: migratedCount,
       skipped: skippedCount,
-      total: users.length
+      total: users.length,
     });
-    
   } catch (error) {
-    console.error('Migration error:', error);
-    res.status(500).json({ error: 'Migration failed' });
+    console.error("Migration error:", error);
+    res.status(500).json({ error: "Migration failed" });
   }
 });
 
@@ -8200,19 +8303,19 @@ app.get(
       if (project.tasks && Array.isArray(project.tasks)) {
         // Fetch inputs data to get SubjectMatterId -> GroupName mapping
         const inputs = await db.collection("inputs").find({}).toArray();
-        
+
         // Create mapping of SubjectMatterId to GroupName
         const subjectMatterMapping = {};
-        inputs.forEach(input => {
+        inputs.forEach((input) => {
           if (input.SubjectMatterId && input.GroupName) {
             subjectMatterMapping[input.SubjectMatterId] = input.GroupName;
           }
         });
-        
+
         // Transform tasks data
-        const transformedTasks = project.tasks.map(task => {
+        const transformedTasks = project.tasks.map((task) => {
           const transformedTask = { ...task };
-          
+
           // Transform Index field if it exists
           if (task.Index && task.SubjectMatterId) {
             const groupName = subjectMatterMapping[task.SubjectMatterId];
@@ -8225,23 +8328,23 @@ app.get(
               }
             }
           }
-          
+
           return transformedTask;
         });
 
         // Sort tasks by Type: Receive -> Process -> Final
-        const typeOrder = { 'receive': 1, 'process': 2, 'final': 3 };
+        const typeOrder = { receive: 1, process: 2, final: 3 };
         const sortedTasks = transformedTasks.sort((a, b) => {
-          const aType = (a.Type || '').toLowerCase();
-          const bType = (b.Type || '').toLowerCase();
-          
+          const aType = (a.Type || "").toLowerCase();
+          const bType = (b.Type || "").toLowerCase();
+
           const aOrder = typeOrder[aType] || 999; // Unknown types go last
           const bOrder = typeOrder[bType] || 999;
-          
+
           if (aOrder !== bOrder) {
             return aOrder - bOrder;
           }
-          
+
           // If same type, sort by ControlId
           return (a.ControlId || 0) - (b.ControlId || 0);
         });
@@ -8790,30 +8893,36 @@ app.get(
   async (req, res) => {
     try {
       const companyId = req.params.id;
-      console.log('🔍 GET-COMPANY-DETAIL: Fetching company with ID:', companyId);
-      
+      console.log(
+        "🔍 GET-COMPANY-DETAIL: Fetching company with ID:",
+        companyId
+      );
+
       const user = await db
         .collection("companies")
         .findOne(
           { _id: new ObjectId(companyId) },
           { projection: { password: 0 } }
         );
-        
+
       if (!user) {
-        console.log('🔍 GET-COMPANY-DETAIL: Company not found for ID:', companyId);
+        console.log(
+          "🔍 GET-COMPANY-DETAIL: Company not found for ID:",
+          companyId
+        );
         return res.status(404).json({ error: "company not found" });
       }
-      
-      console.log('🔍 GET-COMPANY-DETAIL: Company found:', {
+
+      console.log("🔍 GET-COMPANY-DETAIL: Company found:", {
         _id: user._id,
         name: user.name,
         picture: user.picture,
-        hasPicture: !!user.picture
+        hasPicture: !!user.picture,
       });
-      
+
       res.status(200).json(user);
     } catch (error) {
-      console.log('🔍 GET-COMPANY-DETAIL: Error fetching company:', error);
+      console.log("🔍 GET-COMPANY-DETAIL: Error fetching company:", error);
       res.status(500).json({ error: "Failed to fetch company" });
     }
   }
@@ -9480,7 +9589,9 @@ app.post("/close-task", async (req, res) => {
     const { projectId, taskId } = req.body;
 
     if (!taskId || !projectId) {
-      return res.status(400).json({ error: "Task ID and Project ID are required" });
+      return res
+        .status(400)
+        .json({ error: "Task ID and Project ID are required" });
     }
 
     // First get the current task to check its isClosed status
@@ -9493,7 +9604,7 @@ app.post("/close-task", async (req, res) => {
       return res.status(404).json({ error: "Project or task not found" });
     }
 
-    const task = project.tasks.find(t => t._id.toString() === taskId);
+    const task = project.tasks.find((t) => t._id.toString() === taskId);
     const currentIsClosed = task?.isClosed || false;
     const newIsClosed = !currentIsClosed;
 
@@ -9512,7 +9623,7 @@ app.post("/close-task", async (req, res) => {
     );
 
     res.status(200).json({
-      message: `Task ${newIsClosed ? 'closed' : 'opened'} successfully`,
+      message: `Task ${newIsClosed ? "closed" : "opened"} successfully`,
       task: result.value,
     });
   } catch (error) {
@@ -9526,7 +9637,9 @@ app.post("/close-static-control", async (req, res) => {
     const { projectId, posId, subjectMatterId } = req.body;
 
     if (!posId || !subjectMatterId || !projectId) {
-      return res.status(400).json({ error: "Position ID, Subject Matter ID, and Project ID are required" });
+      return res.status(400).json({
+        error: "Position ID, Subject Matter ID, and Project ID are required",
+      });
     }
 
     // Check if this static control is already closed
@@ -9558,7 +9671,9 @@ app.post("/close-static-control", async (req, res) => {
       );
 
       res.status(200).json({
-        message: `Static control ${newIsClosed ? 'closed' : 'opened'} successfully`,
+        message: `Static control ${
+          newIsClosed ? "closed" : "opened"
+        } successfully`,
         control: result.value,
       });
     } else {
@@ -9573,10 +9688,14 @@ app.post("/close-static-control", async (req, res) => {
         updatedAt: new Date(),
       };
 
-      const result = await db.collection("closeStaticControl").insertOne(newControl);
-      
+      const result = await db
+        .collection("closeStaticControl")
+        .insertOne(newControl);
+
       res.status(200).json({
-        message: `Static control ${newIsClosed ? 'closed' : 'opened'} successfully`,
+        message: `Static control ${
+          newIsClosed ? "closed" : "opened"
+        } successfully`,
         control: { ...newControl, _id: result.insertedId },
       });
     }
@@ -9594,10 +9713,13 @@ app.get("/get-static-control-status", async (req, res) => {
       return res.status(400).json({ error: "Project ID is required" });
     }
 
-    const closedControls = await db.collection("closeStaticControl").find({
-      projectId: projectId,
-      isClosed: true,
-    }).toArray();
+    const closedControls = await db
+      .collection("closeStaticControl")
+      .find({
+        projectId: projectId,
+        isClosed: true,
+      })
+      .toArray();
 
     res.status(200).json({
       success: true,
@@ -14462,10 +14584,15 @@ app.post(
         description: pictureDescs[index] || "",
       }));
 
-      const markPictureObjects = markPictures.map((filename, index) => ({
-        filename,
-        description: markDescs[index] || "",
-      }));
+      // Create markPictureObjects with spread operator to capture ALL file information including S3 details
+      const markPictureObjects =
+        req.files["markPictures"] && req.files["markPictures"].length > 0
+          ? req.files["markPictures"].map((file, index) => ({
+              ...file, // Captures ALL file information including S3 details
+              description: markDescs[index] || "",
+              uploadedAt: new Date(),
+            }))
+          : [];
 
       // Convert PDFs to PNGs for store-mention endpoint
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
@@ -14504,18 +14631,18 @@ app.post(
           : projectManager
         : null;
 
-      console.log('=== BACKEND SAFETY MENTION DEBUG ===');
-      console.log('Raw recipients:', recipients);
-      console.log('Recipients type:', typeof recipients);
-      
+      console.log("=== BACKEND SAFETY MENTION DEBUG ===");
+      console.log("Raw recipients:", recipients);
+      console.log("Recipients type:", typeof recipients);
+
       const parsedRecipients = recipients
         ? typeof recipients === "string"
           ? JSON.parse(recipients)
           : recipients
         : null;
-        
-      console.log('Parsed recipients:', parsedRecipients);
-      console.log('=== END BACKEND SAFETY MENTION DEBUG ===');
+
+      console.log("Parsed recipients:", parsedRecipients);
+      console.log("=== END BACKEND SAFETY MENTION DEBUG ===");
       const parsedProfession = profession
         ? typeof profession === "string"
           ? JSON.parse(profession)
@@ -14747,10 +14874,14 @@ app.post(
         description: pictureDescs[index] || "",
       }));
 
-      const markPictureObjects = markPictures.map((filename, index) => ({
-        filename,
-        description: markDescs[index] || "",
-      }));
+      const markPictureObjects =
+        req.files["markPictures"] && req.files["markPictures"].length > 0
+          ? req.files["markPictures"].map((file, index) => ({
+              ...file, // Captures ALL file information including S3 details
+              description: markDescs[index] || "",
+              uploadedAt: new Date(),
+            }))
+          : [];
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
       const parsedProjectManager = projectManager
@@ -14995,10 +15126,14 @@ app.post(
         description: pictureDescs[index] || "",
       }));
 
-      const markPictureObjects = markPictures.map((filename, index) => ({
-        filename,
-        description: markDescs[index] || "",
-      }));
+      const markPictureObjects =
+        req.files["markPictures"] && req.files["markPictures"].length > 0
+          ? req.files["markPictures"].map((file, index) => ({
+              ...file, // Captures ALL file information including S3 details
+              description: markDescs[index] || "",
+              uploadedAt: new Date(),
+            }))
+          : [];
 
       // Insert the data into the database
       const result = await db.collection("notes").insertOne({
@@ -15327,10 +15462,14 @@ app.post(
         }));
       }
 
-      const markPictureObjects = markPictures.map((filename, index) => ({
-        filename,
-        description: markDescs[index] || "",
-      }));
+      const markPictureObjects =
+        req.files["markPictures"] && req.files["markPictures"].length > 0
+          ? req.files["markPictures"].map((file, index) => ({
+              ...file, // Captures ALL file information including S3 details
+              description: markDescs[index] || "",
+              uploadedAt: new Date(),
+            }))
+          : [];
 
       const parsedDrawing = drawing ? JSON.parse(drawing) : null;
       const parsedProjectManager = projectManager
