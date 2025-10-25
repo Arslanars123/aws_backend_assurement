@@ -1,14 +1,28 @@
 <!-- Reception Control Page -->
-<div class="reception-control-container">
-    <div class="reception-control-page">
-        <div class="reception-control-header">
-            <div class="reception-control-header-title">14. RECEPTION CONTROL</div>
+<div class="standard-control-plan-container">
+    <div class="standard-control-plan-page">
+        <div class="standard-control-plan-header">
+            <div class="standard-control-plan-header-title">RECEPTION CONTROL</div>
         </div>
-        <div class="reception-control-sub-header">
-            <div class="reception-control-sub-header-title">Here are all the submissions made during the project execution</div>
-        </div>
-        <div id="receptionControlContent">
-            <!-- Will be populated by server -->
+        <div class="standard-control-plan-content">
+            <table class="standard-control-plan-table">
+                <thead>
+                    <tr class="standard-control-plan-header-row">
+                        <th>Pos.</th>
+                        <th>Control Type</th>
+                        <th>ACTIVITY</th>
+                        <th>ACCEPTANCE CRITERIA</th>
+                        <th>TIME</th>
+                        <th>CIRCUMFERENCE</th>
+                        <th>Method</th>
+                        <th>documentation</th>
+                        <th>Performed</th>
+                    </tr>
+                </thead>
+                <tbody id="receptionControlTableBody">
+                    <!-- Will be populated by server -->
+                </tbody>
+            </table>
         </div>
         <div class="toc-footer">
             <div class="toc-footer-left">Page 15 of 34</div>
@@ -24,4 +38,3 @@
         </div>
     </div>
 </div>
-

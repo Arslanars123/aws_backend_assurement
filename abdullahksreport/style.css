@@ -2,7 +2,7 @@
 .ks-report-wrapper {
   width: 100%;
   background-color: #f8fafc;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* Profession Selector */
@@ -2568,7 +2568,7 @@
 }
 
 .supervision-note-icon-document::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 5px;
   left: 5px;
@@ -2589,7 +2589,7 @@
 }
 
 .supervision-note-icon-magnifier::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -8px;
   right: -8px;
@@ -2610,7 +2610,7 @@
 }
 
 .supervision-note-icon-person::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 12px;
   left: 2px;
@@ -2858,8 +2858,7 @@
 .address-notes-header {
   background-color: #1e3a8a;
   color: white;
-  padding: 15px 40px;
-  width: 100%;
+  padding: 20px 40px;
 }
 
 .address-notes-header-title {

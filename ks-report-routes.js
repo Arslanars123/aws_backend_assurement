@@ -1454,6 +1454,363 @@ function createKsReportRoutes(db) {
         `<tbody id="standardControlPlanTableBody">${standardControlPlanTableRows}</tbody>`
       );
 
+      // Populate ReceptionControl
+      // Filter only submitted tasks
+      const submittedTasks = tasksForProfession.filter(
+        (task) => task.isSubmitted === true
+      );
+
+      // Helper function to get control type number
+      const getControlTypeNumber = (type) => {
+        switch (type) {
+          case "Receive":
+            return "7.4";
+          case "Process":
+            return "7.5";
+          case "Final":
+            return "7.6";
+          default:
+            return "";
+        }
+      };
+
+      // Group tasks by submitter
+      const workerTasks = [];
+      const independentControllerTasks = [];
+
+      submittedTasks.forEach((task) => {
+        if (task.taskEntries && task.taskEntries.length > 0) {
+          const workerEntries = task.taskEntries.filter(
+            (entry) => entry.user && entry.user.role === "Worker"
+          );
+          const independentEntries = task.taskEntries.filter(
+            (entry) =>
+              entry.independentController &&
+              entry.independentController.role === "Independent Controller"
+          );
+
+          if (workerEntries.length > 0) {
+            workerTasks.push({
+              ...task,
+              taskEntries: workerEntries,
+            });
+          }
+
+          if (independentEntries.length > 0) {
+            independentControllerTasks.push({
+              ...task,
+              taskEntries: independentEntries,
+            });
+          }
+        }
+      });
+
+      const receptionControlSections = [];
+
+      // Worker section
+      if (workerTasks.length > 0) {
+        const workerReceivingTasks = workerTasks.filter(
+          (task) => task.Type === "Receive"
+        );
+        const workerProcessTasks = workerTasks.filter(
+          (task) => task.Type === "Process"
+        );
+        const workerFinalTasks = workerTasks.filter(
+          (task) => task.Type === "Final"
+        );
+        const allWorkerTasks = [
+          ...workerReceivingTasks,
+          ...workerProcessTasks,
+          ...workerFinalTasks,
+        ];
+
+        receptionControlSections.push({
+          title: "WORKER",
+          color: "blue",
+          items: allWorkerTasks.map((task) => ({
+            ...task,
+            pos: `${getControlTypeNumber(task.Type)}.${
+              task?.Index?.split("_")?.[1]
+            } `,
+            activity: task.Activity || "",
+            acceptanceCriteria: task["Acceptance Criteria"] || "",
+            time: task.Time || "",
+            circumference: task.Scope || "",
+            method: task.Method || "",
+            documentation: task["Documentation Requirements"] || "",
+            performed: "✓",
+            controlType: task.Type || "",
+          })),
+        });
+      }
+
+      // Independent Controller section
+      if (independentControllerTasks.length > 0) {
+        const icReceivingTasks = independentControllerTasks.filter(
+          (task) => task.Type === "Receive"
+        );
+        const icProcessTasks = independentControllerTasks.filter(
+          (task) => task.Type === "Process"
+        );
+        const icFinalTasks = independentControllerTasks.filter(
+          (task) => task.Type === "Final"
+        );
+        const allIcTasks = [
+          ...icReceivingTasks,
+          ...icProcessTasks,
+          ...icFinalTasks,
+        ];
+
+        receptionControlSections.push({
+          title: "INDEPENDENT CONTROLLER",
+          color: "red",
+          items: allIcTasks.map((task) => ({
+            ...task,
+            pos: `${getControlTypeNumber(task.Type)}.${
+              task?.Index?.split("_")?.[1]
+            } `,
+            activity: task.Activity || "",
+            acceptanceCriteria: task["Acceptance Criteria"] || "",
+            time: task.Time || "",
+            circumference: task.Scope || "",
+            method: task.Method || "",
+            documentation: task["Documentation Requirements"] || "",
+            performed: "✓",
+            controlType: task.Type || "",
+          })),
+        });
+      }
+
+      // Helper function to get circle color for reception control
+      const getReceptionControlCircleColor = (color) => {
+        switch (color) {
+          case "blue":
+            return "#3b82f6";
+          case "red":
+            return "#ef4444";
+          case "purple":
+            return "#8b5cf6";
+          case "yellow":
+            return "#f59e0b";
+          case "green":
+            return "#10b981";
+          default:
+            return "#6b7280";
+        }
+      };
+
+      // Generate table rows
+      let receptionControlTableRows = "";
+      receptionControlSections.forEach((section, sectionIndex) => {
+        // Section Header Row
+        receptionControlTableRows += `
+          <tr class="standard-control-plan-section-header-row">
+            <td colspan="8" class="standard-control-plan-section-title">
+              ${section.title}
+            </td>
+            <td class="standard-control-plan-section-circle">
+              <div class="standard-control-plan-circle" style="background-color: ${getReceptionControlCircleColor(
+                section.color
+              )};"></div>
+            </td>
+          </tr>
+        `;
+        // Section Items
+        section.items.forEach((item, itemIndex) => {
+          receptionControlTableRows += `
+            <tr class="standard-control-plan-data-row">
+              <td class="standard-control-plan-pos-cell">${item.pos}</td>
+              <td class="standard-control-plan-control-type-cell">${item.controlType}</td>
+              <td class="standard-control-plan-activity-cell">${item.activity}</td>
+              <td class="standard-control-plan-criteria-cell">${item.acceptanceCriteria}</td>
+              <td class="standard-control-plan-time-cell">${item.time}</td>
+              <td class="standard-control-plan-circumference-cell">${item.circumference}</td>
+              <td class="standard-control-plan-method-cell">${item.method}</td>
+              <td class="standard-control-plan-documentation-cell">${item.documentation}</td>
+              <td class="standard-control-plan-performed-cell">${item.performed}</td>
+            </tr>
+          `;
+
+          // Documentation rows for task entries (simplified without iframes/images)
+          if (item.taskEntries && item.taskEntries.length > 0) {
+            item.taskEntries.forEach((taskEntry, taskEntryIndex) => {
+              const drawing = taskEntry?.drawing;
+              const buildingParts = taskEntry?.buildingParts;
+              const annotatedPdfs = taskEntry?.annotatedPdfs;
+              const markPictureObjects = taskEntry?.markPictureObjects;
+
+              const hasMainDrawings = drawing?.mainDrawings?.length > 0;
+              const hasChildDrawings = drawing?.childDrawings?.length > 0;
+              const hasBuildingPartImage =
+                buildingParts?.buildingPartDetail?.image?.s3Location;
+              const hasAnnotatedPdfs = annotatedPdfs?.length > 0;
+              const hasMarkPictures = markPictureObjects?.length > 0;
+
+              if (
+                hasMainDrawings ||
+                hasChildDrawings ||
+                hasBuildingPartImage ||
+                hasAnnotatedPdfs ||
+                hasMarkPictures
+              ) {
+                receptionControlTableRows += `
+                  <tr class="standard-control-plan-drawing-row">
+                    <td colspan="9" class="standard-control-plan-drawing-cell">
+                      <div class="drawing-container">
+                        ${
+                          hasMainDrawings
+                            ? drawing.mainDrawings
+                                .map(
+                                  (mainDrawing, mainIndex) => `
+                              <div class="drawing-item">
+                                <h4>Main Drawing ${mainIndex + 1}: ${
+                                    mainDrawing.originalname ||
+                                    mainDrawing.original ||
+                                    mainDrawing.filename ||
+                                    "Unknown"
+                                  }</h4>
+                                <iframe
+                                  src="${
+                                    mainDrawing.s3Location
+                                  }#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+                                  width="100%"
+                                  height="400"
+                                  style="border: 1px solid #ccc; margin-bottom: 10px;"
+                                  title="Main Drawing ${mainIndex + 1}"
+                                  scrolling="no"
+                                ></iframe>
+                              </div>
+                            `
+                                )
+                                .join("")
+                            : ""
+                        }
+                        ${
+                          hasChildDrawings
+                            ? drawing.childDrawings
+                                .map(
+                                  (childDrawing, childIndex) => `
+                              <div class="drawing-item">
+                                <h4>Child Drawing ${childIndex + 1}: ${
+                                    childDrawing.originalname ||
+                                    childDrawing.original ||
+                                    childDrawing.filename ||
+                                    "Unknown"
+                                  }</h4>
+                                <iframe
+                                  src="${
+                                    childDrawing.s3Location
+                                  }#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+                                  width="100%"
+                                  height="400"
+                                  style="border: 1px solid #ccc; margin-bottom: 10px;"
+                                  title="Child Drawing ${childIndex + 1}"
+                                  scrolling="no"
+                                ></iframe>
+                              </div>
+                            `
+                                )
+                                .join("")
+                            : ""
+                        }
+                        ${
+                          hasBuildingPartImage
+                            ? `
+                              <div class="drawing-item">
+                                <h4>Building Part: ${buildingParts.buildingPartDetail.name}</h4>
+                                <img
+                                  src="${buildingParts.buildingPartDetail.image.s3Location}"
+                                  alt="Building Part"
+                                  style="width: 100%; height: auto; object-fit: contain; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px;"
+                                />
+                              </div>
+                            `
+                            : ""
+                        }
+                        ${
+                          hasAnnotatedPdfs
+                            ? `
+                              <div class="drawing-item">
+                                <h4>Annotated Drawings</h4>
+                                ${annotatedPdfs
+                                  .map(
+                                    (pdf, index) => `
+                                  <div style="margin-bottom: 15px;">
+                                    <img
+                                      src="${pdf.s3Location}"
+                                      alt="Annotated ${index + 1}"
+                                      style="width: 100%; height: auto; object-fit: contain; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 5px;"
+                                    />
+                                    <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${
+                                      pdf.originalname
+                                    }</p>
+                                  </div>
+                                `
+                                  )
+                                  .join("")}
+                              </div>
+                            `
+                            : ""
+                        }
+                        ${
+                          hasMarkPictures
+                            ? `
+                              <div class="drawing-item">
+                                <h4>Mark Pictures</h4>
+                                ${markPictureObjects
+                                  .map(
+                                    (pic, index) => `
+                                  <div style="margin-bottom: 15px;">
+                                    <img
+                                      src="${pic.s3Location}"
+                                      alt="Mark ${index + 1}"
+                                      style="width: 100%; height: auto; object-fit: contain; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 5px;"
+                                    />
+                                    ${
+                                      pic.description
+                                        ? `<p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pic.description}</p>`
+                                        : ""
+                                    }
+                                  </div>
+                                `
+                                  )
+                                  .join("")}
+                              </div>
+                            `
+                            : ""
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }
+            });
+          }
+        });
+      });
+
+      // If no submitted tasks, add empty row
+      if (receptionControlSections.length === 0) {
+        receptionControlTableRows = `
+          <tr class="standard-control-plan-data-row">
+            <td class="standard-control-plan-pos-cell"></td>
+            <td class="standard-control-plan-control-type-cell"></td>
+            <td class="standard-control-plan-activity-cell"></td>
+            <td class="standard-control-plan-criteria-cell"></td>
+            <td class="standard-control-plan-time-cell"></td>
+            <td class="standard-control-plan-circumference-cell"></td>
+            <td class="standard-control-plan-method-cell"></td>
+            <td class="standard-control-plan-documentation-cell"></td>
+            <td class="standard-control-plan-performed-cell"></td>
+          </tr>
+        `;
+      }
+
+      receptionControlHtml = receptionControlHtml.replace(
+        /<tbody id="receptionControlTableBody">.*?<\/tbody>/s,
+        `<tbody id="receptionControlTableBody">${receptionControlTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
