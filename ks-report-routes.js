@@ -2276,7 +2276,7 @@ function createKsReportRoutes(db) {
                     <div class="drawing-preview-container">
                       <iframe
                         src="${mainDrawing.s3Location}#toolbar=0&navpanes=0&scrollbar=0"
-                        style="width: 100%; height: 800px; border: 1px solid #d1d5db; border-radius: 4px; overflow: hidden; margin-top: 10px;"
+                        style="width: 100%; height="1100"; border: 1px solid #d1d5db; border-radius: 4px; overflow: hidden; margin-top: 10px;"
                         scrolling="no"
                         title="Main Drawing"
                       ></iframe>
@@ -2408,9 +2408,30 @@ function createKsReportRoutes(db) {
         100% { transform: rotate(360deg); }
       }
       body { padding-top: 50px; }
+      
+      /* Print styles */
       @media print {
         #exportBar { display: none !important; }
-        body { padding-top: 0; }
+        body { 
+          padding-top: 0; 
+          margin: 0;
+        }
+        .qa-report-page, .toc-page, .project-details-page, 
+        .affiliated-advisers-page, .documents-info-page, 
+        .received-case-documents-page, .checklist-page, 
+        .company-organization-page, .employee-production-page, 
+        .project-management-supervision-page, .description-control-work-page, 
+        .standard-control-plan-page, .plan-tenders-page, 
+        .reception-control-page, .address-notes-page, 
+        .new-agreement-page, .safety-mention-page, 
+        .technical-request-page, .deviation-quality-assurance-page, 
+        .drawing-document-page, .supervision-note-page {
+          page-break-after: always;
+          page-break-inside: avoid;
+        }
+        @page {
+          margin: 1cm;
+        }
       }
     </style>
 </head>
@@ -2423,154 +2444,10 @@ function createKsReportRoutes(db) {
   
     ${combinedHtml}
     
-  <script src="/html2canvas.min.js"></script>
-  <script src="/jspdf.umd.min.js"></script>
   <script>
-    async function exportToPDF() {
-      const statusEl = document.getElementById('status');
-      const btn = document.getElementById('exportBtn');
-      
-      if (!window.jspdf || !window.html2canvas) {
-        statusEl.textContent = 'PDF libraries not loaded';
-        return;
-      }
-      
-      statusEl.textContent = 'Preparing PDF...';
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>Exporting...';
-      
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      
-      // Find all page containers
-      const pages = document.querySelectorAll('.qa-report-page, .toc-page, .project-details-page, .affiliated-advisers-page, .documents-info-page, .received-case-documents-page, .checklist-page, .company-organization-page, .employee-production-page, .project-management-supervision-page, .description-control-work-page, .standard-control-plan-page, .plan-tenders-page, .reception-control-page, .address-notes-page, .new-agreement-page, .safety-mention-page, .technical-request-page, .deviation-quality-assurance-page, .drawing-document-page, .supervision-note-page');
-      
-        if (pages.length === 0) {
-          statusEl.textContent = 'No pages found';
-          btn.disabled = false;
-          btn.innerHTML = 'Export Complete Report to PDF';
-          return;
-        }
-      
-      let currentPage = 0;
-      
-      async function processPage() {
-        if (currentPage >= pages.length) {
-          pdf.save('ks-report.pdf');
-          statusEl.textContent = 'PDF generated successfully';
-          btn.disabled = false;
-          btn.innerHTML = 'Export Complete Report to PDF';
-          return;
-        }
-        
-        try {
-          statusEl.textContent = \`Processing page \${currentPage + 1} of \${pages.length}...\`;
-          
-          const page = pages[currentPage];
-          
-          // Keep export bar visible during capture so user can see progress
-          // Don't hide it
-          
-          // Hide iframes temporarily and add notice
-          const iframes = page.querySelectorAll('iframe');
-          const iframeNotices = [];
-          iframes.forEach(iframe => {
-            iframe.style.display = 'none';
-            const notice = document.createElement('div');
-            notice.style.cssText = 'padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b; color: #92400e; font-size: 12px; margin: 5px 0;';
-            notice.textContent = 'ℹ PDF/Drawing content - view in browser for full details';
-            iframeNotices.push({ iframe, notice });
-            iframe.parentNode.insertBefore(notice, iframe);
-          });
-          
-          // Replace S3 images with placeholders since they can't be captured due to CORS
-          const images = page.querySelectorAll('img');
-          const imagePlaceholders = [];
-          images.forEach(img => {
-            if (img.src && (img.src.includes('s3.amazonaws.com') || img.src.includes('localhost'))) {
-              const placeholder = document.createElement('div');
-              placeholder.style.cssText = 'padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 11px; min-height: 50px; display: flex; align-items: center; justify-content: center;';
-              placeholder.textContent = '[Image: ' + (img.alt || 'Content preview') + ']\\nPlease view in browser for full image';
-              imagePlaceholders.push({ img, placeholder });
-              img.parentNode.replaceChild(placeholder, img);
-            }
-          });
-          
-          const canvas = await html2canvas(page, {
-            scale: 1, // Reduced from 1.5 for faster rendering
-            useCORS: false,
-            allowTaint: false,
-            backgroundColor: '#ffffff',
-            windowWidth: page.scrollWidth || 800,
-            windowHeight: page.scrollHeight || 2970,
-            logging: false,
-            imageTimeout: 0,
-            removeContainer: true,
-            proxy: undefined,
-            onclone: null,
-            cacheBust: false,
-            ignoreElements: (element) => {
-              // Ignore external stylesheet requests
-              return element.tagName === 'LINK' && element.rel === 'stylesheet';
-            }
-          });
-          
-          // Restore iframes
-          iframeNotices.forEach(({ iframe, notice }) => {
-            iframe.style.display = '';
-            notice.remove();
-          });
-          
-          // Restore images
-          imagePlaceholders.forEach(({ img, placeholder }) => {
-            placeholder.parentNode.replaceChild(img, placeholder);
-          });
-          
-          const imgData = canvas.toDataURL('image/jpeg', 0.85);
-          const pdfW = 210; // A4 width
-          const pdfH = 297; // A4 height
-          
-          let imgW = pdfW;
-          let imgH = (canvas.height * pdfW) / canvas.width;
-          
-          // Split tall content across multiple pages
-          let yOffset = 0;
-          while (yOffset < imgH) {
-            if (currentPage > 0 || yOffset > 0) {
-              pdf.addPage();
-            }
-            
-            const remainingHeight = imgH - yOffset;
-            const pageImgH = Math.min(remainingHeight, pdfH);
-            
-            // Calculate source rectangle for this page
-            const sourceY = (yOffset / imgH) * canvas.height;
-            const sourceHeight = (pageImgH / imgH) * canvas.height;
-            
-            // Create a temporary canvas for this page slice
-            const pageCanvas = document.createElement('canvas');
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = sourceHeight;
-            const pageCtx = pageCanvas.getContext('2d');
-            pageCtx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
-            
-            const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.85);
-            pdf.addImage(pageImgData, 'JPEG', 0, 0, imgW, pageImgH);
-            
-            yOffset += pdfH;
-          }
-          
-          currentPage++;
-          await processPage();
-        } catch (err) {
-          console.error('Error generating PDF:', err);
-          statusEl.textContent = 'Error: ' + err.message;
-          btn.disabled = false;
-          btn.innerHTML = 'Export Complete Report to PDF';
-        }
-      }
-      
-      await processPage();
+    function exportToPDF() {
+      // Simply trigger the browser's print dialog
+      window.print();
     }
     
     document.getElementById('exportBtn').addEventListener('click', exportToPDF);
@@ -2803,7 +2680,7 @@ function createKsReportRoutes(db) {
                   src="${
                     mainDrawing.s3Location
                   }#toolbar=0&navpanes=0&scrollbar=0"
-                  style="width: 100%; height: 1000px; border: 1px solid #d1d5db; border-radius: 4px; overflow: hidden;"
+                  style="width: 100%; height="1100"; border: 1px solid #d1d5db; border-radius: 4px; overflow: hidden;"
                   scrolling="no"
                   title="Main Drawing ${index + 1}"
                 ></iframe>
