@@ -2048,6 +2048,156 @@ function createKsReportRoutes(db) {
         `<tbody id="technicalRequestTableBody">${technicalRequestTableRows}</tbody>`
       );
 
+      // Fetch Deviation in Quality Assurance data from "deviations" collection with type=Quality Assurance
+      const deviationsQuery = {};
+      if (companyId) deviationsQuery.companyId = companyId;
+      if (projectId) deviationsQuery.projectsId = { $in: [projectId] };
+      deviationsQuery.type = "Quality Assurance";
+
+      const deviationsArray = await db
+        .collection("deviations")
+        .find(deviationsQuery)
+        .toArray();
+
+      // Generate Deviation in Quality Assurance pages (one page per deviation)
+      let deviationQualityAssuranceHtml = "";
+      if (deviationsArray.length > 0) {
+        for (const deviation of deviationsArray) {
+          // Read deviation template
+          const deviationPath = path.join(
+            __dirname,
+            "abdullahksreport",
+            "deviation-quality-assurance.html"
+          );
+          let deviationPageHtml = fs.readFileSync(deviationPath, "utf8");
+
+          // Update header title with deviation number
+          const deviationNumber =
+            deviation.deviationNumber ||
+            `#${deviationsArray.indexOf(deviation) + 1}`;
+          deviationPageHtml = deviationPageHtml.replace(
+            "DEVIATION IN QUALITY ASSURANCE</span>",
+            `DEVIATION IN QUALITY ASSURANCE - ${deviationNumber}</span>`
+          );
+
+          // Create details HTML
+          let detailsHtml = `
+            <div class="deviation-detail-row">
+              <strong>Deviation Number:</strong> ${deviationNumber}
+            </div>
+            <div class="deviation-detail-row">
+              <strong>Comment:</strong> ${deviation.comment || "-"}
+            </div>
+          `;
+          deviationPageHtml = deviationPageHtml.replace(
+            '<div id="deviationQualityAssuranceDetails"></div>',
+            `<div id="deviationQualityAssuranceDetails" class="deviation-quality-assurance-details">${detailsHtml}</div>`
+          );
+
+          // Create content boxes HTML for documentation
+          let contentBoxesHtml = "";
+
+          // Building Part Image
+          if (deviation?.buildingPart?.buildingPartDetail?.image?.s3Location) {
+            contentBoxesHtml += `
+              <div class="deviation-quality-assurance-content-box">
+                <div style="padding: 15px;">
+                  <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">
+                    Building Part: ${deviation.buildingPart.buildingPartDetail.name}
+                  </h4>
+                  <img
+                    src="${deviation.buildingPart.buildingPartDetail.image.s3Location}"
+                    alt="Building Part"
+                    style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+                  />
+                </div>
+              </div>
+            `;
+          }
+
+          // Annotated PDFs
+          if (deviation?.annotatedPdfs && deviation.annotatedPdfs.length > 0) {
+            contentBoxesHtml += `
+              <div class="deviation-quality-assurance-content-box">
+                <div style="padding: 15px;">
+                  <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">Annotated Drawings</h4>
+                  ${deviation.annotatedPdfs
+                    .map(
+                      (pdf) => `
+                    <div style="margin-bottom: 15px;">
+                      <img
+                        src="${pdf.s3Location}"
+                        alt="Annotated"
+                        style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+                      />
+                      <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pdf.originalname}</p>
+                    </div>
+                  `
+                    )
+                    .join("")}
+                </div>
+              </div>
+            `;
+          }
+
+          // Mark Pictures
+          if (
+            deviation?.markPictureObjects &&
+            deviation.markPictureObjects.length > 0
+          ) {
+            contentBoxesHtml += `
+              <div class="deviation-quality-assurance-content-box">
+                <div style="padding: 15px;">
+                  <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">Mark Pictures</h4>
+                  ${deviation.markPictureObjects
+                    .map(
+                      (pic) => `
+                    <div style="margin-bottom: 15px;">
+                      <img
+                        src="${pic.s3Location}"
+                        alt="Mark"
+                        style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 5px;"
+                      />
+                      ${
+                        pic.description
+                          ? `<p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pic.description}</p>`
+                          : ""
+                      }
+                    </div>
+                  `
+                    )
+                    .join("")}
+                </div>
+              </div>
+            `;
+          }
+
+          deviationPageHtml = deviationPageHtml.replace(
+            '<div class="deviation-quality-assurance-content-boxes" id="deviationQualityAssuranceBoxes"></div>',
+            `<div class="deviation-quality-assurance-content-boxes" id="deviationQualityAssuranceBoxes">${contentBoxesHtml}</div>`
+          );
+
+          deviationQualityAssuranceHtml += deviationPageHtml;
+        }
+      } else {
+        // Empty state if no deviations
+        const deviationPath = path.join(
+          __dirname,
+          "abdullahksreport",
+          "deviation-quality-assurance.html"
+        );
+        let deviationPageHtml = fs.readFileSync(deviationPath, "utf8");
+        deviationPageHtml = deviationPageHtml.replace(
+          '<div id="deviationQualityAssuranceDetails"></div>',
+          '<div id="deviationQualityAssuranceDetails" class="deviation-quality-assurance-details"></div>'
+        );
+        deviationPageHtml = deviationPageHtml.replace(
+          '<div class="deviation-quality-assurance-content-boxes" id="deviationQualityAssuranceBoxes"></div>',
+          '<div class="deviation-quality-assurance-content-boxes" id="deviationQualityAssuranceBoxes"><div class="deviation-quality-assurance-empty"><p>No deviations found for this project.</p></div></div>'
+        );
+        deviationQualityAssuranceHtml = deviationPageHtml;
+      }
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
@@ -2074,6 +2224,10 @@ function createKsReportRoutes(db) {
       newAgreementHtml = updatePageFooter(newAgreementHtml);
       safetyMentionHtml = updatePageFooter(safetyMentionHtml);
       technicalRequestHtml = updatePageFooter(technicalRequestHtml);
+      // Update footer for deviation pages (may be multiple pages)
+      deviationQualityAssuranceHtml = updatePageFooter(
+        deviationQualityAssuranceHtml
+      );
 
       // Combine all pages
       const combinedHtml =
@@ -2094,7 +2248,8 @@ function createKsReportRoutes(db) {
         addressNotesHtml +
         newAgreementHtml +
         safetyMentionHtml +
-        technicalRequestHtml;
+        technicalRequestHtml +
+        deviationQualityAssuranceHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
