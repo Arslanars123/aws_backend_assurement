@@ -217,6 +217,11 @@ function createKsReportRoutes(db) {
         "abdullahksreport",
         "documents-and-information.html"
       );
+      const receivedCaseDocumentsPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "received-case-documents.html"
+      );
 
       let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
       let tocHtml = fs.readFileSync(tocPath, "utf8");
@@ -226,6 +231,10 @@ function createKsReportRoutes(db) {
         "utf8"
       );
       let documentsInfoHtml = fs.readFileSync(documentsInfoPath, "utf8");
+      let receivedCaseDocumentsHtml = fs.readFileSync(
+        receivedCaseDocumentsPath,
+        "utf8"
+      );
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -726,13 +735,111 @@ function createKsReportRoutes(db) {
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
 
+      // Populate ReceivedCaseDocuments
+      const documents = data.documents || [];
+      const draws = data.draws || [];
+
+      // Helper function to format date
+      const formatDate = (dateString) => {
+        if (!dateString) return "";
+        try {
+          const date = new Date(dateString);
+          return date.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          });
+        } catch (e) {
+          return "";
+        }
+      };
+
+      // Documents table
+      let documentsTableRows = "";
+      documents.forEach((doc) => {
+        documentsTableRows += `
+          <tr class="received-case-documents-data-row">
+            <td>${formatDate(doc.uploadedAt)}</td>
+            <td>${doc.description || doc.category || ""}</td>
+            <td>${doc.originalName || doc.filename || ""}</td>
+          </tr>
+        `;
+      });
+      receivedCaseDocumentsHtml = receivedCaseDocumentsHtml.replace(
+        /<tbody id="documentsTableBody">.*?<\/tbody>/s,
+        `<tbody id="documentsTableBody">${documentsTableRows}</tbody>`
+      );
+
+      // Flatten all drawings (main + child)
+      const allDrawings = [];
+      draws.forEach((draw) => {
+        if (Array.isArray(draw.mainDrawings)) {
+          draw.mainDrawings.forEach((mainDraw) => {
+            allDrawings.push({
+              ...mainDraw,
+              type: "Main Drawing",
+              subscriptionName: "Main Drawing",
+            });
+          });
+        }
+        if (Array.isArray(draw.childDrawings)) {
+          draw.childDrawings.forEach((childDraw) => {
+            allDrawings.push({
+              ...childDraw,
+              type: "Child Drawing",
+              subscriptionName: "Child Drawing",
+            });
+          });
+        }
+      });
+
+      // Drawings table
+      let drawingsTableRows = "";
+      allDrawings.forEach((drawing) => {
+        drawingsTableRows += `
+          <tr class="received-case-documents-data-row">
+            <td>${drawing.type || ""}</td>
+            <td>${drawing.subscriptionName || ""}</td>
+            <td>${
+              drawing.originalname || drawing.original || drawing.filename || ""
+            }</td>
+          </tr>
+        `;
+      });
+      if (allDrawings.length === 0) {
+        drawingsTableRows = `
+          <tr class="received-case-documents-data-row">
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        `;
+      }
+      receivedCaseDocumentsHtml = receivedCaseDocumentsHtml.replace(
+        /<tbody id="drawingsTableBody">.*?<\/tbody>/s,
+        `<tbody id="drawingsTableBody">${drawingsTableRows}</tbody>`
+      );
+
+      // Footer for ReceivedCaseDocuments
+      receivedCaseDocumentsHtml = receivedCaseDocumentsHtml.replace(
+        /id="footerCompanyLogo"/g,
+        `id="footerCompanyLogo" src="${companyLogo}" ${
+          companyLogo ? 'style="display: block;"' : 'style="display: none;"'
+        }`
+      );
+      receivedCaseDocumentsHtml = receivedCaseDocumentsHtml.replace(
+        /id="footerCompanyLogoFallback">A/g,
+        `id="footerCompanyLogoFallback">${firstLetter}`
+      );
+
       // Combine all pages
       const combinedHtml =
         reportPage1Html +
         tocHtml +
         projectDetailsHtml +
         affiliatedAdvisersHtml +
-        documentsInfoHtml;
+        documentsInfoHtml +
+        receivedCaseDocumentsHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
