@@ -207,10 +207,19 @@ function createKsReportRoutes(db) {
         "abdullahksreport",
         "project-details.html"
       );
+      const affiliatedAdvisersPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "affiliated-advisers.html"
+      );
 
       let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
       let tocHtml = fs.readFileSync(tocPath, "utf8");
       let projectDetailsHtml = fs.readFileSync(projectDetailsPath, "utf8");
+      let affiliatedAdvisersHtml = fs.readFileSync(
+        affiliatedAdvisersPath,
+        "utf8"
+      );
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -498,8 +507,210 @@ function createKsReportRoutes(db) {
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
 
+      // Populate AffiliatedAdvisers
+      const advisors = data.users?.advisors || [];
+      const independentControllers = data.users?.independentControllers || [];
+      const inspectors = data.users?.inspectors || [];
+
+      // Advisors
+      let advisorsHtml = "";
+      advisors.forEach((advisor, index) => {
+        advisorsHtml += `
+          <div class="affiliated-advisers-section-header">
+            <div class="affiliated-advisers-date-column">
+              <span>DATE</span>
+            </div>
+            <div class="affiliated-advisers-section-title">
+              <span>ADVISORS / ${advisor?.type || ""}</span>
+            </div>
+          </div>
+          <div class="affiliated-advisers-fields">
+            <div class="affiliated-advisers-field">
+              <label>NAME:</label>
+              <div class="affiliated-advisers-value">${advisor.name || ""}</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>CONTACT PERSON</label>
+              <div class="affiliated-advisers-value">${
+                advisor.contactPerson || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>CVR NO.:</label>
+              <div class="affiliated-advisers-value">${advisor.cvr || ""}</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>ADDRESS:</label>
+              <div class="affiliated-advisers-value">${
+                advisor.address || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>POSTCODE:</label>
+              <div class="affiliated-advisers-value">${
+                advisor.postalCode || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>TELEPHONE:</label>
+              <div class="affiliated-advisers-value">${
+                advisor.phone || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>EMAIL</label>
+              <div class="affiliated-advisers-value">${
+                advisor.username || ""
+              }</div>
+            </div>
+            ${
+              index < advisors.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      affiliatedAdvisersHtml = affiliatedAdvisersHtml.replace(
+        /<div class="affiliated-advisers-section" id="advisorsSection">.*?<\/div>/s,
+        `<div class="affiliated-advisers-section" id="advisorsSection">${advisorsHtml}</div>`
+      );
+
+      // Independent Controllers
+      let independentControllersHtml = "";
+      independentControllers.forEach((controller, index) => {
+        independentControllersHtml += `
+          <div class="affiliated-advisers-fields">
+            <div class="affiliated-advisers-field">
+              <label>NAME:</label>
+              <div class="affiliated-advisers-value">${
+                controller.name || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>CONTACT PERSON</label>
+              <div class="affiliated-advisers-value">${
+                controller.contactPerson || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>CVR NO.:</label>
+              <div class="affiliated-advisers-value">${
+                controller.cvr || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>ADDRESS:</label>
+              <div class="affiliated-advisers-value">${
+                controller.address || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>POSTCODE:</label>
+              <div class="affiliated-advisers-value">${
+                controller.postalCode || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>TELEPHONE:</label>
+              <div class="affiliated-advisers-value">${
+                controller.contactPhone || controller.phone || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>EMAIL:</label>
+              <div class="affiliated-advisers-value">${
+                controller.username || ""
+              }</div>
+            </div>
+            ${
+              index < independentControllers.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      affiliatedAdvisersHtml = affiliatedAdvisersHtml.replace(
+        /<div id="independentControllersContainer">.*?<\/div>/s,
+        `<div id="independentControllersContainer">${independentControllersHtml}</div>`
+      );
+
+      // Inspectors
+      let inspectorsHtml = "";
+      inspectors.forEach((inspector, index) => {
+        inspectorsHtml += `
+          <div class="affiliated-advisers-fields">
+            <div class="affiliated-advisers-field">
+              <label>NAME:</label>
+              <div class="affiliated-advisers-value">${
+                inspector.name || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>CONTACT PERSON</label>
+              <div class="affiliated-advisers-value">${
+                inspector.contactPerson || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>CVR NO.:</label>
+              <div class="affiliated-advisers-value">${
+                inspector.cvr || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>ADDRESS:</label>
+              <div class="affiliated-advisers-value">${
+                inspector.address || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>POSTCODE:</label>
+              <div class="affiliated-advisers-value">${
+                inspector.postalCode || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>TELEPHONE</label>
+              <div class="affiliated-advisers-value">${
+                inspector.phone || ""
+              }</div>
+            </div>
+            <div class="affiliated-advisers-field">
+              <label>EMAIL</label>
+              <div class="affiliated-advisers-value">${
+                inspector.username || ""
+              }</div>
+            </div>
+            ${
+              index < inspectors.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      affiliatedAdvisersHtml = affiliatedAdvisersHtml.replace(
+        /<div id="inspectorsContainer">.*?<\/div>/s,
+        `<div id="inspectorsContainer">${inspectorsHtml}</div>`
+      );
+
+      // Footer for AffiliatedAdvisers
+      affiliatedAdvisersHtml = affiliatedAdvisersHtml.replace(
+        /id="footerCompanyLogo"/g,
+        `id="footerCompanyLogo" src="${companyLogo}" ${
+          companyLogo ? 'style="display: block;"' : 'style="display: none;"'
+        }`
+      );
+      affiliatedAdvisersHtml = affiliatedAdvisersHtml.replace(
+        /id="footerCompanyLogoFallback">A/g,
+        `id="footerCompanyLogoFallback">${firstLetter}`
+      );
+
       // Combine all pages
-      const combinedHtml = reportPage1Html + tocHtml + projectDetailsHtml;
+      const combinedHtml =
+        reportPage1Html + tocHtml + projectDetailsHtml + affiliatedAdvisersHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
