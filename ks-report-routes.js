@@ -312,8 +312,10 @@ function createKsReportRoutes(db) {
         }`
       );
       reportPage1Html = reportPage1Html.replace(
-        /id="companyLogoFallback">A/g,
-        `id="companyLogoFallback">${firstLetter}`
+        /id="companyLogoFallback" style="display: none;">Company logo/g,
+        `id="companyLogoFallback" style="display: ${
+          companyLogo ? "none" : "flex"
+        };">${companyName || "Company logo"}`
       );
       reportPage1Html = reportPage1Html.replace(
         /id="postNoCity"><\/div>/g,
