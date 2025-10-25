@@ -342,6 +342,202 @@
        text-align: right; font-size: 11px; 
      }
 
+     /* Special Control Table Styles */
+     .special-control-table {
+       width: 100%;
+       border-collapse: collapse;
+       margin-top: 20px;
+     }
+     .special-control-table thead {
+       background: #f0f0f0;
+     }
+     .special-control-table th {
+       padding: 10px;
+       text-align: left;
+       border: 1px solid #ddd;
+       font-weight: 600;
+       font-size: 12px;
+     }
+     .special-control-table td {
+       padding: 10px;
+       border: 1px solid #ddd;
+       font-size: 12px;
+     }
+     .special-control-table tbody tr:nth-child(even) {
+       background: #f9f9f9;
+     }
+
+    /* --- Deviation B7 page styles --- */
+    .deviation-page {
+      position: relative;
+      min-height: 100%;
+      padding: 0;
+    }
+    .deviation-header {
+      background: #0a2540;
+      color: white;
+      padding: 8px 12px;
+      margin-bottom: 18mm;
+    }
+    .deviation-header h1 { 
+      margin: 0; 
+      font-size: 16px; 
+      font-weight: 700; 
+    }
+    .deviation-content { 
+      margin-bottom: 18mm; 
+    }
+    #deviation-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .deviation-card {
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .deviation-id {
+      font-weight: 700;
+      font-size: 14px;
+      color: #0a2540;
+      margin-bottom: 10px;
+    }
+    .deviation-drawing {
+      margin-bottom: 15px;
+    }
+    .deviation-drawing img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .deviation-building-part {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .deviation-building-part img {
+      width: 150px;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+    .deviation-building-part span {
+      font-weight: 600;
+    }
+    .deviation-mark-pictures {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+    }
+    .mark-picture-item {
+      border: 1px solid #ddd;
+      padding: 8px;
+      border-radius: 4px;
+      background: white;
+    }
+    .mark-picture-item img {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 4px;
+      margin-bottom: 5px;
+    }
+    .mark-picture-index {
+      font-weight: 600;
+      font-size: 11px;
+      color: #0a2540;
+      margin-bottom: 3px;
+    }
+    .mark-picture-description {
+      font-size: 10px;
+      color: #666;
+    }
+    .deviation-footer { 
+      position: absolute; bottom: 0; left: 0; right: 0; 
+      background: #0a2540; color: white; padding: 8px 16px; 
+      display: grid; grid-template-columns: 1fr auto; align-items: center; 
+    }
+    .deviation-footer .footer-left { 
+      display: flex; align-items: center; gap: 8px; 
+      font-size: 12px; 
+    }
+    .deviation-footer .footer-logo-small { 
+      width: 20px; height: 20px; 
+    }
+    .deviation-footer .footer-right { 
+      text-align: right; font-size: 11px; 
+    }
+
+    /* --- Control Points Selected page styles --- */
+    .control-points-page {
+      position: relative;
+      min-height: 100%;
+      padding: 0;
+    }
+    .control-points-header {
+      background: #0a2540;
+      color: white;
+      padding: 8px 12px;
+      margin-bottom: 18mm;
+    }
+    .control-points-header h1 { 
+      margin: 0; 
+      font-size: 16px; 
+      font-weight: 700; 
+    }
+    .control-points-content { 
+      margin-bottom: 18mm; 
+    }
+    .control-points-overview {
+      margin-bottom: 20px;
+    }
+    .control-points-overview p {
+      margin: 5px 0;
+      font-size: 12px;
+    }
+    #drawings-container {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+    }
+    .drawing-item {
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .drawing-item img {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .drawing-item .drawing-name {
+      font-weight: 600;
+      font-size: 12px;
+      color: #0a2540;
+    }
+    .control-points-footer { 
+      position: absolute; bottom: 0; left: 0; right: 0; 
+      background: #0a2540; color: white; padding: 8px 16px; 
+      display: grid; grid-template-columns: 1fr auto; align-items: center; 
+    }
+    .control-points-footer .footer-left { 
+      display: flex; align-items: center; gap: 8px; 
+      font-size: 12px; 
+    }
+    .control-points-footer .footer-logo-small { 
+      width: 20px; height: 20px; 
+    }
+    .control-points-footer .footer-right { 
+      text-align: right; font-size: 11px; 
+    }
+
     /* --- Document completion status page styles --- */
     .completion-header {
       background: #0a2540;
@@ -921,7 +1117,7 @@
         </div>
         <div class="toc-sub-item">
           <span>4.2 Special control points</span>
-          <span class="toc-page">8</span>
+          <span class="toc-page">9</span>
         </div>
       </div>
       
@@ -932,7 +1128,7 @@
         </div>
         <div class="toc-sub-item">
           <span>5.1 Handling of any deviations B7</span>
-          <span class="toc-page">2</span>
+          <span class="toc-page">10</span>
         </div>
       </div>
       
@@ -1330,6 +1526,117 @@
     </div>
     <div class="page-number" id="page-8-number"></div>
   </section>
+
+  <!-- Page 9: Special Control Points Table -->
+  <section class="page">
+    <div class="special-controls-page">
+      <!-- Header -->
+      <div class="special-controls-header">
+        <h1>4.2 Special control points</h1>
+      </div>
+
+      <!-- Main Content -->
+      <div class="special-controls-content">
+        <p>Cf. section 3.1, no special controls are required.</p>
+        <p>If there are special checks, it will be stated below in the form, otherwise there will be none.</p>
+
+        <!-- Special Control Points Table -->
+        <table class="special-control-table">
+          <thead>
+            <tr>
+              <th>Control ID</th>
+              <th>Special control</th>
+              <th>Description</th>
+              <th>Made by:</th>
+            </tr>
+          </thead>
+          <tbody id="special-control-table-body">
+            <!-- Will be populated dynamically or left empty -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div class="special-controls-footer">
+        <div class="footer-left">
+          <span>Part of</span>
+          <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
+          <span>Assurement ApS</span>
+        </div>
+        <div class="footer-right">
+          <span class="page-info">Side 9 af 33</span>
+        </div>
+      </div>
+      <div class="page-number" id="page-9-number"></div>
+    </div>
+  </section>
+
+  <!-- Page 10: Deviation B7 -->
+  <section class="page">
+    <div class="deviation-page">
+      <!-- Header -->
+      <div class="deviation-header">
+        <h1>Deviation B7</h1>
+      </div>
+
+      <!-- Main Content -->
+      <div class="deviation-content">
+        <div id="deviation-container">
+          <!-- Will be populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="deviation-footer">
+        <div class="footer-left">
+          <span>Part of</span>
+          <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
+          <span>Assurement ApS</span>
+        </div>
+        <div class="footer-right">
+          <span class="page-info">Side 10 af 33</span>
+        </div>
+      </div>
+      <div class="page-number" id="page-10-number"></div>
+    </div>
+  </section>
+
+  <!-- Page 11: Control Points Selected in the Control Plan -->
+  <section class="page">
+    <div class="control-points-page">
+      <!-- Header -->
+      <div class="control-points-header">
+        <h1>6. CONTROL POINTS SELECTED IN THE CONTROL PLAN</h1>
+      </div>
+
+      <!-- Main Content -->
+      <div class="control-points-content">
+        <div class="control-points-overview">
+          <p><strong>Overview:</strong></p>
+          <p><strong>DRAWINGS INDICATING SELECTED INSPECTION POINTS:</strong></p>
+          <p><strong>DRAWING NAME:</strong></p>
+        </div>
+
+        <!-- Drawings List -->
+        <div id="drawings-container">
+          <!-- Will be populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="control-points-footer">
+        <div class="footer-left">
+          <span>Part of</span>
+          <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
+          <span>Assurement ApS</span>
+        </div>
+        <div class="footer-right">
+          <span class="page-info">Side 11 af 33</span>
+        </div>
+      </div>
+      <div class="page-number" id="page-11-number"></div>
+    </div>
+  </section>
   <script src="html2canvas.min.js"></script>
   <script src="jspdf.umd.min.js"></script>
   
@@ -1431,6 +1738,7 @@
     // Data loading
     // -----------------------------
     async function loadData() {
+      console.log('Local image source:');
       try {
         // Fetch company details
         const companyResponse = await fetch(`${BASE_URL}/get-company-detail/${COMPANY_ID}`, { mode: 'cors' });
@@ -1654,6 +1962,295 @@
             `;
           }
         }
+
+        // Fetch deviation B7 data
+        try {
+          const deviationResponse = await fetch(`${BASE_URL}/get-deviation-b7?projectId=${PROJECT_ID}&subjectMatterId=${SUBJECT_MATTER_ID}`, { mode: 'cors' });
+          const deviationData = await deviationResponse.json();
+          console.log('Deviation B7 data:', deviationData);
+          
+          // Populate deviation container
+          const deviationContainer = document.getElementById('deviation-container');
+          if (deviationContainer && deviationData) {
+            deviationContainer.innerHTML = '';
+            
+            // Check if it's an array
+            const deviations = Array.isArray(deviationData) ? deviationData : (deviationData.data ? deviationData.data : []);
+            
+            if (deviations.length > 0) {
+              deviations.forEach(deviation => {
+                // Create card
+                const card = document.createElement('div');
+                card.className = 'deviation-card';
+                
+                // ID (using deviationNumber from database)
+                const idDiv = document.createElement('div');
+                idDiv.className = 'deviation-id';
+                idDiv.textContent = `ID: ${deviation.deviationNumber || deviation._id || 'N/A'}`;
+                card.appendChild(idDiv);
+                
+                // Mark Drawing section
+                const drawingHeading = document.createElement('h3');
+                drawingHeading.textContent = 'Mark Drawing';
+                drawingHeading.style.fontSize = '14px';
+                drawingHeading.style.fontWeight = '600';
+                drawingHeading.style.color = '#0a2540';
+                drawingHeading.style.marginBottom = '10px';
+                card.appendChild(drawingHeading);
+                
+                const drawingDiv = document.createElement('div');
+                drawingDiv.className = 'deviation-drawing';
+                
+                if (deviation.annotatedPdfs && deviation.annotatedPdfs.length > 0) {
+                  // Use annotated PDF (PNG image)
+                  const drawingImg = document.createElement('img');
+                  drawingImg.crossOrigin = 'anonymous';
+                  drawingImg.src = deviation.annotatedPdfs[0].s3Location;
+                  drawingImg.alt = 'Mark drawing';
+                  drawingImg.style.width = '100%';
+                  drawingImg.style.height = 'auto';
+                  drawingImg.style.border = '1px solid #ddd';
+                  drawingImg.style.borderRadius = '4px';
+                  drawingImg.addEventListener('error', function() {
+                    console.error('Failed to load drawing image:', this.src);
+                    console.log('Trying fallback to local upload...');
+                    
+                    // Try fallback to local upload if S3 fails
+                    if (deviation.annotatedPdfs[0].filename) {
+                      const localImg = document.createElement('img');
+                      localImg.crossOrigin = null; // Remove CORS for local files
+                      localImg.src = `${BASE_URL}/uploads/${deviation.annotatedPdfs[0].filename}`;
+                      localImg.alt = 'Mark drawing';
+                      localImg.style.width = '100%';
+                      localImg.style.height = 'auto';
+                      localImg.style.border = '1px solid #ddd';
+                      localImg.style.borderRadius = '4px';
+                      this.parentNode.replaceChild(localImg, this);
+                    }
+                  });
+                  drawingDiv.appendChild(drawingImg);
+                } else if (deviation.drawing && deviation.drawing.mainDrawings && deviation.drawing.mainDrawings.length > 0) {
+                  // If no annotated PDF, but main drawing (PDF) exists
+                  const noAnnotatedPdfText = document.createElement('p');
+                  noAnnotatedPdfText.textContent = 'No annotated PDF available.';
+                  noAnnotatedPdfText.style.color = '#666';
+                  noAnnotatedPdfText.style.fontStyle = 'italic';
+                  drawingDiv.appendChild(noAnnotatedPdfText);
+                } else {
+                  // If neither annotated PDF nor main drawing exists
+                  const noDrawingText = document.createElement('p');
+                  noDrawingText.textContent = 'You don\'t have mark drawing.';
+                  noDrawingText.style.color = '#999';
+                  noDrawingText.style.fontStyle = 'italic';
+                  drawingDiv.appendChild(noDrawingText);
+                }
+                
+                card.appendChild(drawingDiv);
+                
+                // Selected Building Part section
+                if (deviation.buildingParts && deviation.buildingParts.buildingPartDetail) {
+                  const buildingPartHeading = document.createElement('h3');
+                  buildingPartHeading.textContent = 'Selected Building Part';
+                  buildingPartHeading.style.fontSize = '14px';
+                  buildingPartHeading.style.fontWeight = '600';
+                  buildingPartHeading.style.color = '#0a2540';
+                  buildingPartHeading.style.marginBottom = '10px';
+                  buildingPartHeading.style.marginTop = '20px';
+                  card.appendChild(buildingPartHeading);
+                  
+                  const buildingPartDiv = document.createElement('div');
+                  buildingPartDiv.className = 'deviation-building-part';
+                  
+                  // Add building part image
+                  if (deviation.buildingParts.buildingPartDetail.image && deviation.buildingParts.buildingPartDetail.image.s3Location) {
+                    const img = document.createElement('img');
+                    img.crossOrigin = 'anonymous';
+                    img.src = deviation.buildingParts.buildingPartDetail.image.s3Location;
+                    img.alt = deviation.buildingParts.buildingPartDetail.name || 'Building part';
+                    img.addEventListener('error', function() {
+                      console.error('Failed to load building part image:', this.src);
+                      console.log('Trying fallback to local upload...');
+                    
+                      // Try fallback to local upload if S3 fails
+                      if (deviation.buildingParts.buildingPartDetail.image.filename) {
+                        const localImg = document.createElement('img');
+                        localImg.crossOrigin = null; // Remove CORS for local files
+                        
+                      localImg.src = `${BASE_URL}/uploads/${deviation.buildingParts.buildingPartDetail.image.filename}`;
+                       console.log('Base URL image test:');
+                      console.log('Local image source:', localImg.src);
+                     
+                       localImg.alt = deviation.buildingParts.buildingPartDetail.name || 'Building part';
+                        this.parentNode.replaceChild(localImg, this);
+                      } else {
+                        buildingPartDiv.textContent = 'Building part';
+                      }
+                    });
+                    buildingPartDiv.appendChild(img);
+                  }
+                  
+                  // Add building part name
+                  const nameSpan = document.createElement('span');
+                  nameSpan.textContent = deviation.buildingParts.buildingPartDetail.name || deviation.buildingParts.buildingPartName || '';
+                  buildingPartDiv.appendChild(nameSpan);
+                  
+                  card.appendChild(buildingPartDiv);
+                }
+                
+                // Mark Pictures section
+                if (deviation.markPictures && deviation.markPictures.length > 0) {
+                  const markPicturesHeading = document.createElement('h3');
+                  markPicturesHeading.textContent = 'Mark Pictures';
+                  markPicturesHeading.style.fontSize = '14px';
+                  markPicturesHeading.style.fontWeight = '600';
+                  markPicturesHeading.style.color = '#0a2540';
+                  markPicturesHeading.style.marginBottom = '10px';
+                  markPicturesHeading.style.marginTop = '20px';
+                  card.appendChild(markPicturesHeading);
+                  
+                  const picturesDiv = document.createElement('div');
+                  picturesDiv.className = 'deviation-mark-pictures';
+                  
+                  deviation.markPictures.forEach((filename, index) => {
+                    const pictureItem = document.createElement('div');
+                    pictureItem.className = 'mark-picture-item';
+                    
+                    // Construct URL for mark picture (assuming they're in uploads folder)
+                    const img = document.createElement('img');
+                    img.src = `${BASE_URL}/uploads/${filename}`;
+                    img.alt = `Mark picture ${index + 1}`;
+                    img.crossOrigin = null; // No CORS for local uploads (same-origin)
+                    img.addEventListener('error', function() {
+                      console.error('Failed to load mark picture:', this.src);
+                      console.log('Showing placeholder instead');
+                      
+                      // Show placeholder text instead of hiding
+                      const placeholder = document.createElement('div');
+                      placeholder.style.cssText = 'width: 100%; height: 120px; background: #f0f0f0; border: 1px dashed #ddd; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px;';
+                      placeholder.textContent = 'Image not available';
+                      this.parentNode.replaceChild(placeholder, this);
+                    });
+                    pictureItem.appendChild(img);
+                    
+                    // Add mark label
+                    const indexDiv = document.createElement('div');
+                    indexDiv.className = 'mark-picture-index';
+                    indexDiv.textContent = `Mark ${index + 1}`;
+                    pictureItem.appendChild(indexDiv);
+                    
+                    // Add description from markPictureDescriptions array
+                    const descDiv = document.createElement('div');
+                    descDiv.className = 'mark-picture-description';
+                    descDiv.textContent = deviation.markPictureDescriptions && deviation.markPictureDescriptions[index] ? deviation.markPictureDescriptions[index] : '';
+                    pictureItem.appendChild(descDiv);
+                    
+                    picturesDiv.appendChild(pictureItem);
+                  });
+                  
+                  card.appendChild(picturesDiv);
+                }
+                
+                deviationContainer.appendChild(card);
+              });
+            } else {
+              // Show empty state
+              deviationContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #999;">
+                  No deviations found
+                </div>
+              `;
+            }
+          }
+        } catch (error) {
+          console.log('Error fetching deviation B7 data:', error);
+          // Fallback if API fails
+          const deviationContainer = document.getElementById('deviation-container');
+          if (deviationContainer) {
+            deviationContainer.innerHTML = `
+              <div style="text-align: center; padding: 40px; color: #999;">
+                No deviations found
+              </div>
+            `;
+          }
+        }
+        
+        // Fetch drawings for control points page
+        try {
+          const drawingsResponse = await fetch(`${BASE_URL}/get-draws?companyId=${COMPANY_ID}&projectId=${PROJECT_ID}`, { mode: 'cors' });
+          const drawingsData = await drawingsResponse.json();
+          console.log('Drawings data:', drawingsData);
+          
+          // Populate drawings container
+          const drawingsContainer = document.getElementById('drawings-container');
+          if (drawingsContainer && drawingsData) {
+            drawingsContainer.innerHTML = '';
+            
+            // Check if it's an array or has a data property
+            const drawings = Array.isArray(drawingsData) ? drawingsData : (drawingsData.data || drawingsData.mainDrawings || []);
+            
+            if (drawings.length > 0) {
+              drawings.forEach(drawing => {
+                // Process each main drawing
+                if (drawing.mainDrawings && Array.isArray(drawing.mainDrawings)) {
+                  drawing.mainDrawings.forEach((mainDrawing, index) => {
+                    const drawingItem = document.createElement('div');
+                    drawingItem.className = 'drawing-item';
+                    
+                    // Check if it's a PDF or image
+                    const isPdf = mainDrawing.mimetype === 'application/pdf';
+                    
+                    if (isPdf) {
+                      // For PDF, show a simple placeholder (no PDF.js rendering to avoid CORS)
+                      const pdfDiv = document.createElement('div');
+                      pdfDiv.style.cssText = 'width: 100%; height: 150px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px;';
+                      pdfDiv.innerHTML = `
+                        <div style="font-size: 32px;">📄</div>
+                        <div style="font-size: 12px; color: #666;">${mainDrawing.originalname}</div>
+                        <a href="${mainDrawing.s3Location}" target="_blank" style="color: #0a2540; text-decoration: none; font-size: 12px;">View PDF</a>
+                      `;
+                      drawingItem.appendChild(pdfDiv);
+                    } else {
+                      // For images, show the image
+                      const img = document.createElement('img');
+                      img.src = mainDrawing.s3Location || mainDrawing.path || '';
+                      img.alt = mainDrawing.originalname || 'Drawing';
+                      img.style.cssText = 'width: 100%; height: 150px; object-fit: cover; border-radius: 4px;';
+                      img.onerror = function() {
+                        this.style.display = 'none';
+                      };
+                      drawingItem.appendChild(img);
+                    }
+                    
+                    // Create drawing name using originalname
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'drawing-name';
+                    nameDiv.textContent = mainDrawing.originalname || 'Drawing';
+                    drawingItem.appendChild(nameDiv);
+                    
+                    drawingsContainer.appendChild(drawingItem);
+                  });
+                }
+              });
+            } else {
+              drawingsContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #999; grid-column: 1 / -1;">
+                  No drawings found
+                </div>
+              `;
+            }
+          }
+        } catch (error) {
+          console.log('Error fetching drawings data:', error);
+          // Fallback if API fails
+          const drawingsContainer = document.getElementById('drawings-container');
+          if (drawingsContainer) {
+            drawingsContainer.innerHTML = `
+              <div style="text-align: center; padding: 40px; color: #999; grid-column: 1 / -1;">
+                No drawings found
+              </div>
+            `;
+          }
+        }
         
         // Populate signatures
         filteredSignatures.forEach(sig => {
@@ -1775,9 +2372,49 @@
     }
 
     // -----------------------------
+    // Wait for all images to load
+    // -----------------------------
+    async function waitForAllImages() {
+      return new Promise((resolve) => {
+        const images = document.querySelectorAll('img');
+        let loaded = 0;
+        const total = images.length;
+        
+        if (total === 0) {
+          resolve();
+          return;
+        }
+        
+        const checkComplete = () => {
+          loaded++;
+          if (loaded === total) {
+            console.log('All images loaded');
+            resolve();
+          }
+        };
+        
+        images.forEach(img => {
+          if (img.complete) {
+            checkComplete();
+          } else {
+            img.addEventListener('load', checkComplete);
+            img.addEventListener('error', checkComplete);
+          }
+        });
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          console.log('Timeout waiting for images');
+          resolve();
+        }, 10000);
+      });
+    }
+
+    // -----------------------------
     // Export to PDF (jsPDF + html2canvas)
     // -----------------------------
     async function exportToPDF() {
+      console.log('Export to PDF function called');
       const statusEl = document.getElementById('status');
       const btn = document.getElementById('exportBtn');
       try {
@@ -1839,29 +2476,93 @@
           }
         }
 
-        // Try to convert problematic images to data URLs
-        const problematicImages = Array.from(document.images).filter(img => 
-          img.src.includes('s3.amazonaws.com') || img.src.includes('assurement-v1-backend')
-        );
+        // Try to convert ALL images to data URLs to ensure they're captured
+        const allImages = Array.from(document.images);
         
-        console.log('Found problematic images:', problematicImages.length);
+        console.log('Found images to convert:', allImages.length);
         
-        for (const img of problematicImages) {
-          if (img.complete && img.naturalWidth > 0) {
-            console.log('Converting image to data URL:', img.src);
-            const dataURL = await convertImageToDataURL(img);
-            if (dataURL) {
-              img.src = dataURL;
-              console.log('Image converted to data URL successfully');
+        // Specifically check deviation images
+        const deviationImages = Array.from(document.querySelectorAll('#deviation-container img'));
+        console.log('Deviation images found:', deviationImages.length);
+        deviationImages.forEach((img, idx) => {
+          console.log(`Deviation image ${idx + 1}: src=${img.src.substring(0, 80)}, complete=${img.complete}, naturalWidth=${img.naturalWidth}`);
+        });
+        
+        for (const img of allImages) {
+          try {
+            // Check if image is already a data URL
+            if (!img.src.startsWith('data:')) {
+              console.log('Converting image to data URL:', img.src.substring(0, 80));
+              
+              // Wait for image to load if not ready
+              if (!img.complete || img.naturalWidth === 0) {
+                console.log('Waiting for image to load:', img.src.substring(0, 80));
+                await new Promise((resolve, reject) => {
+                  const timeout = setTimeout(resolve, 3000); // 3 second timeout
+                  img.onload = () => {
+                    clearTimeout(timeout);
+                    resolve();
+                  };
+                  img.onerror = () => {
+                    clearTimeout(timeout);
+                    reject();
+                  };
+                });
+              }
+              
+              const dataURL = await convertImageToDataURL(img);
+              if (dataURL) {
+                img.src = dataURL;
+                console.log('Image converted to data URL successfully, length:', dataURL.length);
+              } else {
+                console.log('Failed to convert image to data URL');
+              }
+            } else {
+              console.log('Image already a data URL');
             }
-          } else {
-            console.log('Skipping image conversion - not ready:', img.src);
+          } catch (error) {
+            console.error('Error converting image:', error, 'src:', img.src.substring(0, 80));
           }
         }
 
-        // Small delay to ensure all images are fully rendered
-        await new Promise(resolve => setTimeout(resolve, 500));
-        console.log('Starting PDF generation...');
+        // Check if deviation container has content
+        const deviationContainer = document.getElementById('deviation-container');
+        console.log('Deviation container:', deviationContainer);
+        console.log('Deviation container HTML:', deviationContainer ? deviationContainer.innerHTML.substring(0, 200) : 'null');
+        console.log('Deviation container children:', deviationContainer ? deviationContainer.children.length : 0);
+        console.log('Total images after conversion:', document.images.length);
+        console.log('Images by source:');
+        Array.from(document.images).forEach((img, idx) => {
+          console.log(`Image ${idx + 1}: src starts with data? ${img.src.startsWith('data:')}, src: ${img.src.substring(0, 80)}`);
+        });
+        
+        // Wait for all images to load
+        await waitForAllImages();
+        console.log('All images loaded, starting PDF generation...');
+        
+        // CRITICAL: Wait for all fallback images to load (local uploads after S3 failures)
+        console.log('Waiting for fallback images to load...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Now re-convert ALL images to data URLs (including fallbacks)
+        console.log('Re-converting all images to data URLs after fallbacks...');
+        const allImagesFinal = Array.from(document.images);
+        for (const img of allImagesFinal) {
+          if (!img.src.startsWith('data:')) {
+            try {
+              const dataURL = await convertImageToDataURL(img);
+              if (dataURL) {
+                img.src = dataURL;
+                console.log('Re-converted image to data URL');
+              }
+            } catch (e) {
+              console.log('Could not re-convert image');
+            }
+          }
+        }
+        
+        // Final delay to ensure everything is settled
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -1885,41 +2586,18 @@
             allowTaint: true,
             backgroundColor: '#ffffff',
             windowWidth: Math.max(document.documentElement.clientWidth, el.scrollWidth),
-            logging: true,           // Enable logging for debugging
+            logging: false,           // Disable logging to reduce noise
             onclone: (clonedDoc) => {
               console.log('Canvas cloned document');
-              // Replace any problematic images with fallback text in the cloned document
-              const images = clonedDoc.querySelectorAll('img');
-              images.forEach(img => {
-                // Check if image is from external source or has CORS issues
-                // Exclude company logos since they work like signatures
-                if ((img.src.includes('s3.amazonaws.com') || img.src.includes('localhost:3000') || img.src.includes('assurement-v1-backend')) 
-                    && !img.parentNode.classList.contains('company-logo-sm')) {
-                  console.log('Replacing problematic image:', img.src);
-                  const fallbackDiv = clonedDoc.createElement('div');
-                  
-                  // Determine fallback text based on context
-                  let fallbackText = 'Image';
-                  if (img.className.includes('signature-image')) {
-                    fallbackText = 'Signature';
-                  } else if (img.src.includes('drawing') || img.src.includes('plan')) {
-                    fallbackText = 'Drawing';
-                  }
-                  
-                  fallbackDiv.textContent = fallbackText;
-                  fallbackDiv.style.cssText = `
-                    width: ${img.className.includes('signature-image') ? '150px' : '140px'}; 
-                    height: ${img.className.includes('signature-image') ? '60px' : '60px'}; 
-                    border: 1px solid #c3cfdd; 
-                    display: flex; align-items: center; justify-content: center;
-                    font-size: 12px; color: #6a7b8e;
-                    background: #f8f9fa;
-                    border-radius: 4px;
-                  `;
-                  img.parentNode.replaceChild(fallbackDiv, img);
+              // Handle any remaining images that might not be converted
+              clonedDoc.querySelectorAll('img').forEach(clonedImg => {
+                if (!clonedImg.src.startsWith('data:') && clonedImg.src.includes('s3.amazonaws.com')) {
+                  console.log('Found unconverted S3 image in cloned doc, replacing with placeholder');
+                  clonedImg.style.display = 'none';
                 }
               });
-            }
+            },
+            imageTimeout: 0  // Don't timeout on images
           });
 
           console.log('Canvas rendered:', canvas.width, 'x', canvas.height);
