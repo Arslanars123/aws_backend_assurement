@@ -1,0 +1,3570 @@
+/* Main Wrapper */
+.ks-report-wrapper {
+  width: 100%;
+  background-color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Profession Selector */
+.profession-selector {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 30px 20px 20px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.profession-selector .MuiAutocomplete-root {
+  width: 100%;
+  max-width: 500px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(30, 58, 138, 0.1);
+}
+
+/* Quality Assurance Report Styles */
+.qa-report-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.qa-report-page {
+  max-width: 210mm; /* A4 width */
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header Section */
+.qa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 30px 40px 20px 40px;
+  border-bottom: 2px solid #1e3a8a;
+}
+
+.qa-header-left {
+  flex: 1;
+}
+
+.qa-logo {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.qa-logo-circle {
+  width: 50px;
+  height: 50px;
+  background-color: #1e3a8a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.qa-logo-a {
+  color: white;
+  font-size: 24px;
+  font-weight: bold;
+  font-family: Arial, sans-serif;
+}
+
+.qa-logo-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.qa-logo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.qa-logo-title {
+  color: #1e3a8a;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.qa-logo-subtitle {
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.qa-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qa-company-logo-placeholder {
+  color: #1e3a8a;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  padding: 20px 40px;
+  border: 2px dashed #1e3a8a;
+  border-radius: 8px;
+}
+
+/* Main Content */
+.qa-content {
+  position: relative;
+  padding: 0 40px 40px 40px;
+}
+
+.qa-left-column {
+  position: relative;
+  max-width: 60%;
+}
+
+.qa-blue-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #1e3a8a;
+}
+
+/* Sections */
+.qa-section {
+  margin-top: 30px;
+  margin-left: 30px;
+  margin-bottom: 30px;
+}
+
+.qa-section-title {
+  color: #1e3a8a;
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.qa-form-group {
+  margin-bottom: 12px;
+  margin-left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.qa-form-group label {
+  color: #1e3a8a;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+/* Display Values Styling */
+.qa-value {
+  font-size: 14px;
+  color: #1e3a8a;
+  font-weight: 500;
+  flex: 1;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* Main Title */
+.qa-main-title {
+  color: #1e3a8a;
+  font-size: 20px;
+  font-weight: bold;
+  text-transform: uppercase;
+  margin: 40px 0 30px 30px;
+  letter-spacing: 1px;
+}
+
+/* Project ID Section */
+.qa-project-id-section {
+  bottom: 40px;
+  left: 40px;
+  right: 40px;
+}
+
+.qa-project-id-table {
+  display: flex;
+  border: 2px solid #1e3a8a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.qa-project-id-cell {
+  background-color: #f8fafc;
+  padding: 15px 20px;
+  border-right: 2px solid #1e3a8a;
+  display: flex;
+  align-items: center;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
+.qa-project-id-cell span {
+  color: #1e3a8a;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.qa-project-id-value-cell {
+  flex: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.qa-project-id-value {
+  width: 100%;
+  height: 100%;
+  padding: 15px 20px;
+  font-size: 16px;
+  color: #1e3a8a;
+  font-weight: 600;
+  background-color: #ffffff;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .profession-selector {
+    padding: 20px 15px 15px 15px;
+  }
+
+  .profession-selector .MuiAutocomplete-root {
+    max-width: 100%;
+  }
+
+  .qa-report-container {
+    padding: 10px;
+  }
+
+  .qa-report-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .qa-header {
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .qa-content {
+    padding: 0 20px 20px 20px;
+  }
+
+  .qa-left-column {
+    max-width: 100%;
+  }
+
+  .qa-project-id-section {
+    position: static;
+    margin-top: 40px;
+  }
+
+  .qa-project-id-table {
+    flex-direction: column;
+  }
+
+  .qa-project-id-cell {
+    border-right: none;
+    border-bottom: 2px solid #1e3a8a;
+  }
+
+  .qa-form-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .qa-form-group label {
+    min-width: auto;
+  }
+}
+
+/* Table of Contents Styles */
+.toc-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.toc-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.toc-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+  text-align: center;
+}
+
+.toc-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content Area */
+.toc-content {
+  flex: 1;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+.toc-content-title {
+  font-size: 24px;
+  font-weight: bold;
+  color: #1e3a8a;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+/* Table of Contents Items */
+.toc-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 30px;
+}
+
+.toc-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.toc-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.toc-item-number {
+  font-weight: 600;
+  color: #1e3a8a;
+  min-width: 30px;
+}
+
+.toc-item-title {
+  color: #374151;
+  font-size: 14px;
+}
+
+.toc-item-right {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.toc-item-page {
+  font-weight: 500;
+}
+
+/* Main Sections */
+.toc-main-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.toc-main-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 2px solid #1e3a8a;
+}
+
+.toc-main-section-left {
+  flex: 1;
+}
+
+.toc-main-section-title {
+  font-weight: bold;
+  color: #1e3a8a;
+  font-size: 16px;
+}
+
+.toc-main-section-right {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.toc-main-section-page {
+  font-weight: 500;
+}
+
+/* Footer */
+.toc-footer {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.toc-footer-left {
+  font-size: 14px;
+}
+
+.toc-footer-center {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toc-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toc-logo-circle {
+  width: 30px;
+  height: 30px;
+  background-color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toc-logo-a {
+  color: #1e3a8a;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.toc-logo-text {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.toc-footer-right {
+  font-size: 14px;
+}
+
+/* Responsive Design for TOC */
+@media (max-width: 768px) {
+  .toc-container {
+    padding: 10px;
+  }
+
+  .toc-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .toc-content {
+    padding: 20px;
+  }
+
+  .toc-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .toc-main-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .toc-footer {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+}
+
+@media print {
+  .qa-report-container {
+    padding: 0;
+  }
+
+  .qa-report-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .qa-value {
+    background: transparent;
+  }
+
+  .qa-project-id-value {
+    background: transparent;
+  }
+
+  .toc-container {
+    padding: 0;
+  }
+
+  .toc-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .project-details-container {
+    padding: 0;
+  }
+
+  .project-details-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Project Details Styles */
+.project-details-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.project-details-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.project-details-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.project-details-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.project-details-content {
+  padding: 40px;
+}
+
+/* Top Row - Two Columns */
+.project-details-top-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.project-details-section {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  margin-bottom: 20px;
+}
+
+/* Section Headers */
+.project-details-section-header {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  border-bottom: 1px solid #d1d5db;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+}
+
+.project-details-section-header-split {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  border-bottom: 1px solid #d1d5db;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Fields */
+.project-details-fields {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-details-fields-split {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-details-field {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.project-details-field label {
+  min-width: 120px;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.project-details-value {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  font-size: 14px;
+  color: #374151;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive Design for Project Details */
+@media (max-width: 768px) {
+  .project-details-container {
+    padding: 10px;
+  }
+
+  .project-details-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .project-details-content {
+    padding: 20px;
+  }
+
+  .project-details-top-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .project-details-section-header-split {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .project-details-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .project-details-field label {
+    min-width: auto;
+  }
+
+  .affiliated-advisers-container {
+    padding: 0;
+  }
+
+  .affiliated-advisers-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Affiliated Advisers Styles */
+.affiliated-advisers-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.affiliated-advisers-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.affiliated-advisers-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.affiliated-advisers-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.affiliated-advisers-content {
+  padding: 40px;
+}
+
+/* Sections */
+.affiliated-advisers-section {
+  border: 1px solid #d1d5db;
+  margin-bottom: 30px;
+}
+
+/* Section Headers */
+.affiliated-advisers-section-header {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  border-bottom: 1px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.affiliated-advisers-date-column {
+  min-width: 80px;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+}
+
+.affiliated-advisers-section-title {
+  flex: 1;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+}
+
+/* Fields */
+.affiliated-advisers-fields {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.affiliated-advisers-field {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.affiliated-advisers-field label {
+  min-width: 120px;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.affiliated-advisers-value {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  font-size: 14px;
+  color: #374151;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive Design for Affiliated Advisers */
+@media (max-width: 768px) {
+  .affiliated-advisers-container {
+    padding: 10px;
+  }
+
+  .affiliated-advisers-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .affiliated-advisers-content {
+    padding: 20px;
+  }
+
+  .affiliated-advisers-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .affiliated-advisers-date-column {
+    min-width: auto;
+  }
+
+  .affiliated-advisers-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .affiliated-advisers-field label {
+    min-width: auto;
+  }
+
+  .documents-info-container {
+    padding: 0;
+  }
+
+  .documents-info-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Documents and Information Styles */
+.documents-info-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.documents-info-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.documents-info-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.documents-info-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.documents-info-content {
+  padding: 40px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.documents-info-content p {
+  margin-bottom: 20px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.documents-info-content h3 {
+  margin: 30px 0 15px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+.documents-info-content ul {
+  margin: 20px 0;
+  padding-left: 20px;
+}
+
+.documents-info-content li {
+  margin-bottom: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.documents-info-content strong {
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+/* Responsive Design for Documents and Information */
+@media (max-width: 768px) {
+  .documents-info-container {
+    padding: 10px;
+  }
+
+  .documents-info-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .documents-info-content {
+    padding: 20px;
+  }
+
+  .documents-info-content p {
+    font-size: 13px;
+  }
+
+  .documents-info-content li {
+    font-size: 13px;
+  }
+
+  .documents-info-content h3 {
+    font-size: 15px;
+  }
+
+  .received-case-documents-container {
+    padding: 0;
+  }
+
+  .received-case-documents-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Received Case Documents Styles */
+.received-case-documents-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.received-case-documents-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Content */
+.received-case-documents-content {
+  flex: 1;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+/* Table Container */
+.received-case-documents-table-container {
+  width: 100%;
+}
+
+/* Table Styles */
+.received-case-documents-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+/* Header Row */
+.received-case-documents-header-row {
+  background-color: #f3f4f6;
+}
+
+.received-case-documents-header-row th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+}
+
+.received-case-documents-header-row th:last-child {
+  border-right: none;
+}
+
+/* Data Rows */
+.received-case-documents-data-row {
+  border-bottom: 1px solid #d1d5db;
+}
+
+.received-case-documents-data-row td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-right: 1px solid #d1d5db;
+  min-height: 20px;
+}
+
+.received-case-documents-data-row td:last-child {
+  border-right: none;
+}
+
+/* Highlighted Row */
+.highlighted-row {
+  background-color: #f0f9ff;
+  border: 1px solid #0ea5e9;
+}
+
+.highlighted-row td {
+  border-color: #0ea5e9;
+}
+
+/* Header Banner */
+.received-case-documents-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+  margin-top: auto;
+}
+
+.received-case-documents-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Responsive Design for Received Case Documents */
+@media (max-width: 768px) {
+  .received-case-documents-container {
+    padding: 10px;
+  }
+
+  .received-case-documents-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .received-case-documents-content {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .received-case-documents-table {
+    font-size: 12px;
+  }
+
+  .received-case-documents-header-row th {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .received-case-documents-data-row td {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .received-case-documents-header {
+    padding: 15px 20px;
+  }
+
+  .received-case-documents-header-title {
+    font-size: 16px;
+  }
+
+  .checklist-container {
+    padding: 0;
+  }
+
+  .checklist-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .company-organization-container {
+    padding: 0;
+  }
+
+  .company-organization-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Checklist Styles */
+.checklist-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.checklist-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.checklist-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.checklist-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.checklist-content {
+  padding: 40px;
+}
+
+/* Table Styles */
+.checklist-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+/* Header Row */
+.checklist-header-row {
+  background-color: #f3f4f6;
+}
+
+.checklist-header-row th {
+  padding: 12px 16px;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+}
+
+.checklist-header-row th:last-child {
+  border-right: none;
+}
+
+.checklist-document-column {
+  text-align: left;
+}
+
+.checklist-approved-date-column,
+.checklist-note-column,
+.checklist-approved-column {
+  text-align: center;
+}
+
+/* Data Rows */
+.checklist-data-row {
+  border-bottom: 1px solid #d1d5db;
+}
+
+.checklist-data-row td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-right: 1px solid #d1d5db;
+  min-height: 20px;
+}
+
+.checklist-data-row td:last-child {
+  border-right: none;
+}
+
+.checklist-document-cell {
+  text-align: left;
+}
+
+.checklist-approved-date-cell,
+.checklist-note-cell,
+.checklist-approved-cell {
+  text-align: center;
+}
+
+/* Company Organization Styles */
+.company-organization-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.company-organization-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.company-organization-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.company-organization-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.company-organization-content {
+  padding: 40px;
+}
+
+/* Sections */
+.company-organization-section {
+  border: 1px solid #d1d5db;
+  margin-bottom: 30px;
+}
+
+/* Section Headers */
+.company-organization-section-header {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  border-bottom: 1px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.company-organization-date-column {
+  min-width: 80px;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+}
+
+.company-organization-section-title {
+  flex: 1;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+}
+
+/* Fields */
+.company-organization-fields {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.company-organization-fields-grid {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.company-organization-field {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.company-organization-field label {
+  min-width: 120px;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.company-organization-value {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  font-size: 14px;
+  color: #374151;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive Design for Checklist and Company Organization */
+@media (max-width: 768px) {
+  .checklist-container {
+    padding: 10px;
+  }
+
+  .checklist-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .checklist-content {
+    padding: 20px;
+  }
+
+  .checklist-table {
+    font-size: 12px;
+  }
+
+  .checklist-header-row th {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .checklist-data-row td {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .company-organization-container {
+    padding: 10px;
+  }
+
+  .company-organization-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .company-organization-content {
+    padding: 20px;
+  }
+
+  .company-organization-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .company-organization-date-column {
+    min-width: auto;
+  }
+
+  .company-organization-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .company-organization-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .company-organization-field label {
+    min-width: auto;
+  }
+
+  .employee-production-container {
+    padding: 0;
+  }
+
+  .employee-production-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Employee and Production Styles */
+.employee-production-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.employee-production-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Employee Section (Page 9) */
+.employee-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.employee-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.employee-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.employee-content {
+  flex: 1;
+  padding: 40px;
+}
+
+/* Employee Table Styles */
+.employee-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+.employee-header-row {
+  background-color: #f3f4f6;
+}
+
+.employee-header-row th {
+  padding: 12px 16px;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.employee-header-row th:last-child {
+  border-right: none;
+}
+
+.employee-data-row {
+  border-bottom: 1px solid #d1d5db;
+}
+
+.employee-data-row td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-right: 1px solid #d1d5db;
+  min-height: 20px;
+}
+
+.employee-data-row td:last-child {
+  border-right: none;
+}
+
+.employee-id-cell {
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+/* Production Section (Page 10) */
+.production-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.production-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.production-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.production-content {
+  flex: 1;
+  padding: 40px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.production-subtitle {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+.production-content p {
+  margin-bottom: 20px;
+  font-size: 14px;
+  text-align: left;
+}
+
+/* Responsive Design for Employee and Production */
+@media (max-width: 768px) {
+  .employee-production-container {
+    padding: 10px;
+  }
+
+  .employee-production-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .employee-content {
+    padding: 20px;
+  }
+
+  .production-content {
+    padding: 20px;
+  }
+
+  .employee-table {
+    font-size: 12px;
+  }
+
+  .employee-header-row th {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .employee-data-row td {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .employee-header,
+  .production-header {
+    padding: 15px 20px;
+  }
+
+  .employee-header-title,
+  .production-header-title {
+    font-size: 16px;
+  }
+
+  .production-content p {
+    font-size: 13px;
+  }
+
+  .production-subtitle {
+    font-size: 15px;
+  }
+
+  .project-management-supervision-container {
+    padding: 0;
+  }
+
+  .project-management-supervision-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Project Management Supervision Styles */
+.project-management-supervision-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.project-management-supervision-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.project-management-supervision-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.project-management-supervision-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.project-management-supervision-content {
+  padding-top: 40px;
+}
+
+/* Table Styles */
+.project-management-supervision-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+  margin-bottom: 30px;
+  table-layout: fixed;
+  word-wrap: break-word;
+}
+
+/* Header Row */
+.project-management-supervision-header-row {
+  background-color: #1e3a8a;
+  color: white;
+}
+
+.project-management-supervision-header-row th {
+  padding: 12px 16px;
+  font-weight: bold;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.project-management-supervision-header-row th:last-child {
+  border-right: none;
+}
+
+/* Section Header Row */
+.project-management-supervision-section-header-row {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #1e3a8a;
+}
+
+.project-management-supervision-section-title {
+  padding: 15px 16px;
+  font-weight: bold;
+  font-size: 16px;
+  color: #1e3a8a;
+  text-align: left;
+  border-bottom: 2px solid #1e3a8a;
+}
+
+/* Data Rows */
+.project-management-supervision-data-row {
+  border-bottom: 1px solid #d1d5db;
+}
+
+.project-management-supervision-data-row td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-right: 1px solid #d1d5db;
+  min-height: 20px;
+  vertical-align: top;
+}
+
+.project-management-supervision-data-row td:last-child {
+  border-right: none;
+}
+
+.project-management-supervision-pos-cell {
+  font-weight: 600;
+  color: #1e3a8a;
+  width: 8%;
+}
+
+.project-management-supervision-what-cell {
+  width: 35%;
+}
+
+.project-management-supervision-where-cell {
+  width: 20%;
+}
+
+.project-management-supervision-when-cell {
+  width: 20%;
+}
+
+.project-management-supervision-how-much-cell {
+  width: 12%;
+}
+
+.project-management-supervision-performed-cell {
+  width: 5%;
+}
+
+/* Footer Section */
+.project-management-supervision-footer {
+  display: flex;
+  gap: 40px;
+  margin-top: 30px;
+  padding: 10px;
+}
+
+.project-management-supervision-footer-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.project-management-supervision-footer-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.project-management-supervision-footer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.project-management-supervision-footer-field span {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.project-management-supervision-footer-input {
+  height: 30px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  min-width: 200px;
+}
+
+/* Responsive Design for Project Management Supervision */
+@media (max-width: 768px) {
+  .project-management-supervision-container {
+    padding: 10px;
+  }
+
+  .project-management-supervision-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .project-management-supervision-content {
+    padding: 20px;
+  }
+
+  .project-management-supervision-table {
+    font-size: 12px;
+  }
+
+  .project-management-supervision-header-row th {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .project-management-supervision-data-row td {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .project-management-supervision-header {
+    padding: 15px 20px;
+  }
+
+  .project-management-supervision-header-title {
+    font-size: 16px;
+  }
+
+  .project-management-supervision-footer {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .project-management-supervision-footer-input {
+    min-width: 100%;
+  }
+
+  .description-control-work-container {
+    padding: 0;
+  }
+
+  .description-control-work-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Description of Control Work Styles */
+.description-control-work-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.description-control-work-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.description-control-work-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.description-control-work-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.description-control-work-content {
+  padding: 40px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+/* Sections */
+.description-control-work-section {
+  margin-bottom: 30px;
+}
+
+.description-control-work-section-title {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e3a8a;
+  line-height: 1.4;
+}
+
+.description-control-work-section p {
+  margin-bottom: 15px;
+  font-size: 14px;
+  text-align: left;
+  line-height: 1.6;
+}
+
+.description-control-work-section p:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive Design for Description of Control Work */
+@media (max-width: 768px) {
+  .description-control-work-container {
+    padding: 10px;
+  }
+
+  .description-control-work-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .description-control-work-content {
+    padding: 20px;
+  }
+
+  .description-control-work-section {
+    margin-bottom: 25px;
+  }
+
+  .description-control-work-section-title {
+    font-size: 15px;
+  }
+
+  .description-control-work-section p {
+    font-size: 13px;
+  }
+
+  .description-control-work-header {
+    padding: 15px 20px;
+  }
+
+  .description-control-work-header-title {
+    font-size: 16px;
+  }
+
+  .standard-control-plan-container {
+    padding: 0;
+  }
+
+  .standard-control-plan-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Standard for Control Plan Styles */
+.standard-control-plan-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.standard-control-plan-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.standard-control-plan-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.standard-control-plan-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.standard-control-plan-content {
+  padding-top: 40px;
+}
+
+/* Table Styles */
+.standard-control-plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+  table-layout: fixed;
+  word-wrap: break-word;
+}
+
+/* Header Row */
+.standard-control-plan-header-row {
+  background-color: #1e3a8a;
+  color: white;
+}
+
+.standard-control-plan-header-row th {
+  padding: 12px 8px;
+  font-weight: bold;
+  font-size: 12px;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.standard-control-plan-header-row th:last-child {
+  border-right: none;
+}
+
+/* Section Header Row */
+.standard-control-plan-section-header-row {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #1e3a8a;
+}
+
+.standard-control-plan-section-title {
+  padding: 15px 8px;
+  font-weight: bold;
+  font-size: 14px;
+  color: #1e3a8a;
+  text-align: left;
+  border-bottom: 2px solid #1e3a8a;
+}
+
+.standard-control-plan-section-circle {
+  padding: 15px 8px;
+  text-align: center;
+  border-bottom: 2px solid #1e3a8a;
+}
+
+.standard-control-plan-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin: 0 auto;
+}
+
+/* Data Rows */
+.standard-control-plan-data-row {
+  border-bottom: 1px solid #d1d5db;
+}
+
+.standard-control-plan-data-row td {
+  padding: 12px 8px;
+  font-size: 12px;
+  color: #374151;
+  border-right: 1px solid #d1d5db;
+  min-height: 20px;
+  vertical-align: top;
+}
+
+.standard-control-plan-data-row td:last-child {
+  border-right: none;
+}
+
+.standard-control-plan-pos-cell {
+  font-weight: 600;
+  color: #1e3a8a;
+  width: 8%;
+}
+
+.standard-control-plan-activity-cell {
+  width: 20%;
+}
+
+.standard-control-plan-criteria-cell {
+  width: 25%;
+}
+
+.standard-control-plan-time-cell {
+  width: 15%;
+}
+
+.standard-control-plan-circumference-cell {
+  width: 10%;
+  text-align: center;
+}
+
+.standard-control-plan-method-cell {
+  width: 8%;
+}
+
+.standard-control-plan-documentation-cell {
+  width: 8%;
+}
+
+.standard-control-plan-performed-cell {
+  width: 6%;
+  text-align: center;
+}
+
+/* Responsive Design for Standard for Control Plan */
+@media (max-width: 768px) {
+  .standard-control-plan-container {
+    padding: 10px;
+  }
+
+  .standard-control-plan-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .standard-control-plan-content {
+    padding: 20px;
+  }
+
+  .standard-control-plan-table {
+    font-size: 10px;
+  }
+
+  .standard-control-plan-header-row th {
+    padding: 8px 6px;
+    font-size: 10px;
+  }
+
+  .standard-control-plan-data-row td {
+    padding: 8px 6px;
+    font-size: 10px;
+  }
+
+  .standard-control-plan-section-title {
+    padding: 12px 6px;
+    font-size: 12px;
+  }
+
+  .standard-control-plan-section-circle {
+    padding: 12px 6px;
+  }
+
+  .standard-control-plan-circle {
+    width: 16px;
+    height: 16px;
+  }
+
+  .standard-control-plan-header {
+    padding: 15px 20px;
+  }
+
+  .standard-control-plan-header-title {
+    font-size: 16px;
+  }
+
+  .plan-control-tenders-container {
+    padding: 0;
+  }
+
+  .plan-control-tenders-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .reception-control-container {
+    padding: 0;
+  }
+
+  .reception-control-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Plan for Control of Tenders Styles */
+.plan-control-tenders-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.plan-control-tenders-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.plan-control-tenders-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.plan-control-tenders-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Content */
+.plan-control-tenders-content {
+  padding: 40px;
+}
+
+.plan-control-tenders-intro {
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.plan-control-tenders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.plan-control-tenders-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.plan-control-tenders-bullet {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.plan-control-tenders-text {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* Reception Control Styles */
+.reception-control-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.reception-control-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Headers */
+.reception-control-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 20px 40px;
+}
+
+.reception-control-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.reception-control-sub-header {
+  color: black;
+  padding: 15px 40px;
+}
+
+.reception-control-sub-header-title {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* Information Fields Section */
+.reception-control-info-section {
+  padding: 30px 40px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.reception-control-info-row {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.reception-control-info-row:last-child {
+  margin-bottom: 0;
+}
+
+.reception-control-info-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.reception-control-info-field label {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.reception-control-info-value {
+  font-size: 14px;
+  color: #1e3a8a;
+  font-weight: 500;
+  flex: 1;
+}
+
+.reception-control-info-input {
+  height: 30px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  flex: 1;
+  min-width: 150px;
+}
+
+/* Grid Section */
+.reception-control-grid-section {
+  padding: 30px 40px;
+  flex: 1;
+}
+
+.reception-control-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 20px;
+  height: 400px;
+}
+
+.reception-control-grid-cell {
+  border: 1px solid #d1d5db;
+  display: flex;
+  flex-direction: column;
+}
+
+.reception-control-grid-header {
+  background-color: #f3f4f6;
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+  text-align: center;
+}
+
+.reception-control-grid-content {
+  flex: 1;
+  padding: 15px;
+  background-color: #ffffff;
+}
+
+/* Responsive Design for Plan for Control of Tenders and Reception Control */
+@media (max-width: 768px) {
+  .plan-control-tenders-container {
+    padding: 10px;
+  }
+
+  .plan-control-tenders-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .plan-control-tenders-content {
+    padding: 20px;
+  }
+
+  .plan-control-tenders-intro {
+    font-size: 13px;
+  }
+
+  .plan-control-tenders-text {
+    font-size: 13px;
+  }
+
+  .plan-control-tenders-header {
+    padding: 15px 20px;
+  }
+
+  .plan-control-tenders-header-title {
+    font-size: 16px;
+  }
+
+  .reception-control-container {
+    padding: 10px;
+  }
+
+  .reception-control-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .reception-control-info-section {
+    padding: 20px;
+  }
+
+  .reception-control-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .reception-control-info-field {
+    width: 100%;
+  }
+
+  .reception-control-info-field label {
+    min-width: auto;
+  }
+
+  .reception-control-grid-section {
+    padding: 20px;
+  }
+
+  .reception-control-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(4, 1fr);
+    height: auto;
+    gap: 15px;
+  }
+
+  .reception-control-header,
+  .reception-control-sub-header {
+    padding: 15px 20px;
+  }
+
+  .reception-control-header-title {
+    font-size: 16px;
+  }
+
+  .reception-control-sub-header-title {
+    font-size: 14px;
+  }
+}
+
+/* Drawing Display Styles */
+.standard-control-plan-drawing-row {
+  background-color: #f8fafc;
+}
+
+.standard-control-plan-drawing-cell {
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.drawing-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.drawing-item {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #ffffff;
+}
+
+.drawing-item h4 {
+  margin: 0 0 15px 0;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 8px;
+}
+
+.drawing-item iframe {
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive drawing display */
+@media (max-width: 768px) {
+  .drawing-item iframe {
+    height: 300px;
+  }
+
+  .drawing-container {
+    gap: 15px;
+  }
+
+  .drawing-item {
+    padding: 10px;
+  }
+}
+
+/* Employee Photo Styles */
+.employee-photo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+}
+
+.employee-photo {
+  max-width: 50px;
+  max-height: 50px;
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Bootstrap Image component styles for employee photos */
+.employee-photo-container .img-fluid {
+  max-width: 50px !important;
+  max-height: 50px !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 4px !important;
+  border: 1px solid #d1d5db !important;
+  object-fit: cover !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.employee-photo-placeholder {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+  padding: 8px;
+  border: 1px dashed #d1d5db;
+  border-radius: 4px;
+  background-color: #f9fafb;
+}
+
+.employee-no-photo {
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.employee-photo-cell {
+  text-align: center;
+  vertical-align: middle;
+  width: 100px;
+}
+
+/* Responsive employee photo display */
+@media (max-width: 768px) {
+  .employee-photo {
+    max-width: 40px;
+    max-height: 40px;
+  }
+
+  .employee-photo-cell {
+    width: 80px;
+  }
+}
+
+/* Supervision Note Styles */
+.supervision-note-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.supervision-note-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  min-height: auto; /* Dynamic height based on content */
+}
+
+/* Header */
+.supervision-note-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  width: 100%;
+}
+
+.supervision-note-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Main Title and Icon Section */
+.supervision-note-title-section {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 30px 40px;
+}
+
+.supervision-note-icon {
+  flex-shrink: 0;
+}
+
+.supervision-note-icon-content {
+  width: 80px;
+  height: 80px;
+  background-color: #e0f2fe;
+  border: 3px solid #1e3a8a;
+  border-radius: 8px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.supervision-note-icon-graphic {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.supervision-note-icon-document {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  width: 30px;
+  height: 25px;
+  background-color: #1e3a8a;
+  border-radius: 2px;
+}
+
+.supervision-note-icon-document::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 20px;
+  height: 15px;
+  background-color: #e0f2fe;
+  border-radius: 1px;
+}
+
+.supervision-note-icon-magnifier {
+  position: absolute;
+  top: 20px;
+  right: 15px;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #1e3a8a;
+  border-radius: 50%;
+}
+
+.supervision-note-icon-magnifier::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  right: -8px;
+  width: 8px;
+  height: 2px;
+  background-color: #1e3a8a;
+  transform: rotate(45deg);
+}
+
+.supervision-note-icon-person {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 12px;
+  height: 12px;
+  background-color: #1e3a8a;
+  border-radius: 50%;
+}
+
+.supervision-note-icon-person::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  background-color: #1e3a8a;
+  border-radius: 2px;
+}
+
+.supervision-note-icon-text {
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: #1e3a8a;
+  font-weight: bold;
+  opacity: 0.3;
+  transform: translateX(-50%) scaleX(-1);
+}
+
+.supervision-note-main-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #374151;
+  margin: 0;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Separator Line */
+.supervision-note-separator {
+  height: 1px;
+  background-color: #d1d5db;
+  margin: 0 40px;
+}
+
+/* Project Details Section */
+.supervision-note-project-details {
+  padding: 30px 40px;
+}
+
+.supervision-note-section-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #374151;
+  margin: 0 0 25px 0;
+}
+
+.supervision-note-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.supervision-note-form-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.supervision-note-form-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+  min-height: 40px;
+}
+
+.supervision-note-form-label {
+  min-width: 150px;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+  padding: 10px 15px;
+  flex-shrink: 0;
+}
+
+.supervision-note-form-field {
+  flex: 1;
+  height: 20px;
+  border-bottom: 1px solid #d1d5db;
+  margin: 10px 15px;
+  background-color: transparent;
+}
+
+/* Content Section */
+.supervision-note-content-section {
+  padding: 30px 40px;
+  flex: 1;
+}
+
+.supervision-note-content-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.supervision-note-content-title-left,
+.supervision-note-content-title-right {
+  font-size: 16px;
+  font-weight: bold;
+  color: #374151;
+  margin: 0;
+}
+
+.supervision-note-content-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.supervision-note-content-box {
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  border-radius: 4px;
+  overflow: visible;
+  max-height: none;
+}
+
+.supervision-note-content-box-left {
+  /* Left box for inspection results */
+}
+
+.supervision-note-content-box-right {
+  /* Right box for documentation/photos */
+}
+
+/* Bottom Section */
+.supervision-note-bottom-section {
+  padding: 20px 40px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.supervision-note-bottom-text {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* Responsive Design for Supervision Note */
+@media (max-width: 768px) {
+  .supervision-note-container {
+    padding: 10px;
+  }
+
+  .supervision-note-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .supervision-note-title-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .supervision-note-main-title {
+    font-size: 22px;
+  }
+
+  .supervision-note-project-details {
+    padding: 20px;
+  }
+
+  .supervision-note-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .supervision-note-form-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 10px 0;
+  }
+
+  .supervision-note-form-label {
+    min-width: auto;
+    padding: 0;
+  }
+
+  .supervision-note-form-field {
+    width: 100%;
+    margin: 0;
+  }
+
+  .supervision-note-content-section {
+    padding: 20px;
+  }
+
+  .supervision-note-content-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .supervision-note-content-boxes {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 15px;
+  }
+
+  .supervision-note-content-box {
+    height: 200px;
+  }
+
+  .supervision-note-bottom-section {
+    padding: 15px 20px;
+  }
+
+  .supervision-note-header {
+    padding: 12px 20px;
+  }
+
+  .supervision-note-separator {
+    margin: 0 20px;
+  }
+}
+
+@media print {
+  .supervision-note-container {
+    padding: 0;
+  }
+
+  .supervision-note-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Address Notes Table Styles */
+.address-notes-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.address-notes-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.address-notes-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  width: 100%;
+}
+
+.address-notes-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.address-notes-content {
+  padding: 30px 40px;
+}
+
+.address-notes-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.address-notes-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+.address-notes-table th {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+}
+
+.address-notes-table th:last-child {
+  border-right: none;
+}
+
+.address-notes-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+}
+
+.address-notes-table td:last-child {
+  border-right: none;
+}
+
+.address-notes-table tr:hover {
+  background-color: #f9fafb;
+}
+
+.address-notes-empty {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+/* New Agreement Table Styles */
+.new-agreement-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.new-agreement-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.new-agreement-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  width: 100%;
+}
+
+.new-agreement-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.new-agreement-content {
+  padding: 30px 40px;
+}
+
+.new-agreement-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.new-agreement-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+.new-agreement-table th {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+}
+
+.new-agreement-table th:last-child {
+  border-right: none;
+}
+
+.new-agreement-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+  border-right: 1px solid #d1d5db;
+}
+
+.new-agreement-table td:last-child {
+  border-right: none;
+}
+
+.new-agreement-table tr:hover {
+  background-color: #f9fafb;
+}
+
+.new-agreement-empty {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+/* Safety Mention Table Styles */
+.safety-mention-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.safety-mention-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.safety-mention-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  width: 100%;
+}
+
+.safety-mention-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.safety-mention-content {
+  padding: 30px 40px;
+}
+
+.safety-mention-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.safety-mention-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+.safety-mention-table th {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.safety-mention-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.safety-mention-table tr:hover {
+  background-color: #f9fafb;
+}
+
+.safety-mention-empty {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+/* Technical Request Table Styles */
+.technical-request-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.technical-request-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.technical-request-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  width: 100%;
+}
+
+.technical-request-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.technical-request-content {
+  padding: 30px 40px;
+}
+
+.technical-request-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.technical-request-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+.technical-request-table th {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.technical-request-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.technical-request-table tr:hover {
+  background-color: #f9fafb;
+}
+
+.technical-request-empty {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+/* Deviation In Quality Assurance Table Styles */
+.deviation-quality-assurance-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.deviation-quality-assurance-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.deviation-quality-assurance-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  width: 100%;
+}
+
+.deviation-quality-assurance-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.deviation-quality-assurance-content {
+  padding: 30px 40px;
+}
+
+.deviation-quality-assurance-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.deviation-quality-assurance-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db;
+}
+
+.deviation-quality-assurance-table th {
+  background-color: #f3f4f6;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: bold;
+  color: #374151;
+  font-size: 14px;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.deviation-quality-assurance-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #374151;
+  border-bottom: 1px solid #d1d5db;
+}
+
+.deviation-quality-assurance-table tr:hover {
+  background-color: #f9fafb;
+}
+
+.deviation-quality-assurance-empty {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+.deviation-quality-assurance-details {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.deviation-detail-row {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.deviation-detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.deviation-quality-assurance-content-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.deviation-quality-assurance-content-box {
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* Responsive Design for All Table Components */
+@media (max-width: 768px) {
+  .address-notes-container,
+  .new-agreement-container,
+  .safety-mention-container,
+  .technical-request-container,
+  .deviation-quality-assurance-container {
+    padding: 10px;
+  }
+
+  .address-notes-page,
+  .new-agreement-page,
+  .safety-mention-page,
+  .technical-request-page,
+  .deviation-quality-assurance-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .address-notes-content,
+  .new-agreement-content,
+  .safety-mention-content,
+  .technical-request-content,
+  .deviation-quality-assurance-content {
+    padding: 20px;
+  }
+
+  .address-notes-header,
+  .new-agreement-header,
+  .safety-mention-header,
+  .technical-request-header,
+  .deviation-quality-assurance-header {
+    padding: 12px 20px;
+  }
+
+  .address-notes-table,
+  .new-agreement-table,
+  .safety-mention-table,
+  .technical-request-table,
+  .deviation-quality-assurance-table {
+    font-size: 12px;
+  }
+
+  .address-notes-table th,
+  .address-notes-table td,
+  .new-agreement-table th,
+  .new-agreement-table td,
+  .safety-mention-table th,
+  .safety-mention-table td,
+  .technical-request-table th,
+  .technical-request-table td,
+  .deviation-quality-assurance-table th,
+  .deviation-quality-assurance-table td {
+    padding: 8px 12px;
+  }
+
+  .deviation-quality-assurance-details {
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+
+  .deviation-quality-assurance-content-boxes {
+    gap: 15px;
+  }
+
+  .deviation-quality-assurance-content-box {
+    margin-bottom: 15px;
+  }
+}
+
+@media print {
+  .address-notes-container,
+  .new-agreement-container,
+  .safety-mention-container,
+  .technical-request-container {
+    padding: 0;
+  }
+
+  .address-notes-page,
+  .new-agreement-page,
+  .safety-mention-page,
+  .technical-request-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
+
+/* Drawing and Document Table Styles */
+.drawing-document-container {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 20px;
+}
+
+.drawing-document-page {
+  max-width: 210mm;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.drawing-document-header {
+  background-color: #1e3a8a;
+  color: white;
+  padding: 15px 40px;
+  width: 100%;
+}
+
+.drawing-document-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.drawing-document-content {
+  padding: 30px 40px;
+}
+
+/* Hierarchical Drawing Structure */
+.drawing-hierarchy-container {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.drawing-group {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  background-color: #fafafa;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #1e3a8a;
+  margin: 0 0 15px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #1e3a8a;
+}
+
+.main-drawings-section,
+.child-drawings-section {
+  margin-bottom: 25px;
+}
+
+.child-drawings-section {
+  margin-left: 20px;
+  border-left: 3px solid #1e3a8a;
+  padding-left: 20px;
+}
+
+.main-drawing-item,
+.child-drawing-item {
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.child-drawing-item {
+  background-color: #f8fafc;
+  border-left: 4px solid #3b82f6;
+}
+
+.drawing-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.drawing-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+
+.drawing-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.drawing-type {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1e3a8a;
+  background-color: #e0f2fe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.parent-index {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.drawing-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.upload-date {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.drawing-link {
+  text-align: right;
+}
+
+.view-drawing-link {
+  display: inline-block;
+  background-color: #1e3a8a;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.view-drawing-link:hover {
+  background-color: #1e40af;
+  color: white;
+  text-decoration: none;
+}
+
+.drawing-document-empty {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+/* Responsive Design for Drawing and Document Table */
+@media (max-width: 768px) {
+  .drawing-document-container {
+    padding: 10px;
+  }
+
+  .drawing-document-page {
+    max-width: 100%;
+    min-height: auto;
+  }
+
+  .drawing-document-content {
+    padding: 20px;
+  }
+
+  .drawing-document-header {
+    padding: 12px 20px;
+  }
+
+  .drawing-group {
+    padding: 15px;
+  }
+
+  .child-drawings-section {
+    margin-left: 10px;
+    padding-left: 15px;
+  }
+
+  .main-drawing-item,
+  .child-drawing-item {
+    padding: 12px;
+  }
+
+  .drawing-item-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .drawing-details {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .drawing-link {
+    text-align: left;
+    margin-top: 10px;
+  }
+
+  .view-drawing-link {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  .section-title {
+    font-size: 16px;
+  }
+
+  .drawing-name {
+    font-size: 14px;
+  }
+}
+
+@media print {
+  .drawing-document-container {
+    padding: 0;
+  }
+
+  .drawing-document-page {
+    box-shadow: none;
+    max-width: 100%;
+    min-height: auto;
+  }
+}
