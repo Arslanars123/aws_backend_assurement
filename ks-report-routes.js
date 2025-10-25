@@ -2491,13 +2491,20 @@ function createKsReportRoutes(db) {
           const canvas = await html2canvas(page, {
             scale: 1.5,
             useCORS: false,
-            allowTaint: false, // Set to false to prevent tainted canvas
+            allowTaint: false,
             backgroundColor: '#ffffff',
             windowWidth: page.scrollWidth || 800,
             windowHeight: page.scrollHeight || 2970,
             logging: false,
-            imageTimeout: 0, // Don't wait for images since they're replaced
-            removeContainer: true
+            imageTimeout: 0,
+            removeContainer: true,
+            proxy: undefined,
+            onclone: null,
+            cacheBust: false,
+            ignoreElements: (element) => {
+              // Ignore external stylesheet requests
+              return element.tagName === 'LINK' && element.rel === 'stylesheet';
+            }
           });
           
           // Restore iframes
