@@ -1995,6 +1995,59 @@ function createKsReportRoutes(db) {
         `<tbody id="safetyMentionTableBody">${safetyMentionTableRows}</tbody>`
       );
 
+      // Fetch Technical Request data from "requests" collection
+      const requestsQuery = {};
+      if (companyId) requestsQuery.companyId = companyId;
+      if (projectId) requestsQuery.projectsId = projectId;
+
+      const requestsArray = await db
+        .collection("requests")
+        .find(requestsQuery)
+        .toArray();
+
+      // Generate Technical Request table rows
+      let technicalRequestTableRows = "";
+      if (requestsArray.length > 0) {
+        requestsArray.forEach((request, index) => {
+          technicalRequestTableRows += `
+          <tr>
+            <td>${request.item || "-"}</td>
+            <td>${
+              request.createdAt
+                ? new Date(request.createdAt).toLocaleDateString("en-GB")
+                : "-"
+            }</td>
+            <td>
+              <button class="show-note-btn" onclick="window.open('/supervision-note/${
+                request._id
+              }?companyId=${companyId}&projectId=${projectId}&source=TechnicalRequestTable', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                Show Technical Request
+              </button>
+            </td>
+          </tr>
+        `;
+        });
+      } else {
+        technicalRequestTableRows = `
+          <tr>
+            <td colspan="3" style="text-align: center;">No technical requests found for this project.</td>
+          </tr>
+        `;
+      }
+
+      // Read technical request HTML
+      const technicalRequestPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "technical-request.html"
+      );
+      let technicalRequestHtml = fs.readFileSync(technicalRequestPath, "utf8");
+
+      technicalRequestHtml = technicalRequestHtml.replace(
+        /<tbody id="technicalRequestTableBody">.*?<\/tbody>/s,
+        `<tbody id="technicalRequestTableBody">${technicalRequestTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
@@ -2020,6 +2073,7 @@ function createKsReportRoutes(db) {
       addressNotesHtml = updatePageFooter(addressNotesHtml);
       newAgreementHtml = updatePageFooter(newAgreementHtml);
       safetyMentionHtml = updatePageFooter(safetyMentionHtml);
+      technicalRequestHtml = updatePageFooter(technicalRequestHtml);
 
       // Combine all pages
       const combinedHtml =
@@ -2039,7 +2093,8 @@ function createKsReportRoutes(db) {
         receptionControlHtml +
         addressNotesHtml +
         newAgreementHtml +
-        safetyMentionHtml;
+        safetyMentionHtml +
+        technicalRequestHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
@@ -2081,12 +2136,15 @@ function createKsReportRoutes(db) {
       const isAgreement =
         source === "NewAgreementTable" || source === "agreement";
       const isSafetyMention = source === "SafetyMentionTable";
+      const isTechnicalRequest = source === "TechnicalRequestTable";
 
       let collectionName = "notes"; // default
       if (isAgreement) {
         collectionName = "news";
       } else if (isSafetyMention) {
         collectionName = "mentions";
+      } else if (isTechnicalRequest) {
+        collectionName = "requests";
       }
       let note = await db
         .collection(collectionName)

@@ -2515,8 +2515,7 @@
 .supervision-note-header {
   background-color: #1e3a8a;
   color: white;
-  padding: 15px 40px;
-  width: 100%;
+  padding: 20px 40px;
 }
 
 .supervision-note-header-title {
@@ -3088,8 +3087,7 @@
 .technical-request-header {
   background-color: #1e3a8a;
   color: white;
-  padding: 15px 40px;
-  width: 100%;
+  padding: 20px 40px;
 }
 
 .technical-request-header-title {
