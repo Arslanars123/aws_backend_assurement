@@ -19330,33 +19330,68 @@ const {
 
 app.post("/generate-supervision-note-pdfs", async (req, res) => {
   try {
-    const { companyId, projectId, notes, apiData } = req.body;
+    const { companyId, projectId, noteIds, source } = req.body;
 
-    if (!companyId || !projectId || !notes || !Array.isArray(notes)) {
+    if (!companyId || !projectId || !noteIds || !Array.isArray(noteIds)) {
       return res.status(400).json({
         success: false,
         message:
-          "Missing required fields: companyId, projectId, and notes array",
+          "Missing required fields: companyId, projectId, and noteIds array",
       });
     }
 
-    console.log(`Generating PDFs for ${notes.length} supervision notes`);
+    console.log(`Generating PDFs for ${noteIds.length} supervision notes`);
 
     const pdfUrls = [];
 
-    // Generate PDF for each note
-    for (const note of notes) {
+    // Fetch company and project data from backend
+    const [company, project] = await Promise.all([
+      db.collection("companies").findOne({ _id: new ObjectId(companyId) }),
+      db.collection("projects").findOne({ _id: new ObjectId(projectId) }),
+    ]);
+
+    if (!company || !project) {
+      return res.status(404).json({
+        success: false,
+        message: "Company or project not found",
+      });
+    }
+
+    const finalApiData = {
+      companyDetails: company,
+      projectDetail: project,
+      source: source || "SupervisionNote",
+    };
+
+    // Generate PDF for each note ID
+    for (const noteId of noteIds) {
       try {
-        const pdfUrl = await generateSupervisionNotePdf(note, apiData);
+        // Fetch the note data from database
+        const note = await db
+          .collection("notes")
+          .findOne({ _id: new ObjectId(noteId) });
+
+        if (!note) {
+          console.error(`Note ${noteId} not found`);
+          pdfUrls.push({
+            noteId: noteId,
+            pdfUrl: null,
+            error: "Note not found",
+          });
+          continue;
+        }
+
+        // Generate PDF
+        const pdfUrl = await generateSupervisionNotePdf(note, finalApiData);
         pdfUrls.push({
-          noteId: note._id,
+          noteId: noteId,
           pdfUrl: pdfUrl,
         });
-        console.log(`Generated PDF for note ${note._id}: ${pdfUrl}`);
+        console.log(`Generated PDF for note ${noteId}: ${pdfUrl}`);
       } catch (error) {
-        console.error(`Failed to generate PDF for note ${note._id}:`, error);
+        console.error(`Failed to generate PDF for note ${noteId}:`, error);
         pdfUrls.push({
-          noteId: note._id,
+          noteId: noteId,
           pdfUrl: null,
           error: error.message,
         });
