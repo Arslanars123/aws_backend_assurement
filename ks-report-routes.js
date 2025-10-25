@@ -222,6 +222,11 @@ function createKsReportRoutes(db) {
         "abdullahksreport",
         "received-case-documents.html"
       );
+      const checklistPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "checklist.html"
+      );
 
       let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
       let tocHtml = fs.readFileSync(tocPath, "utf8");
@@ -235,6 +240,7 @@ function createKsReportRoutes(db) {
         receivedCaseDocumentsPath,
         "utf8"
       );
+      let checklistHtml = fs.readFileSync(checklistPath, "utf8");
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -832,6 +838,62 @@ function createKsReportRoutes(db) {
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
 
+      // Populate Checklist
+      const checks = projectDetail.checks || [];
+      let checklistTableRows = "";
+      checks.forEach((check) => {
+        checklistTableRows += `
+          <tr class="checklist-data-row">
+            <td class="checklist-document-cell">${check.name || ""}</td>
+            <td class="checklist-approved-date-cell">${formatDate(
+              check.approvedDate
+            )}</td>
+            <td class="checklist-note-cell">${check.approvalNote || ""}</td>
+            <td class="checklist-approved-cell">${
+              check.isAproved ? "Yes" : "No"
+            }</td>
+          </tr>
+        `;
+      });
+      if (checks.length === 0) {
+        checklistTableRows = `
+          <tr class="checklist-data-row">
+            <td class="checklist-document-cell"></td>
+            <td class="checklist-approved-date-cell"></td>
+            <td class="checklist-note-cell"></td>
+            <td class="checklist-approved-cell"></td>
+          </tr>
+          <tr class="checklist-data-row">
+            <td class="checklist-document-cell"></td>
+            <td class="checklist-approved-date-cell"></td>
+            <td class="checklist-note-cell"></td>
+            <td class="checklist-approved-cell"></td>
+          </tr>
+          <tr class="checklist-data-row">
+            <td class="checklist-document-cell"></td>
+            <td class="checklist-approved-date-cell"></td>
+            <td class="checklist-note-cell"></td>
+            <td class="checklist-approved-cell"></td>
+          </tr>
+        `;
+      }
+      checklistHtml = checklistHtml.replace(
+        /<tbody id="checklistTableBody">.*?<\/tbody>/s,
+        `<tbody id="checklistTableBody">${checklistTableRows}</tbody>`
+      );
+
+      // Footer for Checklist
+      checklistHtml = checklistHtml.replace(
+        /id="footerCompanyLogo"/g,
+        `id="footerCompanyLogo" src="${companyLogo}" ${
+          companyLogo ? 'style="display: block;"' : 'style="display: none;"'
+        }`
+      );
+      checklistHtml = checklistHtml.replace(
+        /id="footerCompanyLogoFallback">A/g,
+        `id="footerCompanyLogoFallback">${firstLetter}`
+      );
+
       // Combine all pages
       const combinedHtml =
         reportPage1Html +
@@ -839,7 +901,8 @@ function createKsReportRoutes(db) {
         projectDetailsHtml +
         affiliatedAdvisersHtml +
         documentsInfoHtml +
-        receivedCaseDocumentsHtml;
+        receivedCaseDocumentsHtml +
+        checklistHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
