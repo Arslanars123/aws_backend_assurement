@@ -3629,6 +3629,33 @@ app.get("/get-deviations", async (req, res) => {
   }
 });
 
+// Get deviations for static report (B7)
+app.get("/get-deviation-b7", async (req, res) => {
+  try {
+    const { projectId, subjectMatterId } = req.query;
+    
+    if (!projectId || !subjectMatterId) {
+      return res.status(400).json({ 
+        error: "Missing required parameters: projectId and subjectMatterId" 
+      });
+    }
+
+    const query = {
+      "projectsId": { $in: [projectId] },
+      "profession.SubjectMatterId": subjectMatterId,
+      "type": "Static Report"
+    };
+
+    console.log("Querying deviations with:", query);
+    const deviations = await db.collection("deviations").find(query).toArray();
+    console.log("Found deviations:", deviations.length);
+    res.status(200).json(deviations);
+  } catch (error) {
+    console.error("Error fetching deviation B7:", error);
+    res.status(500).json({ error: "Failed to fetch deviations" });
+  }
+});
+
 app.get("/get-special-control", async (req, res) => {
   try {
     const { companyId, projectId, specialControleId } = req.query;
