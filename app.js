@@ -17,5 +17,8 @@ app.use("/uploads/previews", express.static("uploads/previews"));
 app.use("/templates", express.static("static-report-templates"));
 app.use(express.static(path.join(__dirname, "public")));
 
+// Serve HTML files from root directory
+app.use(express.static(__dirname));
+
 console.log("app.js loaded");
 module.exports = app;
