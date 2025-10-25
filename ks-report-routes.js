@@ -2418,7 +2418,7 @@ function createKsReportRoutes(db) {
   <script src="/html2canvas.min.js"></script>
   <script src="/jspdf.umd.min.js"></script>
   <script>
-    function exportToPDF() {
+    async function exportToPDF() {
       const statusEl = document.getElementById('status');
       const btn = document.getElementById('exportBtn');
       
@@ -2460,36 +2460,56 @@ function createKsReportRoutes(db) {
           
           const page = pages[currentPage];
           
-          // Hide export bar during capture
-          const exportBar = document.getElementById('exportBar');
-          const prevDisplay = exportBar.style.display;
-          exportBar.style.display = 'none';
+          // Keep export bar visible during capture so user can see progress
+          // Don't hide it
           
-          // Small delay to ensure all images are loaded
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Hide iframes temporarily and add notice
+          const iframes = page.querySelectorAll('iframe');
+          const iframeNotices = [];
+          iframes.forEach(iframe => {
+            iframe.style.display = 'none';
+            const notice = document.createElement('div');
+            notice.style.cssText = 'padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b; color: #92400e; font-size: 12px; margin: 5px 0;';
+            notice.textContent = 'ℹ PDF/Drawing content - view in browser for full details';
+            iframeNotices.push({ iframe, notice });
+            iframe.parentNode.insertBefore(notice, iframe);
+          });
+          
+          // Replace S3 images with placeholders since they can't be captured due to CORS
+          const images = page.querySelectorAll('img');
+          const imagePlaceholders = [];
+          images.forEach(img => {
+            if (img.src && (img.src.includes('s3.amazonaws.com') || img.src.includes('localhost'))) {
+              const placeholder = document.createElement('div');
+              placeholder.style.cssText = 'padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 11px; min-height: 50px; display: flex; align-items: center; justify-content: center;';
+              placeholder.textContent = '[Image: ' + (img.alt || 'Content preview') + ']\\nPlease view in browser for full image';
+              imagePlaceholders.push({ img, placeholder });
+              img.parentNode.replaceChild(placeholder, img);
+            }
+          });
           
           const canvas = await html2canvas(page, {
             scale: 1.5,
-            useCORS: true,
-            allowTaint: true,
+            useCORS: false,
+            allowTaint: false, // Set to false to prevent tainted canvas
             backgroundColor: '#ffffff',
             windowWidth: page.scrollWidth || 800,
             windowHeight: page.scrollHeight || 2970,
             logging: false,
-            onclone: (clonedDoc) => {
-              // Replace iframes with placeholder text
-              const clonedIframes = clonedDoc.querySelectorAll('iframe');
-              clonedIframes.forEach(iframe => {
-                const placeholder = clonedDoc.createElement('div');
-                placeholder.style.cssText = 'display: inline-block; padding: 20px; background: #f3f4f6; border: 2px dashed #9ca3af; text-align: center; color: #6b7280; font-size: 12px; min-height: 100px;';
-                placeholder.textContent = '[Drawing/PDF - viewing in original required]';
-                iframe.parentNode?.replaceChild(placeholder, iframe);
-              });
-            }
+            imageTimeout: 0, // Don't wait for images since they're replaced
+            removeContainer: true
           });
           
-          // Restore export bar
-          exportBar.style.display = prevDisplay;
+          // Restore iframes
+          iframeNotices.forEach(({ iframe, notice }) => {
+            iframe.style.display = '';
+            notice.remove();
+          });
+          
+          // Restore images
+          imagePlaceholders.forEach(({ img, placeholder }) => {
+            placeholder.parentNode.replaceChild(img, placeholder);
+          });
           
           const imgData = canvas.toDataURL('image/png');
           const pdfW = 210; // A4 width
