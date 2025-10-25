@@ -19366,13 +19366,34 @@ app.post("/generate-supervision-note-pdfs", async (req, res) => {
     // Generate PDF for each note ID
     for (const noteId of noteIds) {
       try {
-        // Fetch the note data from database
+        // Determine collection based on source
+        let collectionName;
+        switch (source) {
+          case "AddressNotesTable":
+            collectionName = "notes";
+            break;
+          case "NewAgreementTable":
+            collectionName = "news";
+            break;
+          case "SafetyMentionTable":
+            collectionName = "mentions";
+            break;
+          case "TechnicalRequestTable":
+            collectionName = "requests";
+            break;
+          default:
+            collectionName = "notes";
+        }
+
+        // Fetch the note data from appropriate collection
         const note = await db
-          .collection("notes")
+          .collection(collectionName)
           .findOne({ _id: new ObjectId(noteId) });
 
         if (!note) {
-          console.error(`Note ${noteId} not found`);
+          console.error(
+            `Note ${noteId} not found in collection ${collectionName}`
+          );
           pdfUrls.push({
             noteId: noteId,
             pdfUrl: null,
