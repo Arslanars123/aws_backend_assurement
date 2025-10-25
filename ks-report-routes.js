@@ -1185,6 +1185,68 @@ function createKsReportRoutes(db) {
         `<div id="independentControllersContainer">${independentControllersHtml2}</div>`
       );
 
+      // Populate EmployeeAndProduction workers table
+      const workers = data.users?.workers || [];
+      let workersTableRows = "";
+      workers.forEach((worker, index) => {
+        const photoSrc =
+          worker.picture?.s3Location ||
+          (worker.picture ? `/uploads/${worker.picture}` : "");
+        const photoDisplay = photoSrc
+          ? 'style="display: block;"'
+          : 'style="display: none;"';
+
+        workersTableRows += `
+          <tr class="employee-data-row">
+            <td class="employee-id-cell">07.${String(index + 1).padStart(
+              2,
+              "0"
+            )}</td>
+            <td class="employee-role-cell">${
+              worker.role || worker.userRole || ""
+            }</td>
+            <td class="employee-name-cell">${worker.name || ""}</td>
+            <td class="employee-email-cell">${worker.username || ""}</td>
+            <td class="employee-mobile-cell">${worker.phone || ""}</td>
+            <td class="employee-photo-cell">
+              ${
+                photoSrc
+                  ? `
+                <div class="employee-photo-container">
+                  <img src="${photoSrc}" alt="${
+                      worker.name || "Worker"
+                    } Photo" class="employee-photo" ${photoDisplay} onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                  <div class="employee-photo-placeholder" style="display: none;">Photo/ID</div>
+                </div>
+              `
+                  : `
+                <span class="employee-no-photo">No Photo</span>
+              `
+              }
+            </td>
+          </tr>
+        `;
+      });
+
+      // If no workers, add empty row
+      if (workers.length === 0) {
+        workersTableRows = `
+          <tr class="employee-data-row">
+            <td class="employee-id-cell"></td>
+            <td class="employee-role-cell"></td>
+            <td class="employee-name-cell"></td>
+            <td class="employee-email-cell"></td>
+            <td class="employee-mobile-cell"></td>
+            <td class="employee-photo-cell"></td>
+          </tr>
+        `;
+      }
+
+      employeeProductionHtml = employeeProductionHtml.replace(
+        /<tbody id="workersTableBody">.*?<\/tbody>/s,
+        `<tbody id="workersTableBody">${workersTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
