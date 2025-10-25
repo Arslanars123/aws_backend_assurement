@@ -2178,6 +2178,10 @@ function createKsReportRoutes(db) {
         `<div class="supervision-note-content-boxes" id="documentationBoxes">${documentationHtml}`
       );
 
+      // Read and inline the CSS for better compatibility
+      const cssPath = path.join(__dirname, "abdullahksreport", "style.css");
+      const cssContent = fs.readFileSync(cssPath, "utf8");
+
       // Wrap in full HTML document
       const fullSupervisionNoteHtml = `
 <!DOCTYPE html>
@@ -2186,13 +2190,8 @@ function createKsReportRoutes(db) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Supervision Note</title>
-    <link rel="stylesheet" href="abdullahksreport/style.css">
     <style>
-      body {
-        margin: 0;
-        padding: 0;
-        background-color: #f5f5f5;
-      }
+      ${cssContent}
     </style>
 </head>
 <body>
