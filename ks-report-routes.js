@@ -1628,6 +1628,7 @@ function createKsReportRoutes(db) {
               const drawing = taskEntry?.drawing;
               const buildingParts = taskEntry?.buildingParts;
               const annotatedPdfs = taskEntry?.annotatedPdfs;
+
               const markPictureObjects = taskEntry?.markPictureObjects;
 
               const hasMainDrawings = drawing?.mainDrawings?.length > 0;
@@ -1665,11 +1666,16 @@ function createKsReportRoutes(db) {
                                     mainDrawing.s3Location
                                   }#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
                                   width="100%"
-                                  height="400"
-                                  style="border: 1px solid #ccc; margin-bottom: 10px;"
+                                  height="1100"
+                                  style="border: 1px solid #ccc; margin-bottom: 5px;"
                                   title="Main Drawing ${mainIndex + 1}"
                                   scrolling="no"
                                 ></iframe>
+                                <a href="${
+                                  mainDrawing.s3Location
+                                }" target="_blank" style="color: #1e3a8a; text-decoration: underline; font-size: 13px; padding: 8px 12px; display: inline-block; border: 1px solid #1e3a8a; border-radius: 4px;">
+                                  🔗 View Full Drawing
+                                </a>
                               </div>
                             `
                                 )
@@ -1688,16 +1694,18 @@ function createKsReportRoutes(db) {
                                     childDrawing.filename ||
                                     "Unknown"
                                   }</h4>
-                                <iframe
-                                  src="${
+                                <div style="border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background: #f9fafb; text-align: center;">
+                                  <a href="${
                                     childDrawing.s3Location
-                                  }#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
-                                  width="100%"
-                                  height="400"
-                                  style="border: 1px solid #ccc; margin-bottom: 10px;"
-                                  title="Child Drawing ${childIndex + 1}"
-                                  scrolling="no"
-                                ></iframe>
+                                  }" target="_blank" style="color: #1e3a8a; text-decoration: underline; font-size: 14px;">
+                                    📄 View Drawing (${
+                                      childDrawing.originalname ||
+                                      childDrawing.original ||
+                                      childDrawing.filename ||
+                                      "Unknown"
+                                    })
+                                  </a>
+                                </div>
                               </div>
                             `
                                 )
@@ -2489,7 +2497,7 @@ function createKsReportRoutes(db) {
           });
           
           const canvas = await html2canvas(page, {
-            scale: 1.5,
+            scale: 1, // Reduced from 1.5 for faster rendering
             useCORS: false,
             allowTaint: false,
             backgroundColor: '#ffffff',
@@ -2518,7 +2526,7 @@ function createKsReportRoutes(db) {
             placeholder.parentNode.replaceChild(img, placeholder);
           });
           
-          const imgData = canvas.toDataURL('image/png');
+          const imgData = canvas.toDataURL('image/jpeg', 0.85);
           const pdfW = 210; // A4 width
           const pdfH = 297; // A4 height
           
@@ -2546,8 +2554,8 @@ function createKsReportRoutes(db) {
             const pageCtx = pageCanvas.getContext('2d');
             pageCtx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
             
-            const pageImgData = pageCanvas.toDataURL('image/png');
-            pdf.addImage(pageImgData, 'PNG', 0, 0, imgW, pageImgH);
+            const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.85);
+            pdf.addImage(pageImgData, 'JPEG', 0, 0, imgW, pageImgH);
             
             yOffset += pdfH;
           }
