@@ -212,6 +212,11 @@ function createKsReportRoutes(db) {
         "abdullahksreport",
         "affiliated-advisers.html"
       );
+      const documentsInfoPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "documents-and-information.html"
+      );
 
       let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
       let tocHtml = fs.readFileSync(tocPath, "utf8");
@@ -220,6 +225,7 @@ function createKsReportRoutes(db) {
         affiliatedAdvisersPath,
         "utf8"
       );
+      let documentsInfoHtml = fs.readFileSync(documentsInfoPath, "utf8");
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -708,9 +714,25 @@ function createKsReportRoutes(db) {
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
 
+      // Footer for DocumentsAndInformation
+      documentsInfoHtml = documentsInfoHtml.replace(
+        /id="footerCompanyLogo"/g,
+        `id="footerCompanyLogo" src="${companyLogo}" ${
+          companyLogo ? 'style="display: block;"' : 'style="display: none;"'
+        }`
+      );
+      documentsInfoHtml = documentsInfoHtml.replace(
+        /id="footerCompanyLogoFallback">A/g,
+        `id="footerCompanyLogoFallback">${firstLetter}`
+      );
+
       // Combine all pages
       const combinedHtml =
-        reportPage1Html + tocHtml + projectDetailsHtml + affiliatedAdvisersHtml;
+        reportPage1Html +
+        tocHtml +
+        projectDetailsHtml +
+        affiliatedAdvisersHtml +
+        documentsInfoHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
