@@ -1914,8 +1914,8 @@ function createKsReportRoutes(db) {
             <td>
               <button class="show-note-btn" onclick="window.open('/supervision-note/${
                 agreement._id
-              }?companyId=${companyId}&projectId=${projectId}', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
-                Show Note
+              }?companyId=${companyId}&projectId=${projectId}&source=NewAgreementTable', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                Show Agreement
               </button>
             </td>
           </tr>
@@ -2020,19 +2020,28 @@ function createKsReportRoutes(db) {
   router.get("/supervision-note/:noteId", async (req, res) => {
     try {
       const { noteId } = req.params;
-      const { companyId, projectId } = req.query;
+      const { companyId, projectId, source } = req.query;
 
-      // Fetch the note from database
-      const note = await db
-        .collection("notes")
+      // Determine which collection to query based on the source
+      const isAgreement =
+        source === "NewAgreementTable" || source === "agreement";
+
+      const collectionName = isAgreement ? "news" : "notes";
+      let note = await db
+        .collection(collectionName)
         .findOne({ _id: new ObjectId(noteId) });
 
       if (!note) {
         return res.status(404).send(`
           <html>
             <body style="font-family: Arial; padding: 40px; text-align: center;">
-              <h2>Note Not Found</h2>
-              <p>No supervision note found with the given ID.</p>
+              <h2>${isAgreement ? "Agreement" : "Note"} Not Found</h2>
+              <p>No ${
+                isAgreement ? "agreement" : "supervision note"
+              } found with the given ID: ${noteId}</p>
+              <p>Source parameter: ${source || "not provided"}</p>
+              <p>Collection checked: ${collectionName}</p>
+              <p>Is Agreement: ${isAgreement}</p>
             </body>
           </html>
         `);
@@ -2064,7 +2073,9 @@ function createKsReportRoutes(db) {
         }
       };
 
-      // Populate fields
+      // Populate fields - handle both notes and agreements
+      // isAgreement is already set based on source parameter above
+
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="subjectField"></div>',
         `id="subjectField">${note.item || ""}</div>`
@@ -2085,13 +2096,46 @@ function createKsReportRoutes(db) {
         'id="addressField"></div>',
         `id="addressField">${data.companyDetails?.address || ""}</div>`
       );
-      supervisionNoteHtml = supervisionNoteHtml.replace(
-        'id="recipientNameField"></div>',
-        `id="recipientNameField">${note.users?.name || ""}</div>`
-      );
+
+      // Handle user info - for agreements, there might not be users field
+      if (isAgreement) {
+        // For agreements, try to get user info from the note if available
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="recipientNameField"></div>',
+          `id="recipientNameField">${
+            note.users?.name || note.projectManager?.name || ""
+          }</div>`
+        );
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="recipientEmailField"></div>',
+          `id="recipientEmailField">${
+            note.users?.username || note.projectManager?.username || ""
+          }</div>`
+        );
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="userRoleField"></div>',
+          `id="userRoleField">${note.users?.userRole || ""}</div>`
+        );
+      } else {
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="recipientNameField"></div>',
+          `id="recipientNameField">${note.users?.name || ""}</div>`
+        );
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="recipientEmailField"></div>',
+          `id="recipientEmailField">${note.users?.username || ""}</div>`
+        );
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="userRoleField"></div>',
+          `id="userRoleField">${note.users?.userRole || ""}</div>`
+        );
+      }
+
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="handicraftField"></div>',
-        `id="handicraftField">${note.profession?.GroupName || ""}</div>`
+        `id="handicraftField">${
+          note.profession?.GroupName || note.supplementory || ""
+        }</div>`
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="inspectedDateField"></div>',
@@ -2105,7 +2149,9 @@ function createKsReportRoutes(db) {
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="createdDateField"></div>',
-        `id="createdDateField">${formatDate(note.createdAt)}</div>`
+        `id="createdDateField">${formatDate(
+          note.createdAt || note.createdAt
+        )}</div>`
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="preparedByField"></div>',
@@ -2126,16 +2172,8 @@ function createKsReportRoutes(db) {
         `id="professionField">${note.profession?.SubjectMatterId || ""}</div>`
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
-        'id="recipientEmailField"></div>',
-        `id="recipientEmailField">${note.users?.username || ""}</div>`
-      );
-      supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="projectManagerField"></div>',
         `id="projectManagerField">${note.projectManager?.name || ""}</div>`
-      );
-      supervisionNoteHtml = supervisionNoteHtml.replace(
-        'id="userRoleField"></div>',
-        `id="userRoleField">${note.users?.userRole || ""}</div>`
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="noteIdField"></div>',
