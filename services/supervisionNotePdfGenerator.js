@@ -35,14 +35,44 @@ async function generateSupervisionNotePdf(note, apiData) {
     // Generate HTML for the supervision note
     const html = generateSupervisionNoteHtml(note, apiData);
 
-    // Generate PDF using Puppeteer
+    // Generate PDF using Puppeteer with better error handling
     const browser = await puppeteer.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-web-security",
+        "--disable-features=VizDisplayCompositor",
+      ],
+      timeout: 60000,
     });
+
     const page = await browser.newPage();
 
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    // Set longer timeouts
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(30000);
+
+    // Disable images and iframes for faster loading, then re-enable
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      const resourceType = req.resourceType();
+      if (resourceType === "image" || resourceType === "media") {
+        req.continue();
+      } else {
+        req.continue();
+      }
+    });
+
+    await page.setContent(html, {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
+
+    // Wait a bit for any async content to load
+    await page.waitForTimeout(2000);
 
     const pdfBuffer = await page.pdf({
       format: "A4",
@@ -53,6 +83,7 @@ async function generateSupervisionNotePdf(note, apiData) {
         bottom: "20mm",
         left: "20mm",
       },
+      timeout: 30000,
     });
 
     await browser.close();
@@ -436,7 +467,17 @@ function generateDrawingsHtml(note) {
     <div class="supervision-note-content-box">
       <div>
         <h4>Main Drawing: ${mainDrawing.originalname}</h4>
-        <p>Drawing preview - Reference: ${mainDrawing.s3Location}</p>
+        <div style="border: 1px solid #d1d5db; border-radius: 4px; padding: 10px; background-color: #f9fafb;">
+          <p style="margin: 0; font-size: 14px; color: #374151;">
+            <strong>Drawing Reference:</strong> ${mainDrawing.originalname}
+          </p>
+          <p style="margin: 5px 0 0 0; font-size: 12px; color: #6b7280;">
+            S3 Location: ${mainDrawing.s3Location}
+          </p>
+          <p style="margin: 10px 0 0 0; font-size: 12px; color: #9ca3af;">
+            Note: PDF viewer content is available at the S3 location above
+          </p>
+        </div>
       </div>
     </div>
   `
@@ -457,8 +498,14 @@ function generateAnnotatedPdfsHtml(note) {
           .map(
             (pdf, index) => `
           <div style="margin-bottom: 15px;">
-            <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pdf.originalname}</p>
-            <p style="font-size: 11px; color: #9ca3af;">Reference: ${pdf.s3Location}</p>
+            <img
+              src="${pdf.s3Location}"
+              alt="Annotated ${index + 1}"
+              style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+            />
+            <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${
+              pdf.originalname
+            }</p>
           </div>
         `
           )
@@ -481,14 +528,16 @@ function generateMarkPicturesHtml(note) {
           .map(
             (pic, index) => `
           <div style="margin-bottom: 15px;">
+            <img
+              src="${pic.s3Location}"
+              alt="Mark ${index + 1}"
+              style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 5px;"
+            />
             ${
               pic.description
                 ? `<p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pic.description}</p>`
                 : ""
             }
-            <p style="font-size: 11px; color: #9ca3af;">Reference: ${
-              pic.s3Location
-            }</p>
           </div>
         `
           )
@@ -507,7 +556,11 @@ function generateBuildingPartImageHtml(note) {
     <div class="supervision-note-content-box">
       <div>
         <h4>Building Part: ${note.buildingPart.buildingPartDetail.name}</h4>
-        <p style="font-size: 11px; color: #9ca3af;">Reference: ${note.buildingPart.buildingPartDetail.image.s3Location}</p>
+        <img
+          src="${note.buildingPart.buildingPartDetail.image.s3Location}"
+          alt="Building Part"
+          style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+        />
       </div>
     </div>
   `;
