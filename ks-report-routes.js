@@ -1322,6 +1322,138 @@ function createKsReportRoutes(db) {
         `<tbody id="supervisionTableBody">${supervisionTableRows}</tbody>`
       );
 
+      // Populate StandardForControlPlan
+      const tasks = projectDetail.tasks || [];
+      const selectedProfession = req.query.profession;
+
+      // Filter tasks by profession and type
+      const tasksForProfession = tasks.filter(
+        (task) => task.SubjectMatterId === selectedProfession
+      );
+      const receivingTasks = tasksForProfession.filter(
+        (task) => task.Type === "Receive"
+      );
+      const processTasks = tasksForProfession.filter(
+        (task) => task.Type === "Process"
+      );
+      const finalTasks = tasksForProfession.filter(
+        (task) => task.Type === "Final"
+      );
+
+      // Helper function to get circle color
+      const getCircleColor = (color) => {
+        switch (color) {
+          case "purple":
+            return "#8b5cf6";
+          case "yellow":
+            return "#f59e0b";
+          case "green":
+            return "#10b981";
+          default:
+            return "#6b7280";
+        }
+      };
+
+      // Generate control plan sections
+      const controlPlanSections = [
+        {
+          title: "14.?? RECEIVING CONTROL",
+          color: "purple",
+          items: receivingTasks.map((task, index) => ({
+            pos: `14.${index + 1}?`,
+            activity: task.Activity || "",
+            acceptanceCriteria: task["Acceptance Criteria"] || "",
+            time: task.Time || "",
+            circumference: task.Scope || "",
+            method: task.Method || "",
+            documentation: task["Documentation Requirements"] || "",
+            performed: task.isSubmitted ? "✓" : "",
+          })),
+        },
+        {
+          title: "15.1.?? PROCESS CONTROL",
+          color: "yellow",
+          items: processTasks.map((task, index) => ({
+            pos: `15.1.${index + 1}?`,
+            activity: task.Activity || "",
+            acceptanceCriteria: task["Acceptance Criteria"] || "",
+            time: task.Time || "",
+            circumference: task.Scope || "",
+            method: task.Method || "",
+            documentation: task["Documentation Requirements"] || "",
+            performed: task.isSubmitted ? "✓" : "",
+          })),
+        },
+        {
+          title: "16.2.?? END CHECK",
+          color: "green",
+          items: finalTasks.map((task, index) => ({
+            pos: `16.2.${index + 1}?`,
+            activity: task.Activity || "",
+            acceptanceCriteria: task["Acceptance Criteria"] || "",
+            time: task.Time || "",
+            circumference: task.Scope || "",
+            method: task.Method || "",
+            documentation: task["Documentation Requirements"] || "",
+            performed: task.isSubmitted ? "✓" : "",
+          })),
+        },
+      ];
+
+      // Generate table rows
+      let standardControlPlanTableRows = "";
+      controlPlanSections.forEach((section, sectionIndex) => {
+        // Section Header Row
+        standardControlPlanTableRows += `
+          <tr class="standard-control-plan-section-header-row">
+            <td colspan="7" class="standard-control-plan-section-title">
+              ${section.title}
+            </td>
+            <td class="standard-control-plan-section-circle">
+              <div class="standard-control-plan-circle" style="background-color: ${getCircleColor(
+                section.color
+              )};"></div>
+            </td>
+          </tr>
+        `;
+        // Section Items
+        section.items.forEach((item, itemIndex) => {
+          standardControlPlanTableRows += `
+            <tr class="standard-control-plan-data-row">
+              <td class="standard-control-plan-pos-cell">${item.pos}</td>
+              <td class="standard-control-plan-activity-cell">${item.activity}</td>
+              <td class="standard-control-plan-criteria-cell">${item.acceptanceCriteria}</td>
+              <td class="standard-control-plan-time-cell">${item.time}</td>
+              <td class="standard-control-plan-circumference-cell">${item.circumference}</td>
+              <td class="standard-control-plan-method-cell">${item.method}</td>
+              <td class="standard-control-plan-documentation-cell">${item.documentation}</td>
+              <td class="standard-control-plan-performed-cell">${item.performed}</td>
+            </tr>
+          `;
+        });
+      });
+
+      // If no tasks, add empty row
+      if (controlPlanSections.every((section) => section.items.length === 0)) {
+        standardControlPlanTableRows = `
+          <tr class="standard-control-plan-data-row">
+            <td class="standard-control-plan-pos-cell"></td>
+            <td class="standard-control-plan-activity-cell"></td>
+            <td class="standard-control-plan-criteria-cell"></td>
+            <td class="standard-control-plan-time-cell"></td>
+            <td class="standard-control-plan-circumference-cell"></td>
+            <td class="standard-control-plan-method-cell"></td>
+            <td class="standard-control-plan-documentation-cell"></td>
+            <td class="standard-control-plan-performed-cell"></td>
+          </tr>
+        `;
+      }
+
+      standardControlHtml = standardControlHtml.replace(
+        /<tbody id="standardControlPlanTableBody">.*?<\/tbody>/s,
+        `<tbody id="standardControlPlanTableBody">${standardControlPlanTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
