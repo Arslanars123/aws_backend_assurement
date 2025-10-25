@@ -2346,7 +2346,7 @@ function createKsReportRoutes(db) {
         deviationQualityAssuranceHtml +
         drawingTableHtml;
 
-      // Wrap in full HTML document
+      // Wrap in full HTML document with export bar
       const fullHtml = `
 <!DOCTYPE html>
 <html lang="en">
@@ -2355,9 +2355,137 @@ function createKsReportRoutes(db) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KS Report - Abdullah</title>
     <link rel="stylesheet" href="abdullahksreport/style.css">
+    <style>
+      #exportBar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 12px;
+        background: #0a2540;
+        color: #fff;
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+        font-size: 14px;
+      }
+      #exportBtn {
+        appearance: none;
+        background: #22a06b;
+        color: #fff;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+        position: relative;
+      }
+      #exportBtn[disabled] { opacity: .6; cursor: not-allowed; }
+      #status { font-size: 12px; opacity: .9; }
+      .spinner {
+        border: 2px solid #ffffff;
+        border-top: 2px solid transparent;
+        border-radius: 50%;
+        width: 14px;
+        height: 14px;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+        margin-right: 8px;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      body { padding-top: 50px; }
+      @media print {
+        #exportBar { display: none !important; }
+        body { padding-top: 0; }
+      }
+    </style>
 </head>
 <body>
+  <!-- Export bar -->
+  <div id="exportBar">
+    <button id="exportBtn" type="button">Export Complete Report to PDF</button>
+    <span id="status" aria-live="polite"></span>
+  </div>
+  
     ${combinedHtml}
+    
+  <script src="/html2canvas.min.js"></script>
+  <script src="/jspdf.umd.min.js"></script>
+  <script>
+    function exportToPDF() {
+      const statusEl = document.getElementById('status');
+      const btn = document.getElementById('exportBtn');
+      
+      if (!window.jspdf || !window.html2canvas) {
+        statusEl.textContent = 'PDF libraries not loaded';
+        return;
+      }
+      
+      statusEl.textContent = 'Preparing PDF...';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Exporting...';
+      
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      
+      const pages = document.querySelectorAll('.qa-report-page');
+      
+        if (pages.length === 0) {
+          statusEl.textContent = 'No pages found';
+          btn.disabled = false;
+          btn.innerHTML = 'Export Complete Report to PDF';
+          return;
+        }
+      
+      let currentPage = 0;
+      
+      function processPage() {
+        if (currentPage >= pages.length) {
+          pdf.save('ks-report.pdf');
+          statusEl.textContent = 'PDF generated successfully';
+          btn.disabled = false;
+          btn.innerHTML = 'Export Complete Report to PDF';
+          return;
+        }
+        
+        statusEl.textContent = \`Processing page \${currentPage + 1} of \${pages.length}...\`;
+        
+        const page = pages[currentPage];
+        html2canvas(page, {
+          scale: 2,
+          useCORS: true,
+          logging: false
+        }).then(canvas => {
+          const imgData = canvas.toDataURL('image/png');
+          const imgWidth = 210;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          
+          if (currentPage > 0) {
+            pdf.addPage();
+          }
+          
+          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+          currentPage++;
+          processPage();
+        }).catch(err => {
+          console.error('Error generating PDF:', err);
+          statusEl.textContent = 'Error: ' + err.message;
+          btn.disabled = false;
+          btn.innerHTML = 'Export Complete Report to PDF';
+        });
+      }
+      
+      processPage();
+    }
+    
+    document.getElementById('exportBtn').addEventListener('click', exportToPDF);
+  </script>
 </body>
 </html>
       `;
