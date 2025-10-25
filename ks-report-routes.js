@@ -954,6 +954,237 @@ function createKsReportRoutes(db) {
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
 
+      // Populate CompanyOrganization data
+      const subcontractors = data.users?.subcontractors || [];
+      const projectManagers = data.users?.projectManagers || [];
+      // Note: safetyManagers, constructionManagers already declared above for ProjectDetails (line 382, 381)
+      // Note: independentControllers already declared above for AffiliatedAdvisers (line 593)
+
+      // Subcontractors
+      let subcontractorsHtml = "";
+      subcontractors.forEach((sub, index) => {
+        subcontractorsHtml += `
+          <div class="company-organization-fields">
+            <div class="company-organization-field">
+              <label>COMPANY NAME:</label>
+              <div class="company-organization-value">${sub.name || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>CONTACT PERSON</label>
+              <div class="company-organization-value">${
+                sub.contactPerson || ""
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>CVR NO.:</label>
+              <div class="company-organization-value">${sub.cvr || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>ADDRESS:</label>
+              <div class="company-organization-value">${sub.address || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>POSTCODE:</label>
+              <div class="company-organization-value">${
+                sub.postalCode || ""
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>TELEPHONE:</label>
+              <div class="company-organization-value">${sub.phone || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>EMAIL</label>
+              <div class="company-organization-value">${
+                sub.username || ""
+              }</div>
+            </div>
+            ${
+              index < subcontractors.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      companyOrgHtml = companyOrgHtml.replace(
+        /<div id="subcontractorsContainer">.*?<\/div>/s,
+        `<div id="subcontractorsContainer">${subcontractorsHtml}</div>`
+      );
+
+      // Project Managers
+      let projectManagersHtml = "";
+      projectManagers.forEach((pm, index) => {
+        projectManagersHtml += `
+          <div class="company-organization-fields-grid">
+            <div class="company-organization-field">
+              <label>NAME</label>
+              <div class="company-organization-value">${pm.name || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>ROLE</label>
+              <div class="company-organization-value">${
+                pm.userRole || pm.role || ""
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>TELEPHONE:</label>
+              <div class="company-organization-value">${pm.phone || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>EMAIL</label>
+              <div class="company-organization-value">${pm.username || ""}</div>
+            </div>
+            ${
+              index < projectManagers.length - 1
+                ? '<hr style="gridColumn: 1 / -1; margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      companyOrgHtml = companyOrgHtml.replace(
+        /<div id="projectManagersContainer">.*?<\/div>/s,
+        `<div id="projectManagersContainer">${projectManagersHtml}</div>`
+      );
+
+      // Safety Managers for Company Organization (different format than ProjectDetails)
+      let safetyManagersHtml2 = "";
+      safetyManagers.forEach((sm, index) => {
+        safetyManagersHtml2 += `
+          <div class="company-organization-fields-grid">
+            <div class="company-organization-field">
+              <label>NAME</label>
+              <div class="company-organization-value">${sm.name || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>ROLE</label>
+              <div class="company-organization-value">${
+                sm.role || "Safety Coordinator"
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>TELEPHONE:</label>
+              <div class="company-organization-value">${sm.phone || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>EMAIL</label>
+              <div class="company-organization-value">${sm.username || ""}</div>
+            </div>
+            ${
+              index < safetyManagers.length - 1
+                ? '<hr style="gridColumn: 1 / -1; margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      companyOrgHtml = companyOrgHtml.replace(
+        /<div id="safetyManagersContainer">.*?<\/div>/s,
+        `<div id="safetyManagersContainer">${safetyManagersHtml2}</div>`
+      );
+
+      // Subcontractor to Subcontractor (same data as subcontractors but with profession)
+      let subcontractorToSubcontractorHtml = "";
+      subcontractors.forEach((sub, index) => {
+        const professionText = Array.isArray(sub.userProfession)
+          ? sub.userProfession.map((p) => p.GroupName).join(", ")
+          : "";
+        subcontractorToSubcontractorHtml += `
+          <div class="company-organization-fields">
+            <div class="company-organization-field">
+              <label>NAME:</label>
+              <div class="company-organization-value">${sub.name || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>CONTACT PERSON</label>
+              <div class="company-organization-value">${
+                sub.contactPerson || ""
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>CVR NO.:</label>
+              <div class="company-organization-value">${sub.cvr || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>ADDRESS:</label>
+              <div class="company-organization-value">${sub.address || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>POSTCODE:</label>
+              <div class="company-organization-value">${
+                sub.postalCode || ""
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>TELEPHONE:</label>
+              <div class="company-organization-value">${sub.phone || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>EMAIL</label>
+              <div class="company-organization-value">${
+                sub.username || ""
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>PROFESSION</label>
+              <div class="company-organization-value">${professionText}</div>
+            </div>
+            ${
+              index < subcontractors.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      companyOrgHtml = companyOrgHtml.replace(
+        /<div id="subcontractorToSubcontractorContainer">.*?<\/div>/s,
+        `<div id="subcontractorToSubcontractorContainer">${subcontractorToSubcontractorHtml}</div>`
+      );
+
+      // Independent Controllers for Company Organization (different format than AffiliatedAdvisers)
+      let independentControllersHtml2 = "";
+      independentControllers.forEach((ic, index) => {
+        independentControllersHtml2 += `
+          <div class="company-organization-fields">
+            <div class="company-organization-field">
+              <label>NAME:</label>
+              <div class="company-organization-value">${ic.name || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>CONTACT PERSON</label>
+              <div class="company-organization-value">${
+                ic.contactPerson || ""
+              }</div>
+            </div>
+            <div class="company-organization-field">
+              <label>CVR NO.:</label>
+              <div class="company-organization-value">${ic.cvr || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>ADDRESS:</label>
+              <div class="company-organization-value">${ic.address || ""}</div>
+            </div>
+            <div class="company-organization-field">
+              <label>POSTCODE:</label>
+              <div class="company-organization-value">${
+                ic.postalCode || ""
+              }</div>
+            </div>
+            ${
+              index < independentControllers.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      companyOrgHtml = companyOrgHtml.replace(
+        /<div id="independentControllersContainer">.*?<\/div>/s,
+        `<div id="independentControllersContainer">${independentControllersHtml2}</div>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
