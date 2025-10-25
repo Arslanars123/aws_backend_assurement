@@ -2689,10 +2689,13 @@
 
 .supervision-note-form-field {
   flex: 1;
-  height: 20px;
+  min-height: 20px;
   border-bottom: 1px solid #d1d5db;
   margin: 10px 15px;
   background-color: transparent;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 /* Content Section */
