@@ -1802,6 +1802,76 @@ function createKsReportRoutes(db) {
         `<tbody id="receptionControlTableBody">${receptionControlTableRows}</tbody>`
       );
 
+      // Populate AddressNotesTable
+      // Helper function to fetch notes from database
+      const addFilters = (query, companyId, projectId) => {
+        if (companyId) query.companyId = companyId;
+        if (projectId) query.projectId = projectId;
+        return query;
+      };
+
+      const notesQuery = {
+        companyId,
+        projectsId: projectId,
+      };
+      const notes = await db.collection("notes").find(notesQuery).toArray();
+
+      // Generate table rows for notes
+      let addressNotesTableRows = "";
+      notes.forEach((note, index) => {
+        const noteDate = note.createdAt ? formatDate(note.createdAt) : "";
+        addressNotesTableRows += `
+          <tr>
+            <td>${note.item || "-"}</td>
+            <td>${note.users?.name || "-"}</td>
+            <td>${noteDate}</td>
+            <td>${note.address || "-"}</td>
+            <td>
+              <button 
+                onclick="window.open('http://localhost:3000/supervision-note/${
+                  note._id
+                }?companyId=${companyId}&projectId=${projectId}', '_blank')"
+                style="
+                  background-color: #1e3a8a; 
+                  color: white; 
+                  border: none; 
+                  padding: 8px 16px; 
+                  border-radius: 4px; 
+                  cursor: pointer;
+                  font-size: 14px;
+                "
+                onmouseover="this.style.backgroundColor='#1e40af'"
+                onmouseout="this.style.backgroundColor='#1e3a8a'"
+              >
+                Show Note
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+
+      // If no notes, add empty row
+      if (notes.length === 0) {
+        addressNotesTableRows = `
+          <tr>
+            <td colspan="5" style="text-align: center;">No address notes found for this project.</td>
+          </tr>
+        `;
+      }
+
+      // Read address notes HTML
+      const addressNotesPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "address-notes.html"
+      );
+      let addressNotesHtml = fs.readFileSync(addressNotesPath, "utf8");
+
+      addressNotesHtml = addressNotesHtml.replace(
+        /<tbody id="addressNotesTableBody">.*?<\/tbody>/s,
+        `<tbody id="addressNotesTableBody">${addressNotesTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
@@ -1824,6 +1894,7 @@ function createKsReportRoutes(db) {
       standardControlHtml = updatePageFooter(standardControlHtml);
       planTendersHtml = updatePageFooter(planTendersHtml);
       receptionControlHtml = updatePageFooter(receptionControlHtml);
+      addressNotesHtml = updatePageFooter(addressNotesHtml);
 
       // Combine all pages
       const combinedHtml =
@@ -1840,7 +1911,8 @@ function createKsReportRoutes(db) {
         descriptionControlHtml +
         standardControlHtml +
         planTendersHtml +
-        receptionControlHtml;
+        receptionControlHtml +
+        addressNotesHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
@@ -1865,6 +1937,277 @@ function createKsReportRoutes(db) {
         <html>
           <body style="font-family: Arial; padding: 40px; text-align: center;">
             <h2>Error Loading Report</h2>
+            <p>${err.message}</p>
+          </body>
+        </html>
+      `);
+    }
+  });
+
+  // GET route to render supervision note HTML
+  router.get("/supervision-note/:noteId", async (req, res) => {
+    try {
+      const { noteId } = req.params;
+      const { companyId, projectId } = req.query;
+
+      // Fetch the note from database
+      const note = await db
+        .collection("notes")
+        .findOne({ _id: new ObjectId(noteId) });
+
+      if (!note) {
+        return res.status(404).send(`
+          <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+              <h2>Note Not Found</h2>
+              <p>No supervision note found with the given ID.</p>
+            </body>
+          </html>
+        `);
+      }
+
+      // Fetch project and company details
+      const data = await fetchKsReportData(db, companyId, projectId);
+
+      // Read supervision note HTML template
+      const supervisionNotePath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "supervision-note.html"
+      );
+      let supervisionNoteHtml = fs.readFileSync(supervisionNotePath, "utf8");
+
+      // Helper function to format date
+      const formatDate = (dateString) => {
+        if (!dateString) return "";
+        try {
+          const date = new Date(dateString);
+          return date.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          });
+        } catch (e) {
+          return "";
+        }
+      };
+
+      // Populate fields
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="subjectField"></div>',
+        `id="subjectField">${note.item || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="mailSentDateField"></div>',
+        `id="mailSentDateField">${formatDate(note.createdAt)}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="projectNameField"></div>',
+        `id="projectNameField">${data.projectDetail?.name || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="customerField"></div>',
+        `id="customerField">${data.companyDetails?.name || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="addressField"></div>',
+        `id="addressField">${data.companyDetails?.address || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="recipientNameField"></div>',
+        `id="recipientNameField">${note.users?.name || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="handicraftField"></div>',
+        `id="handicraftField">${note.profession?.GroupName || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="inspectedDateField"></div>',
+        `id="inspectedDateField">${formatDate(note.createdAt)}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="followUpField"></div>',
+        `id="followUpField">${
+          note.comment && note.comment !== "null" ? note.comment : ""
+        }</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="createdDateField"></div>',
+        `id="createdDateField">${formatDate(note.createdAt)}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="preparedByField"></div>',
+        `id="preparedByField">${data.companyDetails?.name || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="projectIdField"></div>',
+        `id="projectIdField">${data.projectDetail?._id || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="buildingPartField"></div>',
+        `id="buildingPartField">${
+          note.buildingPart?.buildingPartDetail?.name || ""
+        }</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="professionField"></div>',
+        `id="professionField">${note.profession?.SubjectMatterId || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="recipientEmailField"></div>',
+        `id="recipientEmailField">${note.users?.username || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="projectManagerField"></div>',
+        `id="projectManagerField">${note.projectManager?.name || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="userRoleField"></div>',
+        `id="userRoleField">${note.users?.userRole || ""}</div>`
+      );
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="noteIdField"></div>',
+        `id="noteIdField">${note._id || ""}</div>`
+      );
+
+      // Populate documentation section
+      let documentationHtml = "";
+
+      // Main Drawings
+      if (note.drawing?.mainDrawings && note.drawing.mainDrawings.length > 0) {
+        note.drawing.mainDrawings.forEach((mainDrawing, index) => {
+          documentationHtml += `
+            <div class="supervision-note-content-box">
+              <div style="padding: 15px;">
+                <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">
+                  Main Drawing: ${
+                    mainDrawing.originalname ||
+                    mainDrawing.original ||
+                    mainDrawing.filename ||
+                    "Unknown"
+                  }
+                </h4>
+                <iframe
+                  src="${
+                    mainDrawing.s3Location
+                  }#toolbar=0&navpanes=0&scrollbar=0"
+                  style="width: 100%; height: 1000px; border: 1px solid #d1d5db; border-radius: 4px; overflow: hidden;"
+                  scrolling="no"
+                  title="Main Drawing ${index + 1}"
+                ></iframe>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      // Building Part Image
+      if (note.buildingPart?.buildingPartDetail?.image?.s3Location) {
+        documentationHtml += `
+          <div class="supervision-note-content-box">
+            <div style="padding: 15px;">
+              <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">
+                Building Part: ${note.buildingPart.buildingPartDetail.name}
+              </h4>
+              <img
+                src="${note.buildingPart.buildingPartDetail.image.s3Location}"
+                alt="Building Part"
+                style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+              />
+            </div>
+          </div>
+        `;
+      }
+
+      // Annotated PDFs
+      if (note.annotatedPdfs && note.annotatedPdfs.length > 0) {
+        documentationHtml += `
+          <div class="supervision-note-content-box">
+            <div style="padding: 15px;">
+              <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">Annotated Drawings</h4>
+              ${note.annotatedPdfs
+                .map(
+                  (pdf) => `
+                <div style="margin-bottom: 15px;">
+                  <img
+                    src="${pdf.s3Location}"
+                    alt="Annotated"
+                    style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+                  />
+                  <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pdf.originalname}</p>
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      // Mark Pictures
+      if (note.markPictureObjects && note.markPictureObjects.length > 0) {
+        documentationHtml += `
+          <div class="supervision-note-content-box">
+            <div style="padding: 15px;">
+              <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">Mark Pictures</h4>
+              ${note.markPictureObjects
+                .map(
+                  (pic) => `
+                <div style="margin-bottom: 15px;">
+                  <img
+                    src="${pic.s3Location}"
+                    alt="Mark"
+                    style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 5px;"
+                  />
+                  ${
+                    pic.description
+                      ? `<p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pic.description}</p>`
+                      : ""
+                  }
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        '<div class="supervision-note-content-boxes" id="documentationBoxes">',
+        `<div class="supervision-note-content-boxes" id="documentationBoxes">${documentationHtml}`
+      );
+
+      // Wrap in full HTML document
+      const fullSupervisionNoteHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supervision Note</title>
+    <link rel="stylesheet" href="abdullahksreport/style.css">
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f5f5f5;
+      }
+    </style>
+</head>
+<body>
+    ${supervisionNoteHtml}
+</body>
+</html>
+      `;
+
+      res.send(fullSupervisionNoteHtml);
+    } catch (err) {
+      console.error("supervision-note error:", err);
+      return res.status(500).send(`
+        <html>
+          <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h2>Error Loading Supervision Note</h2>
             <p>${err.message}</p>
           </body>
         </html>
