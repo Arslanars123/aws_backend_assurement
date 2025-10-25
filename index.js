@@ -295,6 +295,10 @@ async function startServer() {
     const createKsReportRoutes = require("./ks-report-routes");
     app.use("/", createKsReportRoutes(db));
 
+    // Register PDF generator routes after database connection is established
+    const pdfGeneratorRoutes = require("./pdf-generator");
+    app.use("/api/pdf", pdfGeneratorRoutes);
+
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
