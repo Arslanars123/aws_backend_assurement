@@ -2492,17 +2492,81 @@ function createKsReportRoutes(db) {
   
     ${combinedHtml}
     
+  <script src="/html2canvas.min.js"></script>
+  <script src="/jspdf.umd.min.js"></script>
   <script>
     function exportToPDF() {
-      // Simply trigger the browser's print dialog
-      window.print();
+      const statusEl = document.getElementById('status');
+      const btn = document.getElementById('exportBtn');
+      
+      if (!window.jspdf || !window.html2canvas) {
+        statusEl.textContent = 'PDF libraries not loaded';
+        return;
+      }
+      
+      statusEl.textContent = 'Preparing PDF...';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Exporting...';
+      
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      
+      // Find all page containers
+      const pages = document.querySelectorAll('.qa-report-page, .toc-page, .project-details-page, .affiliated-advisers-page, .documents-info-page, .received-case-documents-page, .checklist-page, .company-organization-page, .employee-production-page, .project-management-supervision-page, .description-control-work-page, .standard-control-plan-page, .plan-tenders-page, .reception-control-page, .address-notes-page, .new-agreement-page, .safety-mention-page, .technical-request-page, .deviation-quality-assurance-page, .drawing-document-page, .supervision-note-page');
+      
+        if (pages.length === 0) {
+          statusEl.textContent = 'No pages found';
+          btn.disabled = false;
+          btn.innerHTML = 'Export Complete Report to PDF';
+          return;
+        }
+      
+      let currentPage = 0;
+      
+      function processPage() {
+        if (currentPage >= pages.length) {
+          pdf.save('ks-report.pdf');
+          statusEl.textContent = 'PDF generated successfully';
+          btn.disabled = false;
+          btn.innerHTML = 'Export Complete Report to PDF';
+          return;
+        }
+        
+        statusEl.textContent = \`Processing page \${currentPage + 1} of \${pages.length}...\`;
+        
+        const page = pages[currentPage];
+        html2canvas(page, {
+          scale: 2,
+          useCORS: true,
+          logging: false
+        }).then(canvas => {
+          const imgData = canvas.toDataURL('image/png');
+          const imgWidth = 210;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          
+          if (currentPage > 0) {
+            pdf.addPage();
+          }
+          
+          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+          currentPage++;
+          processPage();
+        }).catch(err => {
+          console.error('Error generating PDF:', err);
+          statusEl.textContent = 'Error: ' + err.message;
+          btn.disabled = false;
+          btn.innerHTML = 'Export Complete Report to PDF';
+        });
+      }
+      
+      processPage();
     }
     
     document.getElementById('exportBtn').addEventListener('click', exportToPDF);
   </script>
 </body>
 </html>
-      `;
+`;
 
       res.send(fullHtml);
     } catch (err) {
