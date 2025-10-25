@@ -191,13 +191,20 @@ function createKsReportRoutes(db) {
       // Fetch data
       const data = await fetchKsReportData(db, companyId, projectId);
 
-      // Read the HTML template
-      const htmlPath = path.join(
+      // Read the HTML templates
+      const reportPage1Path = path.join(
         __dirname,
         "abdullahksreport",
         "report-page1.html"
       );
-      let html = fs.readFileSync(htmlPath, "utf8");
+      const tocPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "table-of-contents.html"
+      );
+
+      let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
+      let tocHtml = fs.readFileSync(tocPath, "utf8");
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -210,55 +217,70 @@ function createKsReportRoutes(db) {
       }`.trim();
       const projectIdValue = projectDetail.case_no || projectDetail._id || "";
 
-      // Replace placeholders in HTML
-      html = html.replace(
+      // Replace placeholders in ReportPage1
+      reportPage1Html = reportPage1Html.replace(
         /id="companyLogo"/g,
         `id="companyLogo" src="${companyLogo}" ${
           companyLogo ? 'style="display: block;"' : 'style="display: none;"'
         }`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="companyLogoFallback">A/g,
         `id="companyLogoFallback">${firstLetter}`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="postNoCity"><\/div>/g,
         `id="postNoCity">${postNoCity}</div>`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="address"><\/div>/g,
         `id="address">${companyDetails.address || ""}</div>`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="cvr"><\/div>/g,
         `id="cvr">${companyDetails.cvr || ""}</div>`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="telephone"><\/div>/g,
         `id="telephone">${companyDetails.companyPhone || ""}</div>`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="mail"><\/div>/g,
         `id="mail">${companyDetails.email || ""}</div>`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="projectId"><\/div>/g,
         `id="projectId">${projectIdValue}</div>`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="footerCompanyLogo"/g,
         `id="footerCompanyLogo" src="${companyLogo}" ${
           companyLogo ? 'style="display: block;"' : 'style="display: none;"'
         }`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="footerCompanyLogoFallback">A/g,
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
-      html = html.replace(
+      reportPage1Html = reportPage1Html.replace(
         /id="footerTocLogo">A/g,
         `id="footerTocLogo">${firstLetter}`
       );
+
+      // Replace placeholders in TableOfContents
+      tocHtml = tocHtml.replace(
+        /id="footerCompanyLogo"/g,
+        `id="footerCompanyLogo" src="${companyLogo}" ${
+          companyLogo ? 'style="display: block;"' : 'style="display: none;"'
+        }`
+      );
+      tocHtml = tocHtml.replace(
+        /id="footerCompanyLogoFallback">A/g,
+        `id="footerCompanyLogoFallback">${firstLetter}`
+      );
+
+      // Combine both pages
+      const combinedHtml = reportPage1Html + tocHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
@@ -271,7 +293,7 @@ function createKsReportRoutes(db) {
     <link rel="stylesheet" href="abdullahksreport/style.css">
 </head>
 <body>
-    ${html}
+    ${combinedHtml}
 </body>
 </html>
       `;
