@@ -1942,6 +1942,59 @@ function createKsReportRoutes(db) {
         `<tbody id="newAgreementTableBody">${newAgreementTableRows}</tbody>`
       );
 
+      // Fetch Safety Mention data from "mentions" collection
+      const mentionsQuery = {};
+      if (companyId) mentionsQuery.companyId = companyId;
+      if (projectId) mentionsQuery.projectsId = projectId;
+
+      const mentionsArray = await db
+        .collection("mentions")
+        .find(mentionsQuery)
+        .toArray();
+
+      // Generate Safety Mention table rows
+      let safetyMentionTableRows = "";
+      if (mentionsArray.length > 0) {
+        mentionsArray.forEach((mention, index) => {
+          safetyMentionTableRows += `
+          <tr>
+            <td>${mention.item || "-"}</td>
+            <td>${
+              mention.createdAt
+                ? new Date(mention.createdAt).toLocaleDateString("en-GB")
+                : "-"
+            }</td>
+            <td>
+              <button class="show-note-btn" onclick="window.open('/supervision-note/${
+                mention._id
+              }?companyId=${companyId}&projectId=${projectId}&source=SafetyMentionTable', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                Show Safety Mention
+              </button>
+            </td>
+          </tr>
+        `;
+        });
+      } else {
+        safetyMentionTableRows = `
+          <tr>
+            <td colspan="3" style="text-align: center;">No safety mentions found for this project.</td>
+          </tr>
+        `;
+      }
+
+      // Read safety mention HTML
+      const safetyMentionPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "safety-mention.html"
+      );
+      let safetyMentionHtml = fs.readFileSync(safetyMentionPath, "utf8");
+
+      safetyMentionHtml = safetyMentionHtml.replace(
+        /<tbody id="safetyMentionTableBody">.*?<\/tbody>/s,
+        `<tbody id="safetyMentionTableBody">${safetyMentionTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
@@ -1966,6 +2019,7 @@ function createKsReportRoutes(db) {
       receptionControlHtml = updatePageFooter(receptionControlHtml);
       addressNotesHtml = updatePageFooter(addressNotesHtml);
       newAgreementHtml = updatePageFooter(newAgreementHtml);
+      safetyMentionHtml = updatePageFooter(safetyMentionHtml);
 
       // Combine all pages
       const combinedHtml =
@@ -1984,7 +2038,8 @@ function createKsReportRoutes(db) {
         planTendersHtml +
         receptionControlHtml +
         addressNotesHtml +
-        newAgreementHtml;
+        newAgreementHtml +
+        safetyMentionHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
@@ -2025,8 +2080,14 @@ function createKsReportRoutes(db) {
       // Determine which collection to query based on the source
       const isAgreement =
         source === "NewAgreementTable" || source === "agreement";
+      const isSafetyMention = source === "SafetyMentionTable";
 
-      const collectionName = isAgreement ? "news" : "notes";
+      let collectionName = "notes"; // default
+      if (isAgreement) {
+        collectionName = "news";
+      } else if (isSafetyMention) {
+        collectionName = "mentions";
+      }
       let note = await db
         .collection(collectionName)
         .findOne({ _id: new ObjectId(noteId) });
