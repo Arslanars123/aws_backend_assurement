@@ -2446,7 +2446,7 @@ function createKsReportRoutes(db) {
       
       let currentPage = 0;
       
-      function processPage() {
+      async function processPage() {
         if (currentPage >= pages.length) {
           pdf.save('ks-report.pdf');
           statusEl.textContent = 'PDF generated successfully';
@@ -2455,34 +2455,87 @@ function createKsReportRoutes(db) {
           return;
         }
         
-        statusEl.textContent = \`Processing page \${currentPage + 1} of \${pages.length}...\`;
-        
-        const page = pages[currentPage];
-        html2canvas(page, {
-          scale: 2,
-          useCORS: true,
-          logging: false
-        }).then(canvas => {
-          const imgData = canvas.toDataURL('image/png');
-          const imgWidth = 210;
-          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        try {
+          statusEl.textContent = \`Processing page \${currentPage + 1} of \${pages.length}...\`;
           
-          if (currentPage > 0) {
-            pdf.addPage();
+          const page = pages[currentPage];
+          
+          // Hide export bar during capture
+          const exportBar = document.getElementById('exportBar');
+          const prevDisplay = exportBar.style.display;
+          exportBar.style.display = 'none';
+          
+          // Small delay to ensure all images are loaded
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const canvas = await html2canvas(page, {
+            scale: 1.5,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            windowWidth: page.scrollWidth || 800,
+            windowHeight: page.scrollHeight || 2970,
+            logging: false,
+            onclone: (clonedDoc) => {
+              // Replace iframes with placeholder text
+              const clonedIframes = clonedDoc.querySelectorAll('iframe');
+              clonedIframes.forEach(iframe => {
+                const placeholder = clonedDoc.createElement('div');
+                placeholder.style.cssText = 'display: inline-block; padding: 20px; background: #f3f4f6; border: 2px dashed #9ca3af; text-align: center; color: #6b7280; font-size: 12px; min-height: 100px;';
+                placeholder.textContent = '[Drawing/PDF - viewing in original required]';
+                iframe.parentNode?.replaceChild(placeholder, iframe);
+              });
+            }
+          });
+          
+          // Restore export bar
+          exportBar.style.display = prevDisplay;
+          
+          const imgData = canvas.toDataURL('image/png');
+          const pdfW = 210; // A4 width
+          const pdfH = 297; // A4 height
+          
+          let imgW = pdfW;
+          let imgH = (canvas.height * pdfW) / canvas.width;
+          
+          // Split tall content across multiple pages
+          let yOffset = 0;
+          while (yOffset < imgH) {
+            if (currentPage > 0 || yOffset > 0) {
+              pdf.addPage();
+            }
+            
+            const remainingHeight = imgH - yOffset;
+            const pageImgH = Math.min(remainingHeight, pdfH);
+            
+            // Calculate source rectangle for this page
+            const sourceY = (yOffset / imgH) * canvas.height;
+            const sourceHeight = (pageImgH / imgH) * canvas.height;
+            
+            // Create a temporary canvas for this page slice
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = sourceHeight;
+            const pageCtx = pageCanvas.getContext('2d');
+            pageCtx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+            
+            const pageImgData = pageCanvas.toDataURL('image/png');
+            pdf.addImage(pageImgData, 'PNG', 0, 0, imgW, pageImgH);
+            
+            yOffset += pdfH;
           }
           
-          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
           currentPage++;
-          processPage();
-        }).catch(err => {
+          await processPage();
+        } catch (err) {
           console.error('Error generating PDF:', err);
           statusEl.textContent = 'Error: ' + err.message;
           btn.disabled = false;
           btn.innerHTML = 'Export Complete Report to PDF';
-        });
+        }
       }
       
-      processPage();
+      await processPage();
     }
     
     document.getElementById('exportBtn').addEventListener('click', exportToPDF);
