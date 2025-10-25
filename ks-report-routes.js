@@ -1247,6 +1247,81 @@ function createKsReportRoutes(db) {
         `<tbody id="workersTableBody">${workersTableRows}</tbody>`
       );
 
+      // Populate ProjectManagementSupervision
+      const supervisionDetails = data.supervisionDetails || [];
+
+      // Note: formatDate already declared above (line 809) for ReceivedCaseDocuments
+
+      // Group supervision details by section
+      const groupedSections = {};
+      supervisionDetails.forEach((detail) => {
+        const section = detail.checkDetails?.section || "Unknown Section";
+        if (!groupedSections[section]) {
+          groupedSections[section] = [];
+        }
+        groupedSections[section].push(detail);
+      });
+
+      // Convert to array format for rendering
+      const supervisionSections = Object.entries(groupedSections).map(
+        ([title, items]) => ({
+          title: title.toUpperCase(),
+          items: items.map((item) => ({
+            pos: item.checkDetails?.pos || "",
+            what: item.checkDetails?.what || "",
+            where: item.checkDetails?.where || "",
+            when: item.checkDetails?.when || "",
+            howMuch: item.note || "100%",
+            performed: formatDate(item.approvedDate),
+          })),
+        })
+      );
+
+      // Generate table rows
+      let supervisionTableRows = "";
+      supervisionSections.forEach((section, sectionIndex) => {
+        // Section Header Row
+        supervisionTableRows += `
+          <tr class="project-management-supervision-section-header-row">
+            <td colspan="6" class="project-management-supervision-section-title">
+              ${section.title}
+            </td>
+          </tr>
+        `;
+        // Section Items
+        section.items.forEach((item, itemIndex) => {
+          supervisionTableRows += `
+            <tr class="project-management-supervision-data-row">
+              <td class="project-management-supervision-pos-cell">${item.pos}</td>
+              <td class="project-management-supervision-what-cell">${item.what}</td>
+              <td class="project-management-supervision-where-cell">${item.where}</td>
+              <td class="project-management-supervision-when-cell">${item.when}</td>
+              <td class="project-management-supervision-how-much-cell">${item.howMuch}</td>
+              <td class="project-management-supervision-performed-cell">${item.performed}</td>
+            </tr>
+          `;
+        });
+      });
+
+      // If no supervision details, add empty row
+      if (supervisionSections.length === 0) {
+        supervisionTableRows = `
+          <tr class="project-management-supervision-data-row">
+            <td class="project-management-supervision-pos-cell"></td>
+            <td class="project-management-supervision-what-cell"></td>
+            <td class="project-management-supervision-where-cell"></td>
+            <td class="project-management-supervision-when-cell"></td>
+            <td class="project-management-supervision-how-much-cell"></td>
+            <td class="project-management-supervision-performed-cell"></td>
+          </tr>
+        `;
+      }
+
+      projectManagementHtml = projectManagementHtml.replace(
+        /<tbody id="supervisionTableBody">.*?<\/tbody>/s,
+        `<tbody id="supervisionTableBody">${supervisionTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
