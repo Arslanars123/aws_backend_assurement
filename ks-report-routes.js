@@ -2434,7 +2434,8 @@ function createKsReportRoutes(db) {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       
-      const pages = document.querySelectorAll('.qa-report-page');
+      // Find all page containers
+      const pages = document.querySelectorAll('.qa-report-page, .toc-page, .project-details-page, .affiliated-advisers-page, .documents-info-page, .received-case-documents-page, .checklist-page, .company-organization-page, .employee-production-page, .project-management-supervision-page, .description-control-work-page, .standard-control-plan-page, .plan-tenders-page, .reception-control-page, .address-notes-page, .new-agreement-page, .safety-mention-page, .technical-request-page, .deviation-quality-assurance-page, .drawing-document-page, .supervision-note-page');
       
         if (pages.length === 0) {
           statusEl.textContent = 'No pages found';
