@@ -37,7 +37,7 @@ async function generateSupervisionNotePdf(note, apiData) {
 
     // Generate PDF using Puppeteer with better error handling
     const browser = await puppeteer.launch({
-      headless: true,
+      headless: "new",
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
