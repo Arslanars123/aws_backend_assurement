@@ -461,29 +461,44 @@ app.post(
 
       // Standardize picture to always be a simple string (filename)
       const picture = standardizePicture(pictureObject);
-        
-     
-      
+
       // If no picture uploaded, check if user with same email has a picture
       let finalPicture = picture;
       if (!picture) {
-        console.log('🔍 No picture uploaded, checking for existing picture...');
+        console.log("🔍 No picture uploaded, checking for existing picture...");
         // Find all users with same email
-        const existingUsers = await db.collection("users").find({ username: username }).toArray();
-        console.log('🔍 Found', existingUsers.length, 'users with email:', username);
-        
+        const existingUsers = await db
+          .collection("users")
+          .find({ username: username })
+          .toArray();
+        console.log(
+          "🔍 Found",
+          existingUsers.length,
+          "users with email:",
+          username
+        );
+
         // Find the first user that has a picture
-        const userWithPicture = existingUsers.find(user => user.picture && user.picture !== null);
-        
+        const userWithPicture = existingUsers.find(
+          (user) => user.picture && user.picture !== null
+        );
+
         if (userWithPicture && userWithPicture.picture) {
           finalPicture = userWithPicture.picture;
-          console.log('✅ Found existing picture for email:', username, 'Picture:', finalPicture);
+          console.log(
+            "✅ Found existing picture for email:",
+            username,
+            "Picture:",
+            finalPicture
+          );
         } else {
-          console.log('❌ No existing picture found for any user with email:', username);
+          console.log(
+            "❌ No existing picture found for any user with email:",
+            username
+          );
         }
       }
-      
-     
+
       const contactPictureFile = req.files?.contactPicture?.[0];
       const contactPictureObject = contactPictureFile
         ? {
@@ -590,18 +605,31 @@ app.post(
       }
 
       // If user already exists and is being added to another project, don't auto-assign as project manager
-      if (existingUser && existingUser.projectsId && Array.isArray(projectsId)) {
-        const newProjects = Array.isArray(projectsId) ? projectsId : [projectsId];
-        const existingProjects = Array.isArray(existingUser.projectsId) ? existingUser.projectsId : [];
-        
+      if (
+        existingUser &&
+        existingUser.projectsId &&
+        Array.isArray(projectsId)
+      ) {
+        const newProjects = Array.isArray(projectsId)
+          ? projectsId
+          : [projectsId];
+        const existingProjects = Array.isArray(existingUser.projectsId)
+          ? existingUser.projectsId
+          : [];
+
         // Check if any of the new projects are different from existing projects
-        const hasNewProjects = newProjects.some(newProject => !existingProjects.includes(newProject));
-        
+        const hasNewProjects = newProjects.some(
+          (newProject) => !existingProjects.includes(newProject)
+        );
+
         if (hasNewProjects && !standardizedPM) {
           // User is being added to a new project but no explicit PM status provided
           // Keep their existing PM status, don't auto-assign
-          standardizedPM = existingUser.isProjectManager || 'no';
-          console.log('🔄 User being added to new project, preserving existing PM status:', standardizedPM);
+          standardizedPM = existingUser.isProjectManager || "no";
+          console.log(
+            "🔄 User being added to new project, preserving existing PM status:",
+            standardizedPM
+          );
         }
       }
 
@@ -634,7 +662,7 @@ app.post(
       // Only include pictures if they exist (not null)
       if (finalPicture) {
         userData.picture = finalPicture;
-        console.log('✅ Adding picture to userData:', finalPicture);
+        console.log("✅ Adding picture to userData:", finalPicture);
       }
       if (picture) {
         userData.picture = picture;
@@ -672,7 +700,10 @@ app.post(
         if (finalPicture) {
           // If new user has a picture, always update all users with same email
           commonDetails.picture = finalPicture;
-          console.log('🔄 STORE-USER: Updating picture for all users with email:', username);
+          console.log(
+            "🔄 STORE-USER: Updating picture for all users with email:",
+            username
+          );
         } else {
           // If new user has no picture, check existing users
           const existingUsers = await db
@@ -923,12 +954,15 @@ app.post("/updateUser", async (req, res) => {
     const objectIds = userIds.map((id) => new ObjectId(id));
 
     // Get all users first to check their existing roles
-    const users = await db.collection("users").find({
-      _id: { $in: objectIds }
-    }).toArray();
+    const users = await db
+      .collection("users")
+      .find({
+        _id: { $in: objectIds },
+      })
+      .toArray();
 
     const bulkOps = objectIds.map((userId) => {
-      const user = users.find(u => u._id.toString() === userId.toString());
+      const user = users.find((u) => u._id.toString() === userId.toString());
       const updateQuery = {
         $addToSet: {
           projectsId: projectId,
@@ -943,7 +977,11 @@ app.post("/updateUser", async (req, res) => {
         // User is being added to a new project without explicit role
         // Set their userRole to their base role, not project manager
         updateQuery.$set = { userRole: user.role || "Worker" };
-        console.log(`🔄 Adding user ${user.username} to project ${projectId} as ${user.role || "Worker"}`);
+        console.log(
+          `🔄 Adding user ${user.username} to project ${projectId} as ${
+            user.role || "Worker"
+          }`
+        );
       }
 
       return {
@@ -7643,7 +7681,9 @@ app.post("/update-user-project-manager", async (req, res) => {
     }
 
     // Get the current user data
-    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+    const user = await db
+      .collection("users")
+      .findOne({ _id: new ObjectId(userId) });
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -10958,12 +10998,7 @@ app.post(
         req.files ? Object.keys(req.files) : "No files"
       );
 
-      const {
-        projectId,
-        staticReportId,
-        comment,
-        date,
-      } = req.body;
+      const { projectId, staticReportId, comment, date } = req.body;
 
       // Safely parse JSON fields with null checks
       const profession = req.body.profession
@@ -10972,7 +11007,7 @@ app.post(
       const selectedWorkers = req.body.selectedWorkers
         ? JSON.parse(req.body.selectedWorkers)
         : null;
-      
+
       let independentController = null;
       if (req.body.independentController) {
         try {
@@ -10980,7 +11015,10 @@ app.post(
           console.log("Parsed independentController:", independentController);
         } catch (error) {
           console.error("Error parsing independentController:", error);
-          console.log("Raw independentController:", req.body.independentController);
+          console.log(
+            "Raw independentController:",
+            req.body.independentController
+          );
         }
       }
       const controlPlan = req.body.controlPlan
@@ -10996,13 +11034,20 @@ app.post(
 
       console.log("Parsed fields:");
       console.log("  - profession:", profession ? "Present" : "Null");
-      console.log("  - selectedWorkers:", selectedWorkers ? (selectedWorkers.name || "Present") : "Null");
+      console.log(
+        "  - selectedWorkers:",
+        selectedWorkers ? selectedWorkers.name || "Present" : "Null"
+      );
       console.log("  - controlPlan:", controlPlan ? "Present" : "Null");
       console.log("  - drawing:", drawing ? "Present" : "Null");
       console.log("  - buildingParts:", buildingParts ? "Present" : "Null");
       console.log(
         "  - independentController:",
-        independentController ? (independentController.name || JSON.stringify(independentController) || "Present") : "Null"
+        independentController
+          ? independentController.name ||
+              JSON.stringify(independentController) ||
+              "Present"
+          : "Null"
       );
       console.log("  - comment:", comment ? "Present" : "Null");
       console.log("  - date:", date ? "Present" : "Null");
@@ -11234,11 +11279,17 @@ app.post(
       }
       if (selectedWorkers !== null) {
         staticReportEntry.selectedWorkers = selectedWorkers;
-        console.log("Storing selectedWorkers:", selectedWorkers.name || selectedWorkers);
+        console.log(
+          "Storing selectedWorkers:",
+          selectedWorkers.name || selectedWorkers
+        );
       }
       if (independentController !== null) {
         staticReportEntry.independentController = independentController;
-        console.log("Storing independentController:", independentController.name || independentController);
+        console.log(
+          "Storing independentController:",
+          independentController.name || independentController
+        );
       }
       if (controlPlan !== null) staticReportEntry.controlPlan = controlPlan;
       if (comment !== null) staticReportEntry.comment = comment;
@@ -19271,6 +19322,117 @@ app.get("/get-project-main-drawings", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch project main drawings",
+      error: error.message,
+    });
+  }
+});
+
+// Generate supervision note PDFs for KS Report
+const {
+  generateSupervisionNotePdf,
+} = require("./services/supervisionNotePdfGenerator");
+
+app.post("/generate-supervision-note-pdfs", async (req, res) => {
+  try {
+    const { companyId, projectId, noteIds, source } = req.body;
+
+    if (!companyId || !projectId || !noteIds || !Array.isArray(noteIds)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Missing required fields: companyId, projectId, and noteIds array",
+      });
+    }
+
+    console.log(`Generating PDFs for ${noteIds.length} supervision notes`);
+
+    const pdfUrls = [];
+
+    // Fetch company and project data from backend
+    const [company, project] = await Promise.all([
+      db.collection("companies").findOne({ _id: new ObjectId(companyId) }),
+      db.collection("projects").findOne({ _id: new ObjectId(projectId) }),
+    ]);
+
+    if (!company || !project) {
+      return res.status(404).json({
+        success: false,
+        message: "Company or project not found",
+      });
+    }
+
+    const finalApiData = {
+      companyDetails: company,
+      projectDetail: project,
+      source: source || "SupervisionNote",
+    };
+
+    // Generate PDF for each note ID
+    for (const noteId of noteIds) {
+      try {
+        // Determine collection based on source
+        let collectionName;
+        switch (source) {
+          case "AddressNotesTable":
+            collectionName = "notes";
+            break;
+          case "NewAgreementTable":
+            collectionName = "news";
+            break;
+          case "SafetyMentionTable":
+            collectionName = "mentions";
+            break;
+          case "TechnicalRequestTable":
+            collectionName = "requests";
+            break;
+          default:
+            collectionName = "notes";
+        }
+
+        // Fetch the note data from appropriate collection
+        const note = await db
+          .collection(collectionName)
+          .findOne({ _id: new ObjectId(noteId) });
+
+        if (!note) {
+          console.error(
+            `Note ${noteId} not found in collection ${collectionName}`
+          );
+          pdfUrls.push({
+            noteId: noteId,
+            pdfUrl: null,
+            error: "Note not found",
+          });
+          continue;
+        }
+
+        // Generate PDF
+        const pdfUrl = await generateSupervisionNotePdf(note, finalApiData);
+        pdfUrls.push({
+          noteId: noteId,
+          pdfUrl: pdfUrl,
+        });
+        console.log(`Generated PDF for note ${noteId}: ${pdfUrl}`);
+      } catch (error) {
+        console.error(`Failed to generate PDF for note ${noteId}:`, error);
+        pdfUrls.push({
+          noteId: noteId,
+          pdfUrl: null,
+          error: error.message,
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Generated ${pdfUrls.length} PDFs`,
+      pdfUrls: pdfUrls,
+    });
+  } catch (error) {
+    console.error("Error generating supervision note PDFs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate supervision note PDFs",
       error: error.message,
     });
   }
