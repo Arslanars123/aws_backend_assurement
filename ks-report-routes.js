@@ -262,11 +262,6 @@ function createKsReportRoutes(db) {
         "abdullahksreport",
         "reception-control.html"
       );
-      const tablesPlaceholderPath = path.join(
-        __dirname,
-        "abdullahksreport",
-        "tables-placeholder.html"
-      );
 
       let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
       let tocHtml = fs.readFileSync(tocPath, "utf8");
@@ -297,10 +292,6 @@ function createKsReportRoutes(db) {
       let standardControlHtml = fs.readFileSync(standardControlPath, "utf8");
       let planTendersHtml = fs.readFileSync(planTendersPath, "utf8");
       let receptionControlHtml = fs.readFileSync(receptionControlPath, "utf8");
-      let tablesPlaceholderHtml = fs.readFileSync(
-        tablesPlaceholderPath,
-        "utf8"
-      );
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -1833,7 +1824,6 @@ function createKsReportRoutes(db) {
       standardControlHtml = updatePageFooter(standardControlHtml);
       planTendersHtml = updatePageFooter(planTendersHtml);
       receptionControlHtml = updatePageFooter(receptionControlHtml);
-      tablesPlaceholderHtml = updatePageFooter(tablesPlaceholderHtml);
 
       // Combine all pages
       const combinedHtml =
@@ -1850,8 +1840,7 @@ function createKsReportRoutes(db) {
         descriptionControlHtml +
         standardControlHtml +
         planTendersHtml +
-        receptionControlHtml +
-        tablesPlaceholderHtml;
+        receptionControlHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
