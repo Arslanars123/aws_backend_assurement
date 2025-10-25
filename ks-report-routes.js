@@ -1827,24 +1827,24 @@ function createKsReportRoutes(db) {
             <td>${noteDate}</td>
             <td>${note.address || "-"}</td>
             <td>
-              <button 
-                onclick="window.open('http://localhost:3000/supervision-note/${
-                  note._id
-                }?companyId=${companyId}&projectId=${projectId}', '_blank')"
+              <a 
+                href="${process.env.FRONTEND_URL}/supervision-note/${
+          note._id
+        }?companyId=${companyId}&projectId=${projectId}" 
+                target="_blank"
                 style="
                   background-color: #1e3a8a; 
                   color: white; 
-                  border: none; 
+                  text-decoration: none;
                   padding: 8px 16px; 
                   border-radius: 4px; 
                   cursor: pointer;
                   font-size: 14px;
+                  display: inline-block;
                 "
-                onmouseover="this.style.backgroundColor='#1e40af'"
-                onmouseout="this.style.backgroundColor='#1e3a8a'"
               >
                 Show Note
-              </button>
+              </a>
             </td>
           </tr>
         `;
@@ -1912,11 +1912,11 @@ function createKsReportRoutes(db) {
                 : "-"
             }</td>
             <td>
-              <button class="show-note-btn" onclick="window.open('/supervision-note/${
-                agreement._id
-              }?companyId=${companyId}&projectId=${projectId}&source=NewAgreementTable', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+              <a href="${process.env.FRONTEND_URL}/supervision-note/${
+            agreement._id
+          }?companyId=${companyId}&projectId=${projectId}&source=NewAgreementTable" target="_blank" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">
                 Show Agreement
-              </button>
+              </a>
             </td>
           </tr>
         `;
@@ -1965,11 +1965,11 @@ function createKsReportRoutes(db) {
                 : "-"
             }</td>
             <td>
-              <button class="show-note-btn" onclick="window.open('/supervision-note/${
-                mention._id
-              }?companyId=${companyId}&projectId=${projectId}&source=SafetyMentionTable', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+              <a href="${process.env.FRONTEND_URL}/supervision-note/${
+            mention._id
+          }?companyId=${companyId}&projectId=${projectId}&source=SafetyMentionTable" target="_blank" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">
                 Show Safety Mention
-              </button>
+              </a>
             </td>
           </tr>
         `;
@@ -2018,11 +2018,11 @@ function createKsReportRoutes(db) {
                 : "-"
             }</td>
             <td>
-              <button class="show-note-btn" onclick="window.open('/supervision-note/${
-                request._id
-              }?companyId=${companyId}&projectId=${projectId}&source=TechnicalRequestTable', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+              <a href="${process.env.FRONTEND_URL}/supervision-note/${
+            request._id
+          }?companyId=${companyId}&projectId=${projectId}&source=TechnicalRequestTable" target="_blank" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">
                 Show Technical Request
-              </button>
+              </a>
             </td>
           </tr>
         `;
