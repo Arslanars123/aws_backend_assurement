@@ -227,6 +227,46 @@ function createKsReportRoutes(db) {
         "abdullahksreport",
         "checklist.html"
       );
+      const companyOrgPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "company-organization.html"
+      );
+      const employeeProductionPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "employee-and-production.html"
+      );
+      const projectManagementPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "project-management-supervision.html"
+      );
+      const descriptionControlPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "description-control-work.html"
+      );
+      const standardControlPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "standard-for-control-plan.html"
+      );
+      const planTendersPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "plan-for-control-tenders.html"
+      );
+      const receptionControlPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "reception-control.html"
+      );
+      const tablesPlaceholderPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "tables-placeholder.html"
+      );
 
       let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
       let tocHtml = fs.readFileSync(tocPath, "utf8");
@@ -241,6 +281,26 @@ function createKsReportRoutes(db) {
         "utf8"
       );
       let checklistHtml = fs.readFileSync(checklistPath, "utf8");
+      let companyOrgHtml = fs.readFileSync(companyOrgPath, "utf8");
+      let employeeProductionHtml = fs.readFileSync(
+        employeeProductionPath,
+        "utf8"
+      );
+      let projectManagementHtml = fs.readFileSync(
+        projectManagementPath,
+        "utf8"
+      );
+      let descriptionControlHtml = fs.readFileSync(
+        descriptionControlPath,
+        "utf8"
+      );
+      let standardControlHtml = fs.readFileSync(standardControlPath, "utf8");
+      let planTendersHtml = fs.readFileSync(planTendersPath, "utf8");
+      let receptionControlHtml = fs.readFileSync(receptionControlPath, "utf8");
+      let tablesPlaceholderHtml = fs.readFileSync(
+        tablesPlaceholderPath,
+        "utf8"
+      );
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -894,6 +954,30 @@ function createKsReportRoutes(db) {
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
 
+      // Populate footers for remaining static pages
+      const updatePageFooter = (html) => {
+        html = html.replace(
+          /id="footerCompanyLogo"/g,
+          `id="footerCompanyLogo" src="${companyLogo}" ${
+            companyLogo ? 'style="display: block;"' : 'style="display: none;"'
+          }`
+        );
+        html = html.replace(
+          /id="footerCompanyLogoFallback">A/g,
+          `id="footerCompanyLogoFallback">${firstLetter}`
+        );
+        return html;
+      };
+
+      companyOrgHtml = updatePageFooter(companyOrgHtml);
+      employeeProductionHtml = updatePageFooter(employeeProductionHtml);
+      projectManagementHtml = updatePageFooter(projectManagementHtml);
+      descriptionControlHtml = updatePageFooter(descriptionControlHtml);
+      standardControlHtml = updatePageFooter(standardControlHtml);
+      planTendersHtml = updatePageFooter(planTendersHtml);
+      receptionControlHtml = updatePageFooter(receptionControlHtml);
+      tablesPlaceholderHtml = updatePageFooter(tablesPlaceholderHtml);
+
       // Combine all pages
       const combinedHtml =
         reportPage1Html +
@@ -902,7 +986,15 @@ function createKsReportRoutes(db) {
         affiliatedAdvisersHtml +
         documentsInfoHtml +
         receivedCaseDocumentsHtml +
-        checklistHtml;
+        checklistHtml +
+        companyOrgHtml +
+        employeeProductionHtml +
+        projectManagementHtml +
+        descriptionControlHtml +
+        standardControlHtml +
+        planTendersHtml +
+        receptionControlHtml +
+        tablesPlaceholderHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
