@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Document Completion Status</title>
+  <style>
+    /* --- Reset & base --- */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #0a2540; /* deep navy */
+      background: #f4f6f8;
+    }
+
+    /* --- Page layout (A4 friendly) --- */
+    .page {
+      width: 210mm;              /* A4 width */
+      min-height: 297mm;         /* A4 height */
+      margin: 16px auto;
+      background: #fff;
+      padding: 24mm 18mm;        /* comfortable print margins */
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    }
+
+    @media print {
+      body { background: #fff; }
+      .page { box-shadow: none; margin: 0; }
+      #exportBar { display: none !important; }
+    }
+
+    /* Print: page breaks between .page blocks */
+    .page + .page { page-break-before: always; }
+
+    /* --- Document completion status page styles --- */
+    .completion-header {
+      background: #0a2540;
+      color: white;
+      padding: 12px 16px;
+      margin-bottom: 18mm;
+    }
+    .completion-header h1 { margin: 0; font-size: 20px; }
+
+    .completion-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 18mm;
+    }
+
+    .workflow-diagram {
+      border: 2px solid #0a2540;
+      padding: 16px;
+    }
+
+    .workflow-phase {
+      display: flex;
+      align-items: center;
+      margin: 12px 0;
+      padding: 8px;
+      border: 1px solid #0a2540;
+      background: #f8f9fa;
+    }
+
+    .workflow-phase .phase-name {
+      font-weight: 700;
+      font-size: 12px;
+      color: #0a2540;
+      min-width: 120px;
+    }
+
+    .workflow-phase .status {
+      background: #22a06b;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 12px;
+    }
+
+    .workflow-phase .status.under-development { background: #f39c12; }
+    .workflow-phase .status.under-control { background: #3498db; }
+    .workflow-phase .status.approved { background: #22a06b; }
+    .workflow-phase .status.released { background: #27ae60; }
+    .workflow-phase .status.replaced { background: #e74c3c; }
+
+    .workflow-arrow {
+      text-align: center;
+      margin: 4px 0;
+      font-size: 16px;
+      color: #0a2540;
+    }
+
+    .completion-text {
+      padding: 16px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .completion-text p {
+      margin: 8px 0;
+    }
+
+    .completion-text .italic {
+      font-style: italic;
+      color: #3c5166;
+    }
+
+    .status-table {
+      border: 2px solid #0a2540;
+      margin-top: 18mm;
+    }
+
+    .status-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .status-table th {
+      background: #0a2540;
+      color: white;
+      padding: 8px;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    .status-table td {
+      padding: 8px;
+      border-bottom: 1px solid #0a2540;
+      font-size: 11px;
+    }
+
+    .status-table td:last-child {
+      border-bottom: 0;
+    }
+
+    /* --- Export bar --- */
+    #exportBar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 12px;
+      background: #0a2540;
+      color: #fff;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      font-size: 14px;
+    }
+    #exportBtn {
+      appearance: none;
+      background: #22a06b;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #exportBtn[disabled] { opacity: .6; cursor: not-allowed; }
+    #status { font-size: 12px; opacity: .9; }
+    #paramInfo { font-size: 11px; opacity: 0.8; margin-left: 16px; }
+  </style>
+</head>
+<body>
+  <!-- Export bar -->
+  <div id="exportBar">
+    <button id="exportBtn" type="button">Export to PDF</button>
+    <span id="status" aria-live="polite"></span>
+    <div id="paramInfo" style="font-size: 11px; opacity: 0.8; margin-left: 16px;"></div>
+  </div>
+
+  <!-- PAGE: Document Completion Status -->
+  <section class="page" id="page-1">
+    <!-- Header -->
+    <div class="completion-header">
+      <h1>Document completion status</h1>
+    </div>
+    
+    <!-- Main content -->
+    <div class="completion-content">
+      <!-- Workflow Diagram -->
+      <div class="workflow-diagram">
+        <div class="workflow-phase">
+          <div class="phase-name">UDARBEJDELSESFASE</div>
+          <div class="status under-development" id="dev-status">Under udarbejdelse</div>
+        </div>
+        <div class="workflow-arrow">↓</div>
+        
+        <div class="workflow-phase">
+          <div class="phase-name">GODKENDELSESFASE</div>
+          <div class="status under-control" id="approval-status">Under kontrol</div>
+        </div>
+        <div class="workflow-arrow">↓</div>
+        
+        <div class="workflow-phase">
+          <div class="phase-name">UDGIVELSESFASE</div>
+          <div class="status approved" id="release-status">Godkendt</div>
+        </div>
+        <div class="workflow-arrow">↓</div>
+        
+        <div class="workflow-phase">
+          <div class="phase-name">AKTIVFASE</div>
+          <div class="status released" id="active-status">Udgivet</div>
+        </div>
+        <div class="workflow-arrow">↓</div>
+        
+        <div class="workflow-phase">
+          <div class="phase-name">REVISIONSFASE</div>
+          <div class="status under-development" id="revision-status">Under udarbejdelse</div>
+        </div>
+        <div class="workflow-arrow">↓</div>
+        
+        <div class="workflow-phase">
+          <div class="phase-name">ARKIVERINGSFASE</div>
+          <div class="status replaced" id="archive-status">Erstatter / udskiftet</div>
+        </div>
+      </div>
+      
+      <!-- Explanatory Text -->
+      <div class="completion-text">
+        <p>Figuren til højre fra SBI 271 Punkt 4.3 angiver dokumentets fase og fremhæver proaktiv kommunikation mellem entreprenør og konsulent for rettelser.</p>
+        
+        <p>Dokumentet underskrives ved godkendelse af konstruktøren, og indtil da forbliver det et "dynamisk dokument".</p>
+        
+        <p class="italic">Forventet godkendelsestid 14 dage, hvorefter dokumentets indhold betragtes som godkendt.</p>
+      </div>
+    </div>
+    
+    <!-- Status Table -->
+    <div class="status-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Status:</th>
+            <th>Phase</th>
+            <th>Approval</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="status-date-1">12-08-2025</td>
+            <td id="status-phase-1">Select an item.</td>
+            <td id="status-approval-1">Status</td>
+          </tr>
+          <tr>
+            <td id="status-date-2">12-08-2025</td>
+            <td id="status-phase-2">Select an item.</td>
+            <td id="status-approval-2">Status</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Dependencies: html2canvas + jsPDF (2.x) - Local files -->
+  <script src="html2canvas.min.js"></script>
+  <script src="jspdf.umd.min.js"></script>
+  
+  <!-- Library loading check -->
+  <script>
+    // Check if libraries loaded
+    window.addEventListener('load', () => {
+      if (typeof window.html2canvas !== 'undefined') {
+        console.log('html2canvas loaded successfully');
+      } else {
+        console.error('html2canvas failed to load');
+      }
+      
+      if (typeof window.jspdf !== 'undefined') {
+        console.log('jsPDF loaded successfully');
+      } else {
+        console.error('jsPDF failed to load');
+      }
+    });
+  </script>
+
+  <script>
+    // -----------------------------
+    // Configuration - Dynamic from URL parameters
+    // -----------------------------
+    const BASE_URL = 'http://localhost:3000';
+    
+    // Parse URL parameters
+    function getUrlParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return {
+        companyId: urlParams.get('companyId') || '68f76ce994e7d41efe754dc4', // Default fallback
+        projectId: urlParams.get('projectId') || '68fa70ccee0ab59dfc5f591a', // Default fallback
+        subjectMatterId: urlParams.get('subjectMatterId') || 'KP13' // Default fallback
+      };
+    }
+    
+    // Get dynamic IDs from URL parameters
+    const { companyId: COMPANY_ID, projectId: PROJECT_ID, subjectMatterId: SUBJECT_MATTER_ID } = getUrlParams();
+    
+    // Log the parameters being used
+    console.log('Using parameters:', {
+      COMPANY_ID,
+      PROJECT_ID,
+      SUBJECT_MATTER_ID,
+      url: window.location.href
+    });
+    
+    // Display parameters in UI
+    function displayParameters() {
+      const paramInfo = document.getElementById('paramInfo');
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      if (urlParams.has('companyId') || urlParams.has('projectId') || urlParams.has('subjectMatterId')) {
+        paramInfo.innerHTML = `Company: ${COMPANY_ID.substring(0,8)}... | Project: ${PROJECT_ID.substring(0,8)}... | Subject: ${SUBJECT_MATTER_ID}`;
+      } else {
+        paramInfo.innerHTML = 'Using default parameters';
+      }
+    }
+
+    // -----------------------------
+    // Data loading
+    // -----------------------------
+    async function loadData() {
+      try {
+        // Load document completion status data
+        await loadCompletionStatus();
+        
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    }
+
+    // Load document completion status
+    async function loadCompletionStatus() {
+      try {
+        // Fetch document status from your API (you can add this endpoint)
+        // For now, we'll use sample data
+        const currentDate = new Date().toLocaleDateString('da-DK');
+        
+        // Update status table with current date
+        document.getElementById('status-date-1').textContent = currentDate;
+        document.getElementById('status-date-2').textContent = currentDate;
+        
+        // You can add API call here to get real status data
+        // const statusResponse = await fetch(`${BASE_URL}/get-document-status?projectId=${PROJECT_ID}`);
+        // const statusData = await statusResponse.json();
+        
+        console.log('Document completion status loaded');
+      } catch (error) {
+        console.error('Error loading completion status:', error);
+      }
+    }
+
+    // -----------------------------
+    // Check if all required libraries are loaded
+    // -----------------------------
+    function checkLibraries() {
+      const issues = [];
+      
+      if (typeof window.html2canvas === 'undefined') {
+        issues.push('html2canvas not loaded');
+      }
+      
+      if (typeof window.jspdf === 'undefined') {
+        issues.push('jsPDF not loaded');
+      }
+      
+      if (issues.length > 0) {
+        console.error('Library loading issues:', issues);
+        return false;
+      }
+      
+      console.log('All libraries loaded successfully');
+      return true;
+    }
+
+    // -----------------------------
+    // Export to PDF (jsPDF + html2canvas)
+    // -----------------------------
+    async function exportToPDF() {
+      const statusEl = document.getElementById('status');
+      const btn = document.getElementById('exportBtn');
+      try {
+        btn.disabled = true;
+        statusEl.textContent = 'Rendering…';
+        console.log('Starting PDF export...');
+
+        // Check if all libraries are loaded
+        if (!checkLibraries()) {
+          throw new Error('Required libraries not loaded. Please refresh the page and try again.');
+        }
+
+        // Ensure dynamic content is loaded (images may still be decoding)
+        await document.fonts?.ready;
+        console.log('Fonts loaded');
+        
+        // Wait for all images to load or fail
+        const imagePromises = Array.from(document.images)
+          .filter(img => !img.complete)
+          .map(img => new Promise(res => {
+            console.log('Waiting for image:', img.src);
+            img.addEventListener('load', () => {
+              console.log('Image loaded:', img.src);
+              res();
+            }, { once: true });
+            img.addEventListener('error', (e) => {
+              console.log('Image failed to load:', img.src, e);
+              res(); // Continue even if image fails
+            }, { once: true });
+          }));
+        
+        await Promise.all(imagePromises);
+        console.log('All images processed');
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        const pages = document.querySelectorAll('.page');
+        console.log(`Found ${pages.length} pages to process`);
+        
+        for (let i = 0; i < pages.length; i++) {
+          const el = pages[i];
+          console.log(`Processing page ${i + 1}`);
+
+          // Temporarily hide the export bar (already sticky) to avoid capture
+          const exportBar = document.getElementById('exportBar');
+          const prevDisplay = exportBar.style.display;
+          exportBar.style.display = 'none';
+
+          // Render DOM to canvas
+          const canvas = await html2canvas(el, {
+            scale: 2,                // sharp text
+            useCORS: true,           // allow external logos (needs CORS headers)
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            windowWidth: Math.max(document.documentElement.clientWidth, el.scrollWidth),
+            logging: true,           // Enable logging for debugging
+            onclone: (clonedDoc) => {
+              console.log('Canvas cloned document');
+            }
+          });
+
+          console.log('Canvas rendered:', canvas.width, 'x', canvas.height);
+
+          // Restore
+          exportBar.style.display = prevDisplay;
+
+          // Fit to A4 (portrait)
+          const imgData = canvas.toDataURL('image/png');
+          const pdfW = pdf.internal.pageSize.getWidth();
+          const pdfH = pdf.internal.pageSize.getHeight();
+          const imgW = pdfW;
+          const imgH = canvas.height * (imgW / canvas.width);
+
+          if (i > 0) pdf.addPage('a4', 'p');
+          pdf.addImage(imgData, 'PNG', 0, 0, imgW, imgH);
+
+          // If content is taller than one page (rare here since we sized A4),
+          // you could optionally slice and spill over. The current design matches A4.
+          if (imgH > pdfH + 0.5) {
+            // Optional: Implement slicing if you expect overflow.
+            console.warn('Content exceeds one page; consider adding slicing logic if needed.');
+          }
+        }
+
+        // Filename from title or fallback
+        const title = (document.querySelector('title')?.textContent || 'document-completion-status')
+          .replace(/[\\/:*?"<>|]/g, '')
+          .trim();
+        const filename = `${title}.pdf`;
+
+        statusEl.textContent = 'Saving…';
+        console.log('Saving PDF:', filename);
+        pdf.save(filename);
+        statusEl.textContent = 'Done.';
+        console.log('PDF export completed successfully');
+      } catch (err) {
+        console.error('PDF export error:', err);
+        console.error('Error stack:', err.stack);
+        statusEl.textContent = `Failed to export: ${err.message}`;
+      } finally {
+        document.getElementById('exportBtn').disabled = false;
+        setTimeout(() => (statusEl.textContent = ''), 2000);
+      }
+    }
+
+    // Load data when page loads
+    window.addEventListener('DOMContentLoaded', async () => {
+      // Display parameters in UI
+      displayParameters();
+      
+      await loadData();
+      
+      // Wait a bit for all scripts to load
+      setTimeout(() => {
+        document.getElementById('exportBtn').addEventListener('click', exportToPDF);
+        console.log('Export button ready');
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

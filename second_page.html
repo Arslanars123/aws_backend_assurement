@@ -1,0 +1,469 @@
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+   <meta charset="UTF-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1" />
+   <title>Quality Assurance Report – Template</title>
+   <style>
+     /* --- Reset & base --- */
+     * { box-sizing: border-box; }
+     html, body { height: 100%; }
+     body {
+       margin: 0;
+       font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+       color: #0a2540; /* deep navy */
+       background: #f4f6f8;
+     }
+ 
+     /* --- Page layout (A4 friendly) --- */
+     .page {
+       width: 210mm;              /* A4 width */
+       min-height: 297mm;         /* A4 height */
+       margin: 16px auto;
+       background: #fff;
+       padding: 24mm 18mm;        /* comfortable print margins */
+       position: relative;
+       box-shadow: 0 8px 24px rgba(0,0,0,.08);
+     }
+ 
+     @media print {
+       body { background: #fff; }
+       .page { box-shadow: none; margin: 0; }
+       #exportBar { display: none !important; }
+     }
+ 
+     /* --- Header --- */
+     .header {
+       display: grid;
+       grid-template-columns: 1fr auto;
+       align-items: center;
+       gap: 16px;
+       margin-bottom: 14mm;
+     }
+ 
+     .brand {
+       display: flex;
+       align-items: center;
+       gap: 12px;
+       font-size: 14px;
+       line-height: 1.2;
+     }
+ 
+     .brand .logo {
+       width: 54px; height: 54px;
+       border: 2px solid #0a2540;
+       border-radius: 50%;
+       display: grid; place-items: center;
+       font-weight: 700; font-size: 11px;
+       overflow: hidden;
+     }
+     .brand .text strong { display: block; font-size: 18px; }
+     .brand .text span { display: block; color: #3c5166; }
+ 
+     .company-logo {
+       width: 140px; height: 32px;
+       border: 1px solid #c3cfdd;
+       display: grid; place-items: center;
+       font-size: 12px; color: #6a7b8e;
+     }
+ 
+     /* --- Small helper --- */
+     .muted { color: #6a7b8e; font-weight: 500; }
+ 
+     /* --- Second-page specific styles --- */
+     .right { text-align: right; }
+     .epanel { border: 2px solid #0a2540; padding: 12px 14px 16px; margin: 0 0 18mm; }
+     .epanel-head { display: grid; grid-template-columns: 1fr 160px; align-items: start; }
+     .epanel-title { font-weight: 700; }
+     .company-logo-sm { width: 140px; height: 60px; border: 1px solid #c3cfdd; display: grid; place-items: center; font-size: 12px; color: #6a7b8e; margin-left: auto; overflow: hidden; }
+ 
+     .report-title { font-size: 24px; font-weight: 800; margin: 10px 0 8px; color: #0a2540; }
+     .report-sub { font-weight: 600; color: #3c5166; margin-bottom: 10px; }
+ 
+     .document-row { border: 2px solid #0a2540; display: grid; grid-template-columns: 220px 1fr; }
+     .document-row .cell { border-right: 2px solid #0a2540; padding: 10px 12px; }
+     .document-row .cell:last-child { border-right: 0; }
+     .document-row .label { font-weight: 700; margin-bottom: 6px; }
+ 
+     .standards { width: 70%; margin: 26mm auto 0; }
+     .standards h2 { text-align: center; margin: 0 0 10px; font-size: 20px; }
+     .standards ul { margin: 8px 0 0 0; padding-left: 0; list-style: none; }
+     .standards li { display: flex; gap: 10px; margin: 6px 0; }
+     .standards li::before { content: "■"; font-size: 10px; line-height: 1.6; }
+ 
+     /* Print: page breaks between .page blocks */
+     .page + .page { page-break-before: always; }
+ 
+     /* --- Export bar --- */
+     #exportBar {
+       position: sticky;
+       top: 0;
+       z-index: 999;
+       display: flex;
+       gap: 8px;
+       align-items: center;
+       justify-content: center;
+       padding: 10px 12px;
+       background: #0a2540;
+       color: #fff;
+       border-bottom: 1px solid rgba(255,255,255,0.2);
+       font-size: 14px;
+     }
+     #exportBtn {
+       appearance: none;
+       background: #22a06b;
+       color: #fff;
+       border: none;
+       padding: 8px 12px;
+       border-radius: 8px;
+       font-weight: 700;
+       cursor: pointer;
+     }
+     #exportBtn[disabled] { opacity: .6; cursor: not-allowed; }
+     #status { font-size: 12px; opacity: .9; }
+   </style>
+ </head>
+ <body>
+   <!-- Lightweight action bar (hidden in print/PDF) -->
+   <div id="exportBar">
+     <button id="exportBtn" type="button">Export to PDF</button>
+     <span id="status" aria-live="polite"></span>
+   </div>
+ 
+   <!-- PAGE 2: Static Control Report -->
+   <section class="page" id="page-2">
+     <header class="header" style="margin-bottom: 14mm;">
+       <div class="brand">
+         <div class="logo">
+           <img src="logo.png" alt="Assurement Logo" style="width: 100%; height: 100%; object-fit: contain;" crossorigin="anonymous" />
+         </div>
+         <div class="text">
+           <strong>Assurement</strong>
+           <span>Report · system</span>
+           <small class="muted">Part of Quality Assurance Denmark</small>
+         </div>
+       </div>
+     </header>
+ 
+     <section class="epanel">
+       <div class="epanel-head">
+         <div class="epanel-title">Executing party:</div>
+         <div class="company-logo-sm">Company logo</div>
+       </div>
+ 
+       <h1 class="report-title">Static Control Report:</h1>
+       <div class="report-sub">For those executed within the construction section:</div>
+ 
+       <div class="document-row">
+         <div class="cell">
+           <div class="label">Document ID:</div>
+           <div id="document-id">B3.</div>
+         </div>
+         <div class="cell"></div>
+       </div>
+     </section>
+ 
+     <div class="standards">
+       <h2>Applicable EU standards 2024</h2>
+       <ul>
+         <li>Eurocode 0: Design basis for structures</li>
+         <li>Eurocode 1: Load on load-bearing structures</li>
+         <li>Eurocode 2: Concrete structures</li>
+         <li>Eurocode 3: Steel structures</li>
+         <li>Eurocode 4: Composite Structures</li>
+         <li>Eurocode 5: Timber structures</li>
+         <li>Eurocode 6: Masonry structures</li>
+         <li>Eurocode 7: Geotechnical Engineering</li>
+         <li>Eurocode 8: Structures in seismic areas</li>
+         <li>Eurocode 9: Aluminium structures</li>
+         <li>EN 1520: Lightweight concrete with porous aggregates</li>
+         <li>EN 12602: Aerated concrete</li>
+       </ul>
+     </div>
+   </section>
+ 
+   <!-- Dependencies: html2canvas + jsPDF (2.x) - Local files -->
+   <script src="html2canvas.min.js"></script>
+   <script src="jspdf.umd.min.js"></script>
+   
+   <!-- Library loading check -->
+   <script>
+     // Check if libraries loaded
+     window.addEventListener('load', () => {
+       if (typeof window.html2canvas !== 'undefined') {
+         console.log('html2canvas loaded successfully');
+       } else {
+         console.error('html2canvas failed to load');
+       }
+       
+       if (typeof window.jspdf !== 'undefined') {
+         console.log('jsPDF loaded successfully');
+       } else {
+         console.error('jsPDF failed to load');
+       }
+     });
+   </script>
+ 
+   <script>
+     // -----------------------------
+     // Configuration - Set these values
+     // -----------------------------
+     const BASE_URL = 'http://localhost:3000';
+     const COMPANY_ID = '68f76ce994e7d41efe754dc4'; // Company ID from URL
+     const PROJECT_ID = '68fa70ccee0ab59dfc5f591a'; // Project ID from URL
+ 
+     // -----------------------------
+     // Data loading (your original)
+     // -----------------------------
+     async function loadData() {
+       try {
+         // Fetch company details
+         const companyResponse = await fetch(`${BASE_URL}/get-company-detail/${COMPANY_ID}`, { mode: 'cors' });
+         const company = await companyResponse.json();
+         // Set company logo if available (prioritize S3 location)
+         if (company.picture) {
+           const logoContainer = document.querySelector('.company-logo-sm');
+           logoContainer.innerHTML = '';
+
+           console.log('Company picture data:', company.picture);
+           console.log('S3 Location:', company.picture.s3Location);
+           console.log('Filename:', company.picture.filename);
+
+           const logoImg = document.createElement('img');
+           // Try without crossOrigin first, then add it if needed
+           logoImg.crossOrigin = 'anonymous';
+
+           if (company.picture.s3Location) {
+             console.log('Loading S3 image:', company.picture.s3Location);
+             logoImg.src = company.picture.s3Location;
+           } else if (company.picture.filename) {
+             console.log('Loading local image:', `${BASE_URL}/uploads/${company.picture.filename}`);
+             logoImg.src = `${BASE_URL}/uploads/${company.picture.filename}`;
+           }
+
+           logoImg.style.maxWidth = '140px';
+           logoImg.style.maxHeight = '60px';
+           logoImg.style.objectFit = 'contain';
+           logoImg.style.border = '1px solid #c3cfdd';
+           logoImg.style.borderRadius = '4px';
+           
+           logoImg.addEventListener('load', () => {
+             console.log('Logo loaded successfully:', logoImg.src);
+           });
+           
+           logoImg.addEventListener('error', (e) => {
+             console.log('Logo failed to load:', logoImg.src, e);
+             console.log('Trying fallback to local upload...');
+             
+             // Try fallback to local upload if S3 fails
+             if (company.picture.s3Location && company.picture.filename) {
+               logoImg.src = `${BASE_URL}/uploads/${company.picture.filename}`;
+               logoImg.crossOrigin = null; // Remove CORS for local files
+             } else {
+               logoContainer.textContent = 'Company logo';
+             }
+           });
+
+           logoContainer.appendChild(logoImg);
+         }
+ 
+         // Fetch special text
+         const specialTextResponse = await fetch(`${BASE_URL}/get-project-special-text?projectId=${PROJECT_ID}`, { mode: 'cors' });
+         const specialTextData = await specialTextResponse.json();
+ 
+         // Update document ID with special text
+         const documentId = document.getElementById('document-id');
+         if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
+           documentId.textContent = `B3. ${specialTextData.data.specialText}`;
+         } else {
+           documentId.textContent = 'B3.';
+         }
+       } catch (error) {
+         console.error('Error loading data:', error);
+       }
+     }
+ 
+     // -----------------------------
+     // Check if all required libraries are loaded
+     // -----------------------------
+     function checkLibraries() {
+       const issues = [];
+       
+       if (typeof window.html2canvas === 'undefined') {
+         issues.push('html2canvas not loaded');
+       }
+       
+       if (typeof window.jspdf === 'undefined') {
+         issues.push('jsPDF not loaded');
+       }
+       
+       if (issues.length > 0) {
+         console.error('Library loading issues:', issues);
+         return false;
+       }
+       
+       console.log('All libraries loaded successfully');
+       return true;
+     }
+
+     // -----------------------------
+     // Export to PDF (jsPDF + html2canvas)
+     // -----------------------------
+     async function exportToPDF() {
+       const statusEl = document.getElementById('status');
+       const btn = document.getElementById('exportBtn');
+       try {
+         btn.disabled = true;
+         statusEl.textContent = 'Rendering…';
+         console.log('Starting PDF export...');
+
+         // Check if all libraries are loaded
+         if (!checkLibraries()) {
+           throw new Error('Required libraries not loaded. Please refresh the page and try again.');
+         }
+
+         // Ensure dynamic content is loaded (images may still be decoding)
+         await document.fonts?.ready;
+         console.log('Fonts loaded');
+         
+         // Wait for all images to load or fail
+         const imagePromises = Array.from(document.images)
+           .filter(img => !img.complete)
+           .map(img => new Promise(res => {
+             console.log('Waiting for image:', img.src);
+             img.addEventListener('load', () => {
+               console.log('Image loaded:', img.src);
+               res();
+             }, { once: true });
+             img.addEventListener('error', (e) => {
+               console.log('Image failed to load:', img.src, e);
+               res(); // Continue even if image fails
+             }, { once: true });
+           }));
+         
+         await Promise.all(imagePromises);
+         console.log('All images processed');
+
+         // Check if jsPDF is loaded
+         if (typeof window.jspdf === 'undefined') {
+           throw new Error('jsPDF library not loaded. Please check your internet connection and refresh the page.');
+         }
+         
+         const { jsPDF } = window.jspdf;
+         const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+         const pages = document.querySelectorAll('.page');
+         console.log(`Found ${pages.length} pages to process`);
+         
+         for (let i = 0; i < pages.length; i++) {
+           const el = pages[i];
+           console.log(`Processing page ${i + 1}`);
+
+           // Temporarily hide the export bar (already sticky) to avoid capture
+           const exportBar = document.getElementById('exportBar');
+           const prevDisplay = exportBar.style.display;
+           exportBar.style.display = 'none';
+
+           // Render DOM to canvas
+           const canvas = await html2canvas(el, {
+             scale: 2,                // sharp text
+             useCORS: true,           // allow external logos (needs CORS headers)
+             allowTaint: true,
+             backgroundColor: '#ffffff',
+             windowWidth: Math.max(document.documentElement.clientWidth, el.scrollWidth),
+             logging: true,           // Enable logging for debugging
+             onclone: (clonedDoc) => {
+               console.log('Canvas cloned document');
+               // Replace any problematic images with fallback text in the cloned document
+               const images = clonedDoc.querySelectorAll('img');
+               images.forEach(img => {
+                 if (img.src.includes('s3.amazonaws.com') || img.src.includes('localhost:3000')) {
+                   const fallbackDiv = clonedDoc.createElement('div');
+                   fallbackDiv.textContent = 'Company Logo';
+                   fallbackDiv.style.cssText = `
+                     width: 140px; height: 60px; 
+                     border: 1px solid #c3cfdd; 
+                     display: flex; align-items: center; justify-content: center;
+                     font-size: 12px; color: #6a7b8e;
+                     background: #f8f9fa;
+                   `;
+                   img.parentNode.replaceChild(fallbackDiv, img);
+                 }
+               });
+             }
+           });
+
+           console.log('Canvas rendered:', canvas.width, 'x', canvas.height);
+
+           // Restore
+           exportBar.style.display = prevDisplay;
+
+           // Fit to A4 (portrait)
+           const imgData = canvas.toDataURL('image/png');
+           const pdfW = pdf.internal.pageSize.getWidth();
+           const pdfH = pdf.internal.pageSize.getHeight();
+           const imgW = pdfW;
+           const imgH = canvas.height * (imgW / canvas.width);
+
+           if (i > 0) pdf.addPage('a4', 'p');
+           pdf.addImage(imgData, 'PNG', 0, 0, imgW, imgH);
+
+           // If content is taller than one page (rare here since we sized A4),
+           // you could optionally slice and spill over. The current design matches A4.
+           if (imgH > pdfH + 0.5) {
+             // Optional: Implement slicing if you expect overflow.
+             console.warn('Content exceeds one page; consider adding slicing logic if needed.');
+           }
+         }
+
+         // Filename from title or fallback
+         const title = (document.querySelector('title')?.textContent || 'report')
+           .replace(/[\\/:*?"<>|]/g, '')
+           .trim();
+         const filename = `${title}.pdf`;
+
+         statusEl.textContent = 'Saving…';
+         console.log('Saving PDF:', filename);
+         pdf.save(filename);
+         statusEl.textContent = 'Done.';
+         console.log('PDF export completed successfully');
+       } catch (err) {
+         console.error('PDF export error:', err);
+         console.error('Error stack:', err.stack);
+         statusEl.textContent = `Failed to export: ${err.message}`;
+       } finally {
+         document.getElementById('exportBtn').disabled = false;
+         setTimeout(() => (statusEl.textContent = ''), 2000);
+       }
+     }
+ 
+     // Test S3 image access
+     async function testS3Image(url) {
+       try {
+         const response = await fetch(url, { mode: 'no-cors' });
+         console.log('S3 image test response:', response);
+         return true;
+       } catch (error) {
+         console.log('S3 image test failed:', error);
+         return false;
+       }
+     }
+
+     // Load data when page loads
+     window.addEventListener('DOMContentLoaded', async () => {
+       await loadData();
+       
+       // Test S3 image access
+       const s3Url = 'https://assurement-v1-backend.s3.eu-north-1.amazonaws.com/abe8b09b87b335609feb6b91cde1125c-360_F_210019072_dMdD6MPM4S7CgBjAZkBRUmJFTrOhWIj0.jpg';
+       await testS3Image(s3Url);
+       
+       // Wait a bit for all scripts to load
+       setTimeout(() => {
+         document.getElementById('exportBtn').addEventListener('click', exportToPDF);
+         console.log('Export button ready');
+       }, 1000);
+     });
+   </script>
+ </body>
+ </html>
+ 

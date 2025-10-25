@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Static Inspection Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0a2540; background: #f4f6f8; }
+    
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 16px auto;
+      background: #fff;
+      padding: 24mm 18mm;
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    }
+    
+    @media print {
+      body { background: #fff; }
+      .page { box-shadow: none; margin: 0; }
+    }
+    
+    /* Header */
+    .header {
+      background: #0a2540;
+      color: white;
+      padding: 12px 16px;
+      margin-bottom: 18mm;
+    }
+    .header h1 { margin: 0; font-size: 20px; }
+    .header p { margin: 4px 0 0; font-size: 12px; opacity: 0.9; }
+    
+    /* Construction case section */
+    .construction-case { border: 2px solid #0a2540; margin-bottom: 18mm; }
+    .construction-case h2 { background: #0a2540; color: white; margin: 0; padding: 8px 12px; font-size: 14px; }
+    .construction-case-content { display: grid; grid-template-columns: 1fr 1fr; }
+    .construction-case-content > div { padding: 12px; border-right: 2px solid #0a2540; }
+    .construction-case-content > div:last-child { border-right: 0; }
+    
+    .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0; font-size: 11px; }
+    .info-row .label { font-weight: 600; color: #3c5166; }
+    .info-row .value { border-bottom: 1px dotted #9bb2c9; min-height: 14px; }
+    
+    /* Document info table */
+    .doc-info { border: 2px solid #0a2540; margin-bottom: 18mm; }
+    .doc-info table { width: 100%; border-collapse: collapse; }
+    .doc-info th { background: #0a2540; color: white; padding: 8px; text-align: left; font-size: 12px; }
+    .doc-info td { padding: 8px; border-bottom: 1px solid #0a2540; font-size: 11px; }
+    
+    /* Signing section */
+    .signing { border: 2px solid #0a2540; margin-bottom: 18mm; }
+    .signing h2 { background: #0a2540; color: white; margin: 0; padding: 8px 12px; font-size: 14px; }
+    .signing-content { padding: 12px; }
+    
+    .signature-block { display: grid; grid-template-columns: 200px 120px 1fr 150px; gap: 8px; align-items: center; margin: 12px 0; padding: 8px 0; border-bottom: 1px solid #0a2540; }
+    .signature-block:last-child { border-bottom: 0; }
+    .signature-block .label { font-size: 11px; font-weight: 600; color: #3c5166; }
+    .signature-block .value { border-bottom: 1px dotted #9bb2c9; min-height: 14px; font-size: 11px; }
+    .signature-block .date { border-bottom: 1px dotted #9bb2c9; min-height: 14px; font-size: 11px; }
+    .signature-block .enterprise { border-bottom: 1px dotted #9bb2c9; min-height: 14px; font-size: 11px; }
+    
+    .signature-image { max-width: 150px; max-height: 60px; border: 1px solid #c3cfdd; padding: 4px; margin-top: 4px; }
+    
+    /* Export bar */
+    #exportBar {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 12px;
+      background: #0a2540;
+      color: #fff;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      font-size: 14px;
+    }
+    #exportBtn {
+      appearance: none;
+      background: #22a06b;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #exportBtn[disabled] { opacity: .6; cursor: not-allowed; }
+    #status { font-size: 12px; opacity: .9; }
+    
+    @media print {
+      #exportBar { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Export bar -->
+  <div id="exportBar">
+    <button id="exportBtn" type="button">Export to PDF</button>
+    <span id="status" aria-live="polite"></span>
+  </div>
+  <script>
+    const BASE_URL = 'http://localhost:3000';
+    const COMPANY_ID = '68f76ce994e7d41efe754dc4';
+    const PROJECT_ID = '68fa70ccee0ab59dfc5f591a';
+    const SUBJECT_MATTER_ID = 'KP13'; // Professional group ID
+    
+    async function loadData() {
+      try {
+        // Fetch project details
+        const projectResponse = await fetch(`${BASE_URL}/get-project-detail/${PROJECT_ID}`);
+        const project = await projectResponse.json();
+        console.log('Project data:', project);
+        
+        // Fetch company details
+        const companyResponse = await fetch(`${BASE_URL}/get-company-detail/${COMPANY_ID}`);
+        const company = await companyResponse.json();
+        console.log('Company data:', company);
+        
+        // Fetch signatures
+        const signaturesResponse = await fetch(`${BASE_URL}/get-static-report-signatures`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyId: COMPANY_ID, projectId: PROJECT_ID })
+        });
+        const signatures = await signaturesResponse.json();
+        console.log('Signatures data:', signatures);
+        
+        // Filter signatures by subjectMatterId
+        const filteredSignatures = signatures.filter(sig => sig.subjectMatterId === SUBJECT_MATTER_ID);
+        console.log('Filtered signatures:', filteredSignatures);
+        
+        // Populate project details
+        if (project.name) document.getElementById('project-name').textContent = project.name;
+        if (project._id) document.getElementById('project-id').textContent = project._id;
+        if (project.name) document.getElementById('project-name-full').textContent = project.name;
+        if (project.address) document.getElementById('project-address').textContent = project.address;
+        if (project.postalCode && project.city) {
+          document.getElementById('project-post').textContent = `${project.postalCode} ${project.city}`;
+        }
+        if (project.contactPerson) document.getElementById('project-contact').textContent = project.contactPerson;
+        if (project.startDate) document.getElementById('project-startup').textContent = new Date(project.startDate).toLocaleDateString();
+        
+        // Populate company details
+        if (company.name) document.getElementById('company-name').textContent = company.name;
+        if (company.name) document.getElementById('company-name-full').textContent = company.name;
+        if (company.address) document.getElementById('company-address').textContent = company.address;
+        if (company.postalCode && company.city) {
+          document.getElementById('company-post').textContent = `${company.postalCode} ${company.city}`;
+        }
+        if (company.cvr) document.getElementById('company-cvr').textContent = company.cvr;
+        if (company.email) document.getElementById('company-email').textContent = company.email;
+        if (company.contactPerson) document.getElementById('company-contact').textContent = company.contactPerson;
+        
+        // Populate signatures
+        filteredSignatures.forEach(sig => {
+          if (sig.signatureType === 1) {
+            // Signature 1 - Prepared/approved by
+            if (sig.name) document.getElementById('sig1-name').textContent = sig.name;
+            if (sig.signatureDate) {
+              document.getElementById('sig1-date').textContent = new Date(sig.signatureDate).toLocaleDateString();
+            }
+            if (sig.signature) {
+              const img = document.createElement('img');
+              img.src = sig.signature;
+              img.className = 'signature-image';
+              document.getElementById('sig1-signature').appendChild(img);
+            }
+          } else if (sig.signatureType === 2) {
+            // Signature 2 - Self-monitoring (EC)
+            if (sig.name) document.getElementById('sig2-name').textContent = sig.name;
+            if (sig.signatureDate) {
+              document.getElementById('sig2-date').textContent = new Date(sig.signatureDate).toLocaleDateString();
+            }
+            if (sig.signature) {
+              const img = document.createElement('img');
+              img.src = sig.signature;
+              img.className = 'signature-image';
+              document.getElementById('sig2-signature').appendChild(img);
+            }
+          } else if (sig.signatureType === 3) {
+            // Signature 3 - Independent Auditor (UK)
+            if (sig.name) document.getElementById('sig3-name').textContent = sig.name;
+            if (sig.signatureDate) {
+              document.getElementById('sig3-date').textContent = new Date(sig.signatureDate).toLocaleDateString();
+            }
+            if (sig.signature) {
+              const img = document.createElement('img');
+              img.src = sig.signature;
+              img.className = 'signature-image';
+              document.getElementById('sig3-signature').appendChild(img);
+            }
+          }
+        });
+        
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    }
+
+    // -----------------------------
+    // Check if all required libraries are loaded
+    // -----------------------------
+    function checkLibraries() {
+      const issues = [];
+      
+      if (typeof window.html2canvas === 'undefined') {
+        issues.push('html2canvas not loaded');
+      }
+      
+      if (typeof window.jspdf === 'undefined') {
+        issues.push('jsPDF not loaded');
+      }
+      
+      if (issues.length > 0) {
+        console.error('Library loading issues:', issues);
+        return false;
+      }
+      
+      console.log('All libraries loaded successfully');
+      return true;
+    }
+
+    // -----------------------------
+    // Export to PDF (jsPDF + html2canvas)
+    // -----------------------------
+    async function exportToPDF() {
+      const statusEl = document.getElementById('status');
+      const btn = document.getElementById('exportBtn');
+      try {
+        btn.disabled = true;
+        statusEl.textContent = 'Rendering…';
+        console.log('Starting PDF export...');
+
+        // Check if all libraries are loaded
+        if (!checkLibraries()) {
+          throw new Error('Required libraries not loaded. Please refresh the page and try again.');
+        }
+
+        // Ensure dynamic content is loaded (images may still be decoding)
+        await document.fonts?.ready;
+        console.log('Fonts loaded');
+        
+        // Wait for all images to load or fail
+        const imagePromises = Array.from(document.images)
+          .filter(img => !img.complete)
+          .map(img => new Promise(res => {
+            console.log('Waiting for image:', img.src);
+            img.addEventListener('load', () => {
+              console.log('Image loaded:', img.src);
+              res();
+            }, { once: true });
+            img.addEventListener('error', (e) => {
+              console.log('Image failed to load:', img.src, e);
+              res(); // Continue even if image fails
+            }, { once: true });
+          }));
+        
+        await Promise.all(imagePromises);
+        console.log('All images processed');
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        const pages = document.querySelectorAll('.page');
+        console.log(`Found ${pages.length} pages to process`);
+        
+        for (let i = 0; i < pages.length; i++) {
+          const el = pages[i];
+          console.log(`Processing page ${i + 1}`);
+
+          // Temporarily hide the export bar (already sticky) to avoid capture
+          const exportBar = document.getElementById('exportBar');
+          const prevDisplay = exportBar.style.display;
+          exportBar.style.display = 'none';
+
+          // Render DOM to canvas
+          const canvas = await html2canvas(el, {
+            scale: 2,                // sharp text
+            useCORS: true,           // allow external logos (needs CORS headers)
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            windowWidth: Math.max(document.documentElement.clientWidth, el.scrollWidth),
+            logging: true,           // Enable logging for debugging
+            onclone: (clonedDoc) => {
+              console.log('Canvas cloned document');
+              // Replace any problematic images with fallback text in the cloned document
+              const images = clonedDoc.querySelectorAll('img');
+              images.forEach(img => {
+                if (img.src.includes('s3.amazonaws.com') || img.src.includes('localhost:3000')) {
+                  const fallbackDiv = clonedDoc.createElement('div');
+                  fallbackDiv.textContent = 'Signature';
+                  fallbackDiv.style.cssText = `
+                    width: 150px; height: 60px; 
+                    border: 1px solid #c3cfdd; 
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 12px; color: #6a7b8e;
+                    background: #f8f9fa;
+                  `;
+                  img.parentNode.replaceChild(fallbackDiv, img);
+                }
+              });
+            }
+          });
+
+          console.log('Canvas rendered:', canvas.width, 'x', canvas.height);
+
+          // Restore
+          exportBar.style.display = prevDisplay;
+
+          // Fit to A4 (portrait)
+          const imgData = canvas.toDataURL('image/png');
+          const pdfW = pdf.internal.pageSize.getWidth();
+          const pdfH = pdf.internal.pageSize.getHeight();
+          const imgW = pdfW;
+          const imgH = canvas.height * (imgW / canvas.width);
+
+          if (i > 0) pdf.addPage('a4', 'p');
+          pdf.addImage(imgData, 'PNG', 0, 0, imgW, imgH);
+
+          // If content is taller than one page (rare here since we sized A4),
+          // you could optionally slice and spill over. The current design matches A4.
+          if (imgH > pdfH + 0.5) {
+            // Optional: Implement slicing if you expect overflow.
+            console.warn('Content exceeds one page; consider adding slicing logic if needed.');
+          }
+        }
+
+        // Filename from title or fallback
+        const title = (document.querySelector('title')?.textContent || 'signatures-report')
+          .replace(/[\\/:*?"<>|]/g, '')
+          .trim();
+        const filename = `${title}.pdf`;
+
+        statusEl.textContent = 'Saving…';
+        console.log('Saving PDF:', filename);
+        pdf.save(filename);
+        statusEl.textContent = 'Done.';
+        console.log('PDF export completed successfully');
+      } catch (err) {
+        console.error('PDF export error:', err);
+        console.error('Error stack:', err.stack);
+        statusEl.textContent = `Failed to export: ${err.message}`;
+      } finally {
+        document.getElementById('exportBtn').disabled = false;
+        setTimeout(() => (statusEl.textContent = ''), 2000);
+      }
+    }
+    
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadData();
+      
+      // Wait a bit for all scripts to load
+      setTimeout(() => {
+        document.getElementById('exportBtn').addEventListener('click', exportToPDF);
+        console.log('Export button ready');
+      }, 1000);
+    });
+  </script>
+  
+  <main class="page">
+    <!-- Header -->
+    <div class="header">
+      <h1>STATIC INSPECTION REPORT</h1>
+      <p>For load-bearing structures, cf. DS1140 applies to:</p>
+      <p>The control plan is built according to the current EU standard: Eurocode</p>
+    </div>
+    
+    <!-- Construction case section -->
+    <section class="construction-case">
+      <h2>Construction case:</h2>
+      <div class="construction-case-content">
+        <!-- Project Details -->
+        <div>
+          <div class="info-row">
+            <div class="label">Project name/ID:</div>
+            <div class="value" id="project-name"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Project ID/Case no.:</div>
+            <div class="value" id="project-id"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Project Name:</div>
+            <div class="value" id="project-name-full"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Project Address:</div>
+            <div class="value" id="project-address"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Project post no./City:</div>
+            <div class="value" id="project-post"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Project Contact person:</div>
+            <div class="value" id="project-contact"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Project Start-up:</div>
+            <div class="value" id="project-startup"></div>
+          </div>
+        </div>
+        
+        <!-- Company Details -->
+        <div>
+          <div class="info-row">
+            <div class="label">Published by: company</div>
+            <div class="value" id="company-name"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Company Name:</div>
+            <div class="value" id="company-name-full"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Business Address:</div>
+            <div class="value" id="company-address"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Company Post no./City.:</div>
+            <div class="value" id="company-post"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Company CVR no.:</div>
+            <div class="value" id="company-cvr"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Business email.:</div>
+            <div class="value" id="company-email"></div>
+          </div>
+          <div class="info-row">
+            <div class="label">Company Contact:</div>
+            <div class="value" id="company-contact"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Document info table -->
+    <section class="doc-info">
+      <table>
+        <thead>
+          <tr>
+            <th>DOCUMENT TYPE:</th>
+            <th>VERSION</th>
+            <th>CONSTRUCTION CLUSTER</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>STATIC INSPECTION REPORT</td>
+            <td>1</td>
+            <td>KK3</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    
+    <!-- Signing section -->
+    <section class="signing">
+      <h2>SIGNING:</h2>
+      <div class="signing-content">
+        <!-- Signature 1: Prepared/approved by -->
+        <div class="signature-block">
+          <div class="label">Signed</div>
+          <div class="date" id="sig1-date"></div>
+          <div class="label">Prepared/approved by:</div>
+          <div class="enterprise"><img class="signature-image" id="sig1-signature-image" /></div>
+        </div>
+        <div class="signature-block">
+          <div class="value" id="sig1-name"></div>
+          <div></div>
+          <div id="sig1-signature"></div>
+          <div></div>
+        </div>
+        
+        <!-- Signature 2: Self-monitoring (EC) -->
+        <div class="signature-block">
+          <div class="label">Signed</div>
+          <div class="date" id="sig2-date"></div>
+          <div class="label">Self-monitoring (EC):</div>
+          <div class="enterprise"></div>
+        </div>
+        <div class="signature-block">
+          <div class="value" id="sig2-name"></div>
+          <div></div>
+          <div id="sig2-signature"></div>
+          <div></div>
+        </div>
+        
+        <!-- Signature 3: Independent Auditor (UK) -->
+        <div class="signature-block">
+          <div class="label">Signed</div>
+          <div class="date" id="sig3-date"></div>
+          <div class="label">Independent Auditor (UK):</div>
+          <div class="enterprise"></div>
+        </div>
+        <div class="signature-block">
+          <div class="value" id="sig3-name"></div>
+          <div></div>
+          <div id="sig3-signature"></div>
+          <div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Dependencies: html2canvas + jsPDF (2.x) - Local files -->
+  <script src="html2canvas.min.js"></script>
+  <script src="jspdf.umd.min.js"></script>
+  
+  <!-- Library loading check -->
+  <script>
+    // Check if libraries loaded
+    window.addEventListener('load', () => {
+      if (typeof window.html2canvas !== 'undefined') {
+        console.log('html2canvas loaded successfully');
+      } else {
+        console.error('html2canvas failed to load');
+      }
+      
+      if (typeof window.jspdf !== 'undefined') {
+        console.log('jsPDF loaded successfully');
+      } else {
+        console.error('jsPDF failed to load');
+      }
+    });
+  </script>
+</body>
+</html>
+
