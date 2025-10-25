@@ -2198,6 +2198,94 @@ function createKsReportRoutes(db) {
         deviationQualityAssuranceHtml = deviationPageHtml;
       }
 
+      // Read Drawing and Document HTML
+      const drawingTablePath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "drawing-table.html"
+      );
+      let drawingTableHtml = fs.readFileSync(drawingTablePath, "utf8");
+
+      // Fetch draws data (already fetched in fetchKsReportData, but need to get mainDrawings structure)
+      const drawGroups = data.draws || [];
+      let drawingHierarchyHtml = "";
+
+      if (drawGroups.length > 0) {
+        drawGroups.forEach((drawingGroup) => {
+          if (
+            drawingGroup.mainDrawings &&
+            drawingGroup.mainDrawings.length > 0
+          ) {
+            drawingGroup.mainDrawings.forEach((mainDrawing) => {
+              const fileName =
+                mainDrawing.originalname ||
+                mainDrawing.filename ||
+                "Unknown File";
+              const fileSize = mainDrawing.size || 0;
+              const fileSizeText =
+                fileSize < 1024
+                  ? `${fileSize} B`
+                  : fileSize < 1024 * 1024
+                  ? `${(fileSize / 1024).toFixed(1)} KB`
+                  : `${(fileSize / (1024 * 1024)).toFixed(1)} MB`;
+
+              const uploadDate =
+                mainDrawing.uploadedAt || new Date().toISOString();
+              const formattedDate = new Date(uploadDate).toLocaleDateString(
+                "en-US",
+                {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }
+              );
+
+              drawingHierarchyHtml += `
+                <div class="main-drawings-section">
+                  <div class="main-drawing-item">
+                    <div class="drawing-item-header">
+                      <div class="drawing-info">
+                        <span class="drawing-name">${fileName}</span>
+                        <span class="drawing-type">Main Drawing</span>
+                      </div>
+                      <div class="drawing-details">
+                        <span class="file-size">${fileSizeText}</span>
+                        <span class="upload-date">${formattedDate}</span>
+                      </div>
+                    </div>
+                    <div class="drawing-link">
+                      <a href="${mainDrawing.s3Location}" target="_blank" rel="noopener noreferrer" class="view-drawing-link">
+                        View Drawing
+                      </a>
+                    </div>
+                    <div class="drawing-preview-container">
+                      <iframe
+                        src="${mainDrawing.s3Location}#toolbar=0&navpanes=0&scrollbar=0"
+                        style="width: 100%; height: 800px; border: 1px solid #d1d5db; border-radius: 4px; overflow: hidden; margin-top: 10px;"
+                        scrolling="no"
+                        title="Main Drawing"
+                      ></iframe>
+                    </div>
+                  </div>
+                </div>
+              `;
+            });
+          }
+        });
+      }
+
+      if (!drawingHierarchyHtml) {
+        drawingHierarchyHtml =
+          '<div class="drawing-document-empty"><p>No drawings and documents found for this project.</p></div>';
+      }
+
+      drawingTableHtml = drawingTableHtml.replace(
+        '<div class="drawing-hierarchy-container" id="drawingHierarchyContainer">',
+        `<div class="drawing-hierarchy-container" id="drawingHierarchyContainer">${drawingHierarchyHtml}`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
@@ -2228,6 +2316,7 @@ function createKsReportRoutes(db) {
       deviationQualityAssuranceHtml = updatePageFooter(
         deviationQualityAssuranceHtml
       );
+      drawingTableHtml = updatePageFooter(drawingTableHtml);
 
       // Combine all pages
       const combinedHtml =
@@ -2249,7 +2338,8 @@ function createKsReportRoutes(db) {
         newAgreementHtml +
         safetyMentionHtml +
         technicalRequestHtml +
-        deviationQualityAssuranceHtml;
+        deviationQualityAssuranceHtml +
+        drawingTableHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
