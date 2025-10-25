@@ -17579,7 +17579,7 @@ app.get(
 
       // Generate PDF using Puppeteer with multiple pages
       const browser = await puppeteer.launch({
-        headless: true,
+        headless: "new",
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });
       const page = await browser.newPage();
