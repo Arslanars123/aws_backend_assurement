@@ -202,9 +202,15 @@ function createKsReportRoutes(db) {
         "abdullahksreport",
         "table-of-contents.html"
       );
+      const projectDetailsPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "project-details.html"
+      );
 
       let reportPage1Html = fs.readFileSync(reportPage1Path, "utf8");
       let tocHtml = fs.readFileSync(tocPath, "utf8");
+      let projectDetailsHtml = fs.readFileSync(projectDetailsPath, "utf8");
 
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
@@ -279,8 +285,221 @@ function createKsReportRoutes(db) {
         `id="footerCompanyLogoFallback">${firstLetter}`
       );
 
-      // Combine both pages
-      const combinedHtml = reportPage1Html + tocHtml;
+      // Populate ProjectDetails
+      const currentDate = new Date().toISOString().split("T")[0];
+      const mainContractors = data.users?.mainContractorsCustomers || [];
+      const constructionManagers = data.users?.constructionManagers || [];
+      const safetyManagers = data.users?.safetyManagers || [];
+      const schemes = data.schemes || [];
+
+      // Construction Case fields
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="constructionCaseDate"><\/div>/g,
+        `id="constructionCaseDate">${currentDate}</div>`
+      );
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="constructionCaseId"><\/div>/g,
+        `id="constructionCaseId">${projectIdValue}</div>`
+      );
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="constructionCaseName"><\/div>/g,
+        `id="constructionCaseName">${projectDetail.name || ""}</div>`
+      );
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="constructionCaseAddress"><\/div>/g,
+        `id="constructionCaseAddress">${projectDetail.address || ""}</div>`
+      );
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="constructionCasePostcode"><\/div>/g,
+        `id="constructionCasePostcode">${projectDetail.postCode || ""}</div>`
+      );
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="constructionCaseStartingDate"><\/div>/g,
+        `id="constructionCaseStartingDate">${
+          projectDetail.startDate || ""
+        }</div>`
+      );
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="constructionCaseDeadline"><\/div>/g,
+        `id="constructionCaseDeadline">${
+          projectDetail.projectDeadLine || ""
+        }</div>`
+      );
+
+      // Main Contractors
+      let mainContractorsHtml = "";
+      mainContractors.forEach((contractor, index) => {
+        mainContractorsHtml += `
+          <div class="project-details-fields">
+            <div class="project-details-field">
+              <label>NAME:</label>
+              <div class="project-details-value">${contractor.name || ""}</div>
+            </div>
+            <div class="project-details-field">
+              <label>CVR NO:</label>
+              <div class="project-details-value">${contractor.cvr || ""}</div>
+            </div>
+            <div class="project-details-field">
+              <label>CONTACT PERSON</label>
+              <div class="project-details-value">${
+                contractor.contactPerson || ""
+              }</div>
+            </div>
+            <div class="project-details-field">
+              <label>ADDRESS:</label>
+              <div class="project-details-value">${
+                contractor.address || ""
+              }</div>
+            </div>
+            <div class="project-details-field">
+              <label>POSTCODE:</label>
+              <div class="project-details-value">${
+                contractor.postalCode || ""
+              }</div>
+            </div>
+            <div class="project-details-field">
+              <label>TELEPHONE:</label>
+              <div class="project-details-value">${contractor.phone || ""}</div>
+            </div>
+            <div class="project-details-field">
+              <label>EMAIL:</label>
+              <div class="project-details-value">${
+                contractor.username || ""
+              }</div>
+            </div>
+            ${
+              index < mainContractors.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /<div id="mainContractorsContainer">.*?<\/div>/s,
+        `<div id="mainContractorsContainer">${mainContractorsHtml}</div>`
+      );
+
+      // Construction Managers
+      let constructionManagersHtml = "";
+      constructionManagers.forEach((manager, index) => {
+        constructionManagersHtml += `
+          <div class="project-details-fields">
+            <div class="project-details-field">
+              <label>Date</label>
+              <div class="project-details-value">${
+                manager.startDate || currentDate
+              }</div>
+            </div>
+            <div class="project-details-field">
+              <label>NAME</label>
+              <div class="project-details-value">${
+                manager.name || "Construction Manager"
+              }</div>
+            </div>
+            <div class="project-details-field">
+              <label>TELEPHONE:</label>
+              <div class="project-details-value">${manager.phone || ""}</div>
+            </div>
+            <div class="project-details-field">
+              <label>EMAIL:</label>
+              <div class="project-details-value">${manager.username || ""}</div>
+            </div>
+            ${
+              index < constructionManagers.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /<div id="constructionManagersContainer">.*?<\/div>/s,
+        `<div id="constructionManagersContainer">${constructionManagersHtml}</div>`
+      );
+
+      // Safety Managers
+      let safetyManagersHtml = "";
+      safetyManagers.forEach((manager, index) => {
+        safetyManagersHtml += `
+          <div class="project-details-fields">
+            <div class="project-details-field">
+              <label>Date</label>
+              <div class="project-details-value">${
+                manager.startDate || currentDate
+              }</div>
+            </div>
+            <div class="project-details-field">
+              <label>NAME</label>
+              <div class="project-details-value">${
+                manager.name || "Safety Coordinator"
+              }</div>
+            </div>
+            <div class="project-details-field">
+              <label>TELEPHONE:</label>
+              <div class="project-details-value">${manager.phone || ""}</div>
+            </div>
+            <div class="project-details-field">
+              <label>EMAIL:</label>
+              <div class="project-details-value">${manager.username || ""}</div>
+            </div>
+            ${
+              index < safetyManagers.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /<div id="safetyManagersContainer">.*?<\/div>/s,
+        `<div id="safetyManagersContainer">${safetyManagersHtml}</div>`
+      );
+
+      // Schemes
+      let schemesHtml = "";
+      schemes.forEach((scheme, index) => {
+        schemesHtml += `
+          <div class="project-details-fields-split">
+            <div class="project-details-field">
+              <label>Date</label>
+              <div class="project-details-value">${scheme.startDate || ""}</div>
+            </div>
+            <div class="project-details-field">
+              <label></label>
+              <div class="project-details-value">${scheme.item || ""}</div>
+            </div>
+            <div class="project-details-field">
+              <label></label>
+              <div class="project-details-value">${scheme.level || ""}</div>
+            </div>
+            ${
+              index < schemes.length - 1
+                ? '<hr style="margin: 10px 0; border: 1px solid #ccc;" />'
+                : ""
+            }
+          </div>
+        `;
+      });
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /<div id="schemesContainer">.*?<\/div>/s,
+        `<div id="schemesContainer">${schemesHtml}</div>`
+      );
+
+      // Footer for ProjectDetails
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="footerCompanyLogo"/g,
+        `id="footerCompanyLogo" src="${companyLogo}" ${
+          companyLogo ? 'style="display: block;"' : 'style="display: none;"'
+        }`
+      );
+      projectDetailsHtml = projectDetailsHtml.replace(
+        /id="footerCompanyLogoFallback">A/g,
+        `id="footerCompanyLogoFallback">${firstLetter}`
+      );
+
+      // Combine all pages
+      const combinedHtml = reportPage1Html + tocHtml + projectDetailsHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
