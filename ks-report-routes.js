@@ -2054,6 +2054,11 @@ function createKsReportRoutes(db) {
       if (projectId) deviationsQuery.projectsId = { $in: [projectId] };
       deviationsQuery.type = "Quality Assurance";
 
+      // Add profession filter if provided
+      if (selectedProfession) {
+        deviationsQuery["profession.SubjectMatterId"] = selectedProfession;
+      }
+
       const deviationsArray = await db
         .collection("deviations")
         .find(deviationsQuery)
