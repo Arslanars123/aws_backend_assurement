@@ -2415,7 +2415,10 @@ function createKsReportRoutes(db) {
         body { 
           padding-top: 0; 
           margin: 0;
+          background: white;
         }
+        
+        /* Ensure all pages print correctly with proper spacing */
         .qa-report-page, .toc-page, .project-details-page, 
         .affiliated-advisers-page, .documents-info-page, 
         .received-case-documents-page, .checklist-page, 
@@ -2428,9 +2431,54 @@ function createKsReportRoutes(db) {
         .drawing-document-page, .supervision-note-page {
           page-break-after: always;
           page-break-inside: avoid;
+          background: white;
+          box-shadow: none;
         }
+        
+        /* Ensure qa-report page layout maintains proper structure */
+        .qa-report-container {
+          background: white;
+        }
+        
+        .qa-report-page {
+          background: white;
+          max-width: 100%;
+          padding: 0;
+        }
+        
+        .qa-header {
+          background: white;
+          border-bottom: 2px solid #1e3a8a;
+          padding: 30px 40px 20px 40px;
+        }
+        
+        .qa-content {
+          background: white;
+          padding: 0 40px 40px 40px;
+        }
+        
+        .qa-form-group {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+        }
+        
+        .qa-form-group label {
+          min-width: 120px;
+          flex-shrink: 0;
+        }
+        
+        .qa-value {
+          color: #1e3a8a;
+        }
+        
+        .toc-footer {
+          background: #1e3a8a;
+        }
+        
         @page {
-          margin: 1cm;
+          margin: 0;
+          size: A4;
         }
       }
     </style>
