@@ -2437,6 +2437,22 @@ function createKsReportRoutes(db) {
         }
       };
 
+      // Determine the main title based on source
+      let mainTitle = "ADDRESS NOTES"; // default for regular notes
+      if (isAgreement) {
+        mainTitle = "NEW AGREEMENT";
+      } else if (isSafetyMention) {
+        mainTitle = "SAFETY MENTION";
+      } else if (isTechnicalRequest) {
+        mainTitle = "TECHNICAL REQUEST";
+      }
+
+      // Update the main title in the HTML
+      supervisionNoteHtml = supervisionNoteHtml.replace(
+        'id="mainTitlePlaceholder">ADDRESS NOTES',
+        `id="mainTitlePlaceholder">${mainTitle}`
+      );
+
       // Populate fields - handle both notes and agreements
       // isAgreement is already set based on source parameter above
 
