@@ -1872,6 +1872,76 @@ function createKsReportRoutes(db) {
         `<tbody id="addressNotesTableBody">${addressNotesTableRows}</tbody>`
       );
 
+      // Fetch New Agreement data from "news" collection
+      const newsQuery = {};
+      if (companyId) newsQuery.companyId = companyId;
+      if (projectId) newsQuery.projectsId = projectId;
+
+      const newsArray = await db.collection("news").find(newsQuery).toArray();
+
+      // Enrich news items with project names
+      for (const item of newsArray) {
+        if (item.projectsId && item.projectsId.length > 0) {
+          const validProjectIds = item.projectsId.filter(ObjectId.isValid);
+          const objectIds = validProjectIds.map((id) => new ObjectId(id));
+
+          const projectsArray = await db
+            .collection("projects")
+            .find({ _id: { $in: objectIds } })
+            .toArray();
+
+          const projectNames = projectsArray
+            .map((proj) => proj.name)
+            .join(", ");
+          item.projectNames = projectNames;
+        }
+      }
+
+      // Generate New Agreement table rows
+      let newAgreementTableRows = "";
+      if (newsArray.length > 0) {
+        newsArray.forEach((agreement, index) => {
+          newAgreementTableRows += `
+          <tr>
+            <td>${agreement.item || "-"}</td>
+            <td>${agreement.supplementory || "-"}</td>
+            <td>${agreement.projectNames || "-"}</td>
+            <td>${
+              agreement.createdAt
+                ? new Date(agreement.createdAt).toLocaleDateString("en-GB")
+                : "-"
+            }</td>
+            <td>
+              <button class="show-note-btn" onclick="window.open('/supervision-note/${
+                agreement._id
+              }?companyId=${companyId}&projectId=${projectId}', '_blank')" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                Show Note
+              </button>
+            </td>
+          </tr>
+        `;
+        });
+      } else {
+        newAgreementTableRows = `
+          <tr>
+            <td colspan="5" style="text-align: center;">No new agreements found for this project.</td>
+          </tr>
+        `;
+      }
+
+      // Read new agreement HTML
+      const newAgreementPath = path.join(
+        __dirname,
+        "abdullahksreport",
+        "new-agreement.html"
+      );
+      let newAgreementHtml = fs.readFileSync(newAgreementPath, "utf8");
+
+      newAgreementHtml = newAgreementHtml.replace(
+        /<tbody id="newAgreementTableBody">.*?<\/tbody>/s,
+        `<tbody id="newAgreementTableBody">${newAgreementTableRows}</tbody>`
+      );
+
       // Populate footers for remaining static pages
       const updatePageFooter = (html) => {
         html = html.replace(
@@ -1895,6 +1965,7 @@ function createKsReportRoutes(db) {
       planTendersHtml = updatePageFooter(planTendersHtml);
       receptionControlHtml = updatePageFooter(receptionControlHtml);
       addressNotesHtml = updatePageFooter(addressNotesHtml);
+      newAgreementHtml = updatePageFooter(newAgreementHtml);
 
       // Combine all pages
       const combinedHtml =
@@ -1912,7 +1983,8 @@ function createKsReportRoutes(db) {
         standardControlHtml +
         planTendersHtml +
         receptionControlHtml +
-        addressNotesHtml;
+        addressNotesHtml +
+        newAgreementHtml;
 
       // Wrap in full HTML document
       const fullHtml = `
