@@ -905,6 +905,12 @@
           <div id="sig1-signature"></div>
           <div></div>
         </div>
+        <div class="signature-block" id="sig1-description" style="display: none;">
+          <div class="label">Description:</div>
+          <div class="value" id="sig1-desc"></div>
+          <div></div>
+          <div></div>
+        </div>
         
         <!-- Signature 2: Self-monitoring (EC) -->
         <div class="signature-block">
@@ -919,6 +925,12 @@
           <div id="sig2-signature"></div>
           <div></div>
         </div>
+        <div class="signature-block" id="sig2-description" style="display: none;">
+          <div class="label">Description:</div>
+          <div class="value" id="sig2-desc"></div>
+          <div></div>
+          <div></div>
+        </div>
         
         <!-- Signature 3: Independent Auditor (UK) -->
         <div class="signature-block">
@@ -931,6 +943,12 @@
           <div class="value" id="sig3-name"></div>
           <div></div>
           <div id="sig3-signature"></div>
+          <div></div>
+        </div>
+        <div class="signature-block" id="sig3-description" style="display: none;">
+          <div class="label">Description:</div>
+          <div class="value" id="sig3-desc"></div>
+          <div></div>
           <div></div>
         </div>
       </div>
@@ -1809,8 +1827,14 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ companyId: COMPANY_ID, projectId: PROJECT_ID, subjectMatterId: PROFESSION })
         });
-        const filteredSignatures = await signaturesResponse.json();
-        console.log('Signatures data:', filteredSignatures);
+        const signaturesData = await signaturesResponse.json();
+        console.log('Signatures data:', signaturesData);
+        
+        // Filter signatures by subjectMatterId to ensure only matching ones are shown
+        const filteredSignatures = Array.isArray(signaturesData) 
+          ? signaturesData.filter(sig => sig.subjectMatterId === PROFESSION)
+          : [];
+        console.log('Filtered signatures by PROFESSION:', PROFESSION, filteredSignatures);
       
         // Populate project details
         if (project._id) document.getElementById('project-id').textContent = project._id;
@@ -2267,6 +2291,11 @@
               img.className = 'signature-image';
               document.getElementById('sig1-signature').appendChild(img);
             }
+            // Add description
+            if (sig.description) {
+              document.getElementById('sig1-desc').textContent = sig.description;
+              document.getElementById('sig1-description').style.display = 'grid';
+            }
           } else if (sig.signatureType === 2) {
             // Signature 2 - Self-monitoring (EC)
             if (sig.name) document.getElementById('sig2-name').textContent = sig.name;
@@ -2279,6 +2308,11 @@
               img.className = 'signature-image';
               document.getElementById('sig2-signature').appendChild(img);
             }
+            // Add description
+            if (sig.description) {
+              document.getElementById('sig2-desc').textContent = sig.description;
+              document.getElementById('sig2-description').style.display = 'grid';
+            }
           } else if (sig.signatureType === 3) {
             // Signature 3 - Independent Auditor (UK)
             if (sig.name) document.getElementById('sig3-name').textContent = sig.name;
@@ -2290,6 +2324,11 @@
               img.src = sig.signature;
               img.className = 'signature-image';
               document.getElementById('sig3-signature').appendChild(img);
+            }
+            // Add description
+            if (sig.description) {
+              document.getElementById('sig3-desc').textContent = sig.description;
+              document.getElementById('sig3-description').style.display = 'grid';
             }
           }
         });
