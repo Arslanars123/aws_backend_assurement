@@ -2749,6 +2749,7 @@ document is a dynamic document.</p>
               // If not submitted, statusText shows "Approved" (hardcoded)
               
               registrationMap[pos] = {
+                ...entry,
                 comment: entry.comment || '',
                 date: entry.submissionCreatedDate || entry.registrationDate || '',
                 approvedBy: entry.approvedBy || false,
