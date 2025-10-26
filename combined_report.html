@@ -1005,11 +1005,14 @@
       
       <!-- Explanatory Text -->
       <div class="completion-text">
-        <p>Figuren til højre fra SBI 271 Punkt 4.3 angiver dokumentets fase og fremhæver proaktiv kommunikation mellem entreprenør og konsulent for rettelser.</p>
+        <p>The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document
+submissions, and must also help to ensure that both the contractor and the consultant work
+proactively to communicate back and forth in connection with any corrections.</p>
         
-        <p>Dokumentet underskrives ved godkendelse af konstruktøren, og indtil da forbliver det et "dynamisk dokument".</p>
+        <p>The document is signed when this has been approved by the structural engineer, until then the
+document is a dynamic document.</p>
         
-        <p class="italic">Forventet godkendelsestid 14 dage, hvorefter dokumentets indhold betragtes som godkendt.</p>
+        <p class="italic">Expected approval time 14 days, after which the content of the document is considered approved.</p>
       </div>
     </div>
     
@@ -1028,11 +1031,6 @@
             <td id="status-date-1">12-08-2025</td>
             <td id="status-phase-1">Select an item.</td>
             <td id="status-approval-1">Status</td>
-          </tr>
-          <tr>
-            <td id="status-date-2">12-08-2025</td>
-            <td id="status-phase-2">Select an item.</td>
-            <td id="status-approval-2">Status</td>
           </tr>
         </tbody>
       </table>
@@ -1206,22 +1204,32 @@
       <div class="toc-section">
         <div class="toc-main-item">
           <span>9. KONTROLPUNKT OVERVIEW</span>
-          <span class="toc-page">2</span>
+          <span class="toc-page">16</span>
         </div>
         <div class="toc-sub-item">
           <span>7.1 Review of the execution basis from the design</span>
           <span class="toc-code">B1</span>
-          <span class="toc-page">2</span>
+          <span class="toc-page">17</span>
         </div>
         <div class="toc-sub-item">
           <span>7.2 Verification of the basis for execution of the work</span>
           <span class="toc-code">B2</span>
-          <span class="toc-page">2</span>
+          <span class="toc-page">18</span>
         </div>
         <div class="toc-sub-item">
           <span>7.3 Verification of Documentation of Materials and Products</span>
           <span class="toc-code">B3</span>
-          <span class="toc-page">2</span>
+          <span class="toc-page">19</span>
+        </div>
+        <div class="toc-sub-item">
+          <span>7.4 RECEIPT CONTROL DELIVERIES</span>
+          <span class="toc-code">B4</span>
+          <span class="toc-page">20</span>
+        </div>
+        <div class="toc-sub-item">
+          <span>7.5 Performance Control</span>
+          <span class="toc-code">B5</span>
+          <span class="toc-page">22</span>
         </div>
       </div>
     </div>
@@ -2344,17 +2352,7 @@
     // Load document completion status
     async function loadCompletionStatus() {
       try {
-        // Fetch document status from your API (you can add this endpoint)
-        // For now, we'll use sample data
         const currentDate = new Date().toLocaleDateString('da-DK');
-        
-        // Update status table with current date
-        document.getElementById('status-date-1').textContent = currentDate;
-        document.getElementById('status-date-2').textContent = currentDate;
-        
-        // You can add API call here to get real status data
-        // const statusResponse = await fetch(`${BASE_URL}/get-document-status?projectId=${PROJECT_ID}`);
-        // const statusData = await statusResponse.json();
         
         console.log('Document completion status loaded');
       } catch (error) {
