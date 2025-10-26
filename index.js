@@ -10875,7 +10875,8 @@ app.post(
         req.files ? Object.keys(req.files) : "No files"
       );
 
-      const { projectId, staticReportId, comment, date } = req.body;
+      const { projectId, staticReportId, comment, date, buildingPart } =
+        req.body;
 
       // Safely parse JSON fields with null checks
       const profession = req.body.profession
@@ -10883,6 +10884,12 @@ app.post(
         : null;
       const selectedWorkers = req.body.selectedWorkers
         ? JSON.parse(req.body.selectedWorkers)
+        : null;
+
+      const parsedBuildingPart = buildingPart
+        ? typeof buildingPart === "string"
+          ? JSON.parse(buildingPart)
+          : buildingPart
         : null;
 
       let independentController = null;
@@ -11144,6 +11151,7 @@ app.post(
           rowIndex: req.body.entryRowIndex || null,
           language: req.body.entryLanguage || null,
           subjectMatterId: req.body.entrySubjectMatterId || null,
+          buildingPart: parsedBuildingPart,
         },
       };
 
