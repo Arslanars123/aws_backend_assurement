@@ -798,19 +798,16 @@
     <div class="signatures-header">
       <h1>STATIC INSPECTION REPORT</h1>
       <p>For load-bearing structures, cf. DS1140 applies to:</p>
-      <p>The control plan is built according to the current EU standard: Eurocode</p>
+      <p>The control plan is built according to the current EU standard </p>
     </div>
     
     <!-- Construction case section -->
+      <h2>Eurocode:</h2>
     <section class="construction-case">
       <h2>Construction case:</h2>
       <div class="construction-case-content">
         <!-- Project Details -->
         <div>
-          <div class="info-row">
-            <div class="label">Project name/ID:</div>
-            <div class="value" id="project-name"></div>
-          </div>
           <div class="info-row">
             <div class="label">Project ID/Case no.:</div>
             <div class="value" id="project-id"></div>
@@ -885,7 +882,7 @@
           <tr>
             <td>STATIC INSPECTION REPORT</td>
             <td>1</td>
-            <td>KK3</td>
+            <td id="construction-cluster">KK3</td>
           </tr>
         </tbody>
       </table>
@@ -1693,19 +1690,21 @@
       return {
         companyId: urlParams.get('companyId') || '68f76ce994e7d41efe754dc4', // Default fallback
         projectId: urlParams.get('projectId') || '68fa70ccee0ab59dfc5f591a', // Default fallback
-        subjectMatterId: urlParams.get('subjectMatterId') || 'KP13', // Default fallback
+        subjectMatterId: urlParams.get('subjectMatterId') || urlParams.get('profession') || 'KP13', // Default fallback
+        profession: urlParams.get('profession') || urlParams.get('subjectMatterId') || 'KP13', // Get profession parameter
         startPage: parseInt(urlParams.get('startPage')) || 1 // Starting page number
       };
     }
     
     // Get dynamic IDs from URL parameters
-    const { companyId: COMPANY_ID, projectId: PROJECT_ID, subjectMatterId: SUBJECT_MATTER_ID, startPage: START_PAGE } = getUrlParams();
+    const { companyId: COMPANY_ID, projectId: PROJECT_ID, subjectMatterId: SUBJECT_MATTER_ID, profession: PROFESSION, startPage: START_PAGE } = getUrlParams();
     
     // Log the parameters being used
     console.log('Using parameters:', {
       COMPANY_ID,
       PROJECT_ID,
       SUBJECT_MATTER_ID,
+      PROFESSION,
       url: window.location.href
     });
     
@@ -1826,7 +1825,6 @@
         console.log('Filtered signatures:', filteredSignatures);
         
         // Populate project details
-        if (project.name) document.getElementById('project-name').textContent = project.name;
         if (project._id) document.getElementById('project-id').textContent = project._id;
         if (project.name) document.getElementById('project-name-full').textContent = project.name;
         if (project.address) document.getElementById('project-address').textContent = project.address;
@@ -1920,6 +1918,21 @@
           const specialTextResponse = await fetch(`${BASE_URL}/get-project-special-text?projectId=${PROJECT_ID}`, { mode: 'cors' });
           const specialTextData = await specialTextResponse.json();
           console.log('Special text data:', specialTextData);
+          
+          // Filter gammas by profession.SubjectMatterId
+          const filteredGammas = gammasData.filter(gamma => 
+            gamma.profession && gamma.profession.SubjectMatterId === PROFESSION
+          );
+          console.log('Filtered gammas by profession:', PROFESSION, filteredGammas);
+          
+          // Populate construction cluster in document info table
+          if (filteredGammas.length > 0 && filteredGammas[0].cc) {
+            const constructionCluster = document.getElementById('construction-cluster');
+            if (constructionCluster) {
+              constructionCluster.textContent = filteredGammas[0].cc;
+              console.log('Construction cluster updated to:', filteredGammas[0].cc);
+            }
+          }
           
           // Populate construction and execution table (use first index only)
           const constructionExecutionTableBody = document.getElementById('construction-execution-table-body');
