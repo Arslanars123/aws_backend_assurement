@@ -636,6 +636,103 @@
       text-align: right; font-size: 11px; 
     }
 
+    /* --- Registrations/Documentation/Photos page styles --- */
+    .registrations-page {
+      position: relative;
+      min-height: 100%;
+    }
+    .registrations-header {
+      background: #0a2540;
+      color: white;
+      padding: 8px 12px;
+      margin-bottom: 18mm;
+    }
+    .registrations-header h1 { 
+      margin: 0; 
+      font-size: 16px; 
+      font-weight: 700; 
+    }
+    .registrations-content { 
+      margin-bottom: 18mm; 
+    }
+    .submission-group {
+      margin-bottom: 24px;
+      page-break-inside: avoid;
+    }
+    .submission-group-header {
+      background: #3c5166;
+      color: white;
+      padding: 6px 10px;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .registrations-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #0a2540;
+      margin-bottom: 16px;
+    }
+    .registrations-table th {
+      background: #f0f0f0;
+      color: #0a2540;
+      padding: 8px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid #0a2540;
+    }
+    .registrations-table td {
+      padding: 8px;
+      border: 1px solid #0a2540;
+      font-size: 10px;
+      vertical-align: top;
+    }
+    .registrations-table .pos-col {
+      width: 80px;
+      font-weight: 600;
+    }
+    .registrations-table .image-col {
+      width: 120px;
+      text-align: center;
+    }
+    .registrations-table .image-col img {
+      max-width: 100%;
+      max-height: 120px;
+      object-fit: contain;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .registrations-table .desc-col {
+      min-width: 150px;
+    }
+    .registrations-table .drawing-col {
+      width: 100px;
+      text-align: center;
+    }
+    .registrations-table .drawing-col img {
+      max-width: 100%;
+      max-height: 120px;
+      object-fit: contain;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .registrations-footer { 
+      position: absolute; bottom: 0; left: 0; right: 0; 
+      background: #0a2540; color: white; padding: 8px 16px; 
+      display: grid; grid-template-columns: 1fr auto; align-items: center; 
+    }
+    .registrations-footer .footer-left { 
+      display: flex; align-items: center; gap: 8px; 
+      font-size: 12px; 
+    }
+    .registrations-footer .footer-logo-small { 
+      width: 20px; height: 20px; 
+    }
+    .registrations-footer .footer-right { 
+      text-align: right; font-size: 11px; 
+    }
+
     /* --- Document completion status page styles --- */
     .completion-header {
       background: #0a2540;
@@ -1870,6 +1967,73 @@ document is a dynamic document.</p>
       <div class="page-number" id="page-12-number"></div>
     </div>
   </section>
+
+  <!-- Page 13: Registrations/Documentation/Photos -->
+  <section class="page">
+    <div class="registrations-page">
+      <!-- Header -->
+      <div class="registrations-header">
+        <h1>8. REGISTRATIONS/DOCUMENTATION/PHOTOS, CF. SECTION 7</h1>
+      </div>
+
+      <!-- Main Content -->
+      <div class="registrations-content">
+        <!-- Worker Submissions -->
+        <div class="submission-group">
+          <div class="submission-group-header">Worker Submitted</div>
+          <table class="registrations-table" id="worker-submissions-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="drawing-col">Main Drawing</th>
+                <th class="image-col">Building Part Image</th>
+                <th class="image-col">Annotated Drawings</th>
+                <th class="image-col">Mark Picture</th>
+                <th class="desc-col">Mark Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Independent Controller Submissions -->
+        <div class="submission-group">
+          <div class="submission-group-header">Independent Controller Submitted</div>
+          <table class="registrations-table" id="independent-controller-submissions-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="drawing-col">Main Drawing</th>
+                <th class="image-col">Building Part Image</th>
+                <th class="image-col">Annotated Drawings</th>
+                <th class="image-col">Mark Picture</th>
+                <th class="desc-col">Mark Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="registrations-footer">
+        <div class="footer-left">
+          <span>Part of</span>
+          <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
+          <span>Assurement ApS</span>
+        </div>
+        <div class="footer-right">
+          <span class="page-info">Side 13 af 34</span>
+        </div>
+      </div>
+      <div class="page-number" id="page-13-number"></div>
+    </div>
+  </section>
+
   <script src="html2canvas.min.js"></script>
   <script src="jspdf.umd.min.js"></script>
   
@@ -2584,6 +2748,9 @@ document is a dynamic document.</p>
         // Load control carried out data
         await loadControlCarriedOut();
         
+        // Load registrations/documentation/photos
+        await loadRegistrations();
+        
       } catch (error) {
         console.error('Error loading data:', error);
       }
@@ -2889,6 +3056,106 @@ document is a dynamic document.</p>
         console.log('Document completion status loaded');
       } catch (error) {
         console.error('Error loading completion status:', error);
+      }
+    }
+
+    // Load registrations/documentation/photos
+    async function loadRegistrations() {
+      try {
+        // Get registration entries from StaticReportRegistrationEntries collection
+        const registrationApiUrl = `${BASE_URL}/get-static-report-registration-entries?companyId=${COMPANY_ID}&projectId=${PROJECT_ID}&subjectMatterId=${PROFESSION}`;
+        console.log('Fetching registration entries for registrations page from:', registrationApiUrl);
+        
+        const registrationResponse = await fetch(registrationApiUrl, { mode: 'cors' });
+        const registrationData = await registrationResponse.json();
+        
+        if (!registrationData.success || !registrationData.data || !registrationData.data.entries) {
+          console.log('No registration entries found');
+          return;
+        }
+        
+        const allEntries = registrationData.data.entries;
+        console.log('Successfully fetched registration entries:', allEntries);
+        
+        // Separate worker submissions and independent controller submissions
+        const workerSubmissions = [];
+        const independentControllerSubmissions = [];
+        
+        allEntries.forEach(entry => {
+          // Check if entry has selectedWorkers (worker submitted)
+          if (entry.selectedWorkers) {
+            workerSubmissions.push(entry);
+          }
+          // Check if entry has independentController
+          else if (entry.independentController) {
+            independentControllerSubmissions.push(entry);
+          }
+        });
+        
+        console.log('Worker submissions:', workerSubmissions.length);
+        console.log('Independent controller submissions:', independentControllerSubmissions.length);
+        
+        // Populate worker submissions table
+        const workerTableBody = document.querySelector('#worker-submissions-table tbody');
+        workerSubmissions.forEach(entry => {
+          const row = document.createElement('tr');
+          
+          // Get first annotated PDF if exists
+          const firstAnnotatedPdf = entry.annotatedPdfs && entry.annotatedPdfs.length > 0 ? entry.annotatedPdfs[0] : null;
+          const annotatedPdfUrl = firstAnnotatedPdf ? (firstAnnotatedPdf.s3Location || `${BASE_URL}/uploads/${firstAnnotatedPdf.filename}`) : '';
+          
+          // Get first mark picture if exists
+          const firstMarkPicture = entry.markPictures && entry.markPictures.length > 0 ? entry.markPictures[0] : null;
+          const markPictureUrl = firstMarkPicture ? `${BASE_URL}/uploads/${firstMarkPicture.filename}` : '';
+          const markDescription = firstMarkPicture ? firstMarkPicture.description : '';
+          
+          // Get main drawing if exists
+          const mainDrawing = entry.drawing && entry.drawing.mainDrawings && entry.drawing.mainDrawings.length > 0 ? entry.drawing.mainDrawings[0] : null;
+          const mainDrawingUrl = mainDrawing ? (mainDrawing.s3Location || `${BASE_URL}/uploads/${mainDrawing.filename}`) : '';
+          
+          row.innerHTML = `
+            <td class="pos-col">${entry.pos || ''}</td>
+            <td class="drawing-col">${mainDrawingUrl ? `<img src="${mainDrawingUrl}" crossorigin="anonymous" />` : ''}</td>
+            <td class="image-col"></td>
+            <td class="image-col">${annotatedPdfUrl ? `<img src="${annotatedPdfUrl}" crossorigin="anonymous" />` : ''}</td>
+            <td class="image-col">${markPictureUrl ? `<img src="${markPictureUrl}" />` : ''}</td>
+            <td class="desc-col">${markDescription || ''}</td>
+          `;
+          workerTableBody.appendChild(row);
+        });
+        
+        // Populate independent controller submissions table
+        const controllerTableBody = document.querySelector('#independent-controller-submissions-table tbody');
+        independentControllerSubmissions.forEach(entry => {
+          const row = document.createElement('tr');
+          
+          // Get first annotated PDF if exists
+          const firstAnnotatedPdf = entry.annotatedPdfs && entry.annotatedPdfs.length > 0 ? entry.annotatedPdfs[0] : null;
+          const annotatedPdfUrl = firstAnnotatedPdf ? (firstAnnotatedPdf.s3Location || `${BASE_URL}/uploads/${firstAnnotatedPdf.filename}`) : '';
+          
+          // Get first mark picture if exists
+          const firstMarkPicture = entry.markPictures && entry.markPictures.length > 0 ? entry.markPictures[0] : null;
+          const markPictureUrl = firstMarkPicture ? `${BASE_URL}/uploads/${firstMarkPicture.filename}` : '';
+          const markDescription = firstMarkPicture ? firstMarkPicture.description : '';
+          
+          // Get main drawing if exists
+          const mainDrawing = entry.drawing && entry.drawing.mainDrawings && entry.drawing.mainDrawings.length > 0 ? entry.drawing.mainDrawings[0] : null;
+          const mainDrawingUrl = mainDrawing ? (mainDrawing.s3Location || `${BASE_URL}/uploads/${mainDrawing.filename}`) : '';
+          
+          row.innerHTML = `
+            <td class="pos-col">${entry.pos || ''}</td>
+            <td class="drawing-col">${mainDrawingUrl ? `<img src="${mainDrawingUrl}" crossorigin="anonymous" />` : ''}</td>
+            <td class="image-col"></td>
+            <td class="image-col">${annotatedPdfUrl ? `<img src="${annotatedPdfUrl}" crossorigin="anonymous" />` : ''}</td>
+            <td class="image-col">${markPictureUrl ? `<img src="${markPictureUrl}" />` : ''}</td>
+            <td class="desc-col">${markDescription || ''}</td>
+          `;
+          controllerTableBody.appendChild(row);
+        });
+        
+        console.log('Registrations page loaded');
+      } catch (error) {
+        console.error('Error loading registrations data:', error);
       }
     }
 
