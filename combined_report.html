@@ -3120,8 +3120,8 @@ document is a dynamic document.</p>
           }
         });
         
-        console.log('Worker submissions:', workerSubmissions.length);
-        console.log('Independent controller submissions:', independentControllerSubmissions.length);
+        console.log('Worker submissions:', workerSubmissions);
+        console.log('Independent controller submissions:', independentControllerSubmissions);
         
         // Populate worker submissions table
         const workerTableBody = document.querySelector('#worker-submissions-table tbody');
@@ -3141,8 +3141,12 @@ document is a dynamic document.</p>
           `;
           workerTableBody.appendChild(row);
           
-          // Add drawings row if main drawings exist
-          if (entry.drawing && entry.drawing.mainDrawings && entry.drawing.mainDrawings.length > 0) {
+          // Add drawings row if main drawings, building part, or annotated PDFs exist
+          const hasDrawings = entry.drawing && entry.drawing.mainDrawings && entry.drawing.mainDrawings.length > 0;
+          const hasBuildingPart =  entry.buildingPart?.buildingPartImage?.s3Location || entry.buildingPart?.buildingPartDetail?.image?.s3Location;
+          const hasAnnotatedPdfs = entry.annotatedPdfs && entry.annotatedPdfs.length > 0;
+          
+          if (hasDrawings || hasBuildingPart || hasAnnotatedPdfs) {
             const drawingsRow = document.createElement('tr');
             const drawingsCell = document.createElement('td');
             drawingsCell.colSpan = 3;
@@ -3151,41 +3155,103 @@ document is a dynamic document.</p>
             const drawingsContainer = document.createElement('div');
             drawingsContainer.className = 'drawing-container';
             
-            entry.drawing.mainDrawings.forEach((mainDrawing, mainIndex) => {
-              const drawingItem = document.createElement('div');
-              drawingItem.className = 'drawing-item';
-              
-              const isPdf = mainDrawing.mimetype === 'application/pdf';
-              const mainDrawingUrl = mainDrawing.s3Location || `${BASE_URL}/uploads/${mainDrawing.filename}`;
-              
-              let drawingContent = '';
-              
-              if (isPdf) {
-                // Use iframe for PDFs
-                drawingContent = `
-                  <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.pdf'}</h4>
-                  <iframe
-                    src="${mainDrawingUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
-                    width="100%"
-                    height="400"
-                    style="border: 1px solid #ccc;"
-                    title="Main Drawing ${mainIndex + 1}"
-                    scrolling="no"
-                  ></iframe>
-                  <a href="${mainDrawingUrl}" target="_blank">View Full Drawing</a>
+            // 1. Main Drawing
+            if (hasDrawings) {
+              entry.drawing.mainDrawings.forEach((mainDrawing, mainIndex) => {
+                const drawingItem = document.createElement('div');
+                drawingItem.className = 'drawing-item';
+                
+                const isPdf = mainDrawing.mimetype === 'application/pdf';
+                const mainDrawingUrl = mainDrawing.s3Location || `${BASE_URL}/uploads/${mainDrawing.filename}`;
+                
+                let drawingContent = '';
+                
+                if (isPdf) {
+                  // Use iframe for PDFs
+                  drawingContent = `
+                    <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.pdf'}</h4>
+                    <iframe
+                      src="${mainDrawingUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+                      width="100%"
+                      height="400"
+                      style="border: 1px solid #ccc;"
+                      title="Main Drawing ${mainIndex + 1}"
+                      scrolling="no"
+                    ></iframe>
+                    <a href="${mainDrawingUrl}" target="_blank">View Full Drawing</a>
+                  `;
+                } else {
+                  // Use img for images
+                  drawingContent = `
+                    <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.png'}</h4>
+                    <img src="${mainDrawingUrl}" alt="${mainDrawing.originalname || 'drawing'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
+                    <a href="${mainDrawingUrl}" target="_blank">View Full Image</a>
+                  `;
+                }
+                
+                drawingItem.innerHTML = drawingContent;
+                drawingsContainer.appendChild(drawingItem);
+              });
+            }
+            
+            // 2. Building Part Image
+            console.log('hasBuildingPart',hasBuildingPart);
+            
+            if (hasBuildingPart) {
+              const buildingPartImageUrl = entry.buildingPart?.buildingPartImage?.s3Location || 
+                                            entry.buildingPart?.buildingPartDetail?.image?.s3Location || '';
+              if (buildingPartImageUrl) {
+                const buildingPartItem = document.createElement('div');
+                buildingPartItem.className = 'drawing-item';
+                buildingPartItem.innerHTML = `
+                  <h4>Building Part Image</h4>
+                 <img
+                    src="${buildingPartImageUrl}"
+                    alt="Building Part"
+                    style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+                  />
+                  <a href="${buildingPartImageUrl}" target="_blank">View Full Image</a>
                 `;
-              } else {
-                // Use img for images
-                drawingContent = `
-                  <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.png'}</h4>
-                  <img src="${mainDrawingUrl}" alt="${mainDrawing.originalname || 'drawing'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
-                  <a href="${mainDrawingUrl}" target="_blank">View Full Image</a>
-                `;
+                drawingsContainer.appendChild(buildingPartItem);
               }
-              
-              drawingItem.innerHTML = drawingContent;
-              drawingsContainer.appendChild(drawingItem);
-            });
+            }
+            
+            // 3. Annotated PDFs
+            if (hasAnnotatedPdfs) {
+              entry.annotatedPdfs.forEach((annotatedPdf, index) => {
+                const annotatedItem = document.createElement('div');
+                annotatedItem.className = 'drawing-item';
+                
+                const isPdf = annotatedPdf.mimetype === 'application/pdf';
+                const annotatedPdfUrl = annotatedPdf.s3Location || `${BASE_URL}/uploads/${annotatedPdf.filename}`;
+                
+                let annotatedContent = '';
+                
+                if (isPdf) {
+                  annotatedContent = `
+                    <h4>Annotated PDF ${index + 1}: ${annotatedPdf.originalname || 'annotated.pdf'}</h4>
+                    <iframe
+                      src="${annotatedPdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+                      width="100%"
+                      height="400"
+                      style="border: 1px solid #ccc;"
+                      title="Annotated PDF ${index + 1}"
+                      scrolling="no"
+                    ></iframe>
+                    <a href="${annotatedPdfUrl}" target="_blank">View Full PDF</a>
+                  `;
+                } else {
+                  annotatedContent = `
+                    <h4>Annotated Image ${index + 1}: ${annotatedPdf.originalname || 'annotated.png'}</h4>
+                    <img src="${annotatedPdfUrl}" alt="${annotatedPdf.originalname || 'annotated'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
+                    <a href="${annotatedPdfUrl}" target="_blank">View Full Image</a>
+                  `;
+                }
+                
+                annotatedItem.innerHTML = annotatedContent;
+                drawingsContainer.appendChild(annotatedItem);
+              });
+            }
             
             drawingsCell.appendChild(drawingsContainer);
             drawingsRow.appendChild(drawingsCell);
@@ -3211,8 +3277,12 @@ document is a dynamic document.</p>
           `;
           controllerTableBody.appendChild(row);
           
-          // Add drawings row if main drawings exist
-          if (entry.drawing && entry.drawing.mainDrawings && entry.drawing.mainDrawings.length > 0) {
+          // Add drawings row if main drawings, building part, or annotated PDFs exist
+          const hasDrawings = entry.drawing && entry.drawing.mainDrawings && entry.drawing.mainDrawings.length > 0;
+          const hasBuildingPart = entry.buildingPart?.buildingPartImage?.s3Location || entry.buildingPart?.buildingPartDetail?.image?.s3Location;
+          const hasAnnotatedPdfs = entry.annotatedPdfs && entry.annotatedPdfs.length > 0;
+          
+          if (hasDrawings || hasBuildingPart || hasAnnotatedPdfs) {
             const drawingsRow = document.createElement('tr');
             const drawingsCell = document.createElement('td');
             drawingsCell.colSpan = 3;
@@ -3221,41 +3291,97 @@ document is a dynamic document.</p>
             const drawingsContainer = document.createElement('div');
             drawingsContainer.className = 'drawing-container';
             
-            entry.drawing.mainDrawings.forEach((mainDrawing, mainIndex) => {
-              const drawingItem = document.createElement('div');
-              drawingItem.className = 'drawing-item';
-              
-              const isPdf = mainDrawing.mimetype === 'application/pdf';
-              const mainDrawingUrl = mainDrawing.s3Location || `${BASE_URL}/uploads/${mainDrawing.filename}`;
-              
-              let drawingContent = '';
-              
-              if (isPdf) {
-                // Use iframe for PDFs
-                drawingContent = `
-                  <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.pdf'}</h4>
-                  <iframe
-                    src="${mainDrawingUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
-                    width="100%"
-                    height="400"
-                    style="border: 1px solid #ccc;"
-                    title="Main Drawing ${mainIndex + 1}"
-                    scrolling="no"
-                  ></iframe>
-                  <a href="${mainDrawingUrl}" target="_blank">View Full Drawing</a>
+            // 1. Main Drawing
+            if (hasDrawings) {
+              entry.drawing.mainDrawings.forEach((mainDrawing, mainIndex) => {
+                const drawingItem = document.createElement('div');
+                drawingItem.className = 'drawing-item';
+                
+                const isPdf = mainDrawing.mimetype === 'application/pdf';
+                const mainDrawingUrl = mainDrawing.s3Location || `${BASE_URL}/uploads/${mainDrawing.filename}`;
+                
+                let drawingContent = '';
+                
+                if (isPdf) {
+                  // Use iframe for PDFs
+                  drawingContent = `
+                    <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.pdf'}</h4>
+                    <iframe
+                      src="${mainDrawingUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+                      width="100%"
+                      height="400"
+                      style="border: 1px solid #ccc;"
+                      title="Main Drawing ${mainIndex + 1}"
+                      scrolling="no"
+                    ></iframe>
+                    <a href="${mainDrawingUrl}" target="_blank">View Full Drawing</a>
+                  `;
+                } else {
+                  // Use img for images
+                  drawingContent = `
+                    <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.png'}</h4>
+                    <img src="${mainDrawingUrl}" alt="${mainDrawing.originalname || 'drawing'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
+                    <a href="${mainDrawingUrl}" target="_blank">View Full Image</a>
+                  `;
+                }
+                
+                drawingItem.innerHTML = drawingContent;
+                drawingsContainer.appendChild(drawingItem);
+              });
+            }
+            
+            // 2. Building Part Image
+            if (hasBuildingPart) {
+              const buildingPartImageUrl = entry.buildingPart?.buildingPartImage?.s3Location || 
+                                            entry.buildingPart?.buildingPartDetail?.image?.s3Location || '';
+              if (buildingPartImageUrl) {
+                const buildingPartItem = document.createElement('div');
+                buildingPartItem.className = 'drawing-item';
+                buildingPartItem.innerHTML = `
+                  <h4>Building Part Image</h4>
+                  <img src="${buildingPartImageUrl}" alt="Building Part" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
+                  <a href="${buildingPartImageUrl}" target="_blank">View Full Image</a>
                 `;
-              } else {
-                // Use img for images
-                drawingContent = `
-                  <h4>Main Drawing ${mainIndex + 1}: ${mainDrawing.originalname || 'drawing.png'}</h4>
-                  <img src="${mainDrawingUrl}" alt="${mainDrawing.originalname || 'drawing'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
-                  <a href="${mainDrawingUrl}" target="_blank">View Full Image</a>
-                `;
+                drawingsContainer.appendChild(buildingPartItem);
               }
-              
-              drawingItem.innerHTML = drawingContent;
-              drawingsContainer.appendChild(drawingItem);
-            });
+            }
+            
+            // 3. Annotated PDFs
+            if (hasAnnotatedPdfs) {
+              entry.annotatedPdfs.forEach((annotatedPdf, index) => {
+                const annotatedItem = document.createElement('div');
+                annotatedItem.className = 'drawing-item';
+                
+                const isPdf = annotatedPdf.mimetype === 'application/pdf';
+                const annotatedPdfUrl = annotatedPdf.s3Location || `${BASE_URL}/uploads/${annotatedPdf.filename}`;
+                
+                let annotatedContent = '';
+                
+                if (isPdf) {
+                  annotatedContent = `
+                    <h4>Annotated PDF ${index + 1}: ${annotatedPdf.originalname || 'annotated.pdf'}</h4>
+                    <iframe
+                      src="${annotatedPdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+                      width="100%"
+                      height="400"
+                      style="border: 1px solid #ccc;"
+                      title="Annotated PDF ${index + 1}"
+                      scrolling="no"
+                    ></iframe>
+                    <a href="${annotatedPdfUrl}" target="_blank">View Full PDF</a>
+                  `;
+                } else {
+                  annotatedContent = `
+                    <h4>Annotated Image ${index + 1}: ${annotatedPdf.originalname || 'annotated.png'}</h4>
+                    <img src="${annotatedPdfUrl}" alt="${annotatedPdf.originalname || 'annotated'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
+                    <a href="${annotatedPdfUrl}" target="_blank">View Full Image</a>
+                  `;
+                }
+                
+                annotatedItem.innerHTML = annotatedContent;
+                drawingsContainer.appendChild(annotatedItem);
+              });
+            }
             
             drawingsCell.appendChild(drawingsContainer);
             drawingsRow.appendChild(drawingsCell);
