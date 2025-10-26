@@ -1502,41 +1502,12 @@ document is a dynamic document.</p>
       <div class="subsection">
         <h2>4.1 General</h2>
         <p>There are no special controls assigned by the building designers, cf. This construction section.</p>
-        <p>Should there be special controls, they will be stated in section 3.2</p>
+        <p>Should there be special controls, they will be stated in section 4.2</p>
       </div>
 
       <!-- Section 4.2 Special control points -->
       <div class="subsection">
         <h2>4.2 Special control points</h2>
-        <p>Cf. section 3.1, no special controls are required.</p>
-        <p>If there are special checks, it will be stated below in the form, otherwise there will be none.</p>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="special-controls-footer">
-      <div class="footer-left">
-        <span>Part of</span>
-        <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
-        <span>Assurement ApS</span>
-      </div>
-      <div class="footer-right">
-        <span class="page-info">Side 8 af 32</span>
-      </div>
-    </div>
-    <div class="page-number" id="page-8-number"></div>
-  </section>
-
-  <!-- Page 9: Special Control Points Table -->
-  <section class="page">
-    <div class="special-controls-page">
-      <!-- Header -->
-      <div class="special-controls-header">
-        <h1>4.2 Special control points</h1>
-      </div>
-
-      <!-- Main Content -->
-      <div class="special-controls-content">
         <p>Cf. section 3.1, no special controls are required.</p>
         <p>If there are special checks, it will be stated below in the form, otherwise there will be none.</p>
 
@@ -1555,20 +1526,20 @@ document is a dynamic document.</p>
           </tbody>
         </table>
       </div>
-
-      <!-- Footer -->
-      <div class="special-controls-footer">
-        <div class="footer-left">
-          <span>Part of</span>
-          <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
-          <span>Assurement ApS</span>
-        </div>
-        <div class="footer-right">
-          <span class="page-info">Side 9 af 33</span>
-        </div>
-      </div>
-      <div class="page-number" id="page-9-number"></div>
     </div>
+
+    <!-- Footer -->
+    <div class="special-controls-footer">
+      <div class="footer-left">
+        <span>Part of</span>
+        <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
+        <span>Assurement ApS</span>
+      </div>
+      <div class="footer-right">
+        <span class="page-info">Side 8 af 32</span>
+      </div>
+    </div>
+    <div class="page-number" id="page-8-number"></div>
   </section>
 
   <!-- Page 10: Deviation B7 -->
@@ -2212,6 +2183,55 @@ document is a dynamic document.</p>
               </div>
             `;
           }
+        }
+        
+        // Fetch special control data
+        try {
+          const specialControlResponse = await fetch(`${BASE_URL}/get-special-control?companyId=${COMPANY_ID}&projectId=${PROJECT_ID}`, { mode: 'cors' });
+          const specialControlData = await specialControlResponse.json();
+          console.log('Special control data:', specialControlData);
+          
+          // Filter by profession.SubjectMatterId
+          const filteredSpecialControls = Array.isArray(specialControlData) 
+            ? specialControlData.filter(sc => sc.profession && sc.profession.SubjectMatterId === PROFESSION)
+            : [];
+          console.log('Filtered special controls by PROFESSION:', PROFESSION, filteredSpecialControls);
+          
+          // Populate special control table
+          const specialControlTableBody = document.getElementById('special-control-table-body');
+          if (specialControlTableBody && filteredSpecialControls.length > 0) {
+            specialControlTableBody.innerHTML = '';
+            
+            filteredSpecialControls.forEach(specialControl => {
+              // Determine "Made by" name
+              let madeByName = '';
+              if (specialControl.worker && specialControl.worker.name) {
+                madeByName = specialControl.worker.name;
+              } else if (specialControl.projectManager && specialControl.projectManager.name) {
+                madeByName = specialControl.projectManager.name;
+              } else if (specialControl.independentController && (specialControl.independentController.name || specialControl.independentController.fullName)) {
+                madeByName = specialControl.independentController.name || specialControl.independentController.fullName;
+              }
+              
+              // Get description from building parts
+              const description = specialControl.buildingParts && specialControl.buildingParts.buildingPartDetail && specialControl.buildingParts.buildingPartDetail.description
+                ? specialControl.buildingParts.buildingPartDetail.description
+                : '';
+              
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td>${specialControl._id || ''}</td>
+                <td>${specialControl.comment || ''}</td>
+                <td>${description}</td>
+                <td>${madeByName}</td>
+              `;
+              specialControlTableBody.appendChild(row);
+            });
+            
+            console.log('Special control table populated with', filteredSpecialControls.length, 'items');
+          }
+        } catch (error) {
+          console.log('Error fetching special control data:', error);
         }
         
         // Populate signatures
