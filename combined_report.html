@@ -538,6 +538,104 @@
       text-align: right; font-size: 11px; 
     }
 
+    /* --- Control carried out sections 7.1-7.6 (B1-B6) styles --- */
+    .control-carried-out-page {
+      position: relative;
+      min-height: 100%;
+    }
+    .control-carried-out-header {
+      background: #0a2540;
+      color: white;
+      padding: 8px 12px;
+      margin-bottom: 18mm;
+    }
+    .control-carried-out-header h1 { 
+      margin: 0; 
+      font-size: 16px; 
+      font-weight: 700; 
+    }
+    .control-carried-out-content { 
+      margin-bottom: 18mm; 
+    }
+    .control-section {
+      margin-bottom: 20px;
+    }
+    .control-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0a2540;
+      color: white;
+      padding: 6px 10px;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .control-section-id {
+      background: #0a2540;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .control-section-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #0a2540;
+      margin-bottom: 12px;
+    }
+    .control-section-table th {
+      background: #f0f0f0;
+      color: #0a2540;
+      padding: 6px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid #0a2540;
+    }
+    .control-section-table td {
+      padding: 6px;
+      border: 1px solid #ddd;
+      font-size: 11px;
+      vertical-align: top;
+    }
+    .control-section-table .pos-col {
+      width: 60px;
+      text-align: center;
+    }
+    .control-section-table .date-col {
+      width: 100px;
+    }
+    .control-section-table .desc-col {
+      min-width: 200px;
+    }
+    .control-section-table .status-col {
+      width: 80px;
+    }
+    .control-section-table .note-col {
+      width: 100px;
+    }
+    .control-section-table .control-id-col {
+      min-width: 200px;
+      font-size: 10px;
+    }
+    .control-carried-out-footer { 
+      position: absolute; bottom: 0; left: 0; right: 0; 
+      background: #0a2540; color: white; padding: 8px 16px; 
+      display: grid; grid-template-columns: 1fr auto; align-items: center; 
+    }
+    .control-carried-out-footer .footer-left { 
+      display: flex; align-items: center; gap: 8px; 
+      font-size: 12px; 
+    }
+    .control-carried-out-footer .footer-logo-small { 
+      width: 20px; height: 20px; 
+    }
+    .control-carried-out-footer .footer-right { 
+      text-align: right; font-size: 11px; 
+    }
+
     /* --- Document completion status page styles --- */
     .completion-header {
       background: #0a2540;
@@ -1608,6 +1706,170 @@ document is a dynamic document.</p>
       <div class="page-number" id="page-11-number"></div>
     </div>
   </section>
+
+  <!-- Page 12: Control Carried Out (Sections 7.1-7.6) -->
+  <section class="page">
+    <div class="control-carried-out-page">
+      <!-- Header -->
+      <div class="control-carried-out-header">
+        <h1>7. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHECK</h1>
+      </div>
+
+      <!-- Main Content -->
+      <div class="control-carried-out-content">
+        <!-- Section 7.1 -->
+        <div class="control-section">
+          <div class="control-section-header">
+            <span>7.1 Verification of the basis for execution from design</span>
+            <span class="control-section-id">B1</span>
+          </div>
+          <table class="control-section-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="date-col">Date</th>
+                <th class="desc-col">Description</th>
+                <th class="status-col">Status</th>
+                <th class="note-col">Note</th>
+                <th class="control-id-col">Control/ID</th>
+              </tr>
+            </thead>
+            <tbody id="section-b1-body">
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Section 7.2 -->
+        <div class="control-section">
+          <div class="control-section-header">
+            <span>7.2 Verification of the basis for execution of the work</span>
+            <span class="control-section-id">B2</span>
+          </div>
+          <table class="control-section-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="date-col">Date</th>
+                <th class="desc-col">Description</th>
+                <th class="status-col">Status</th>
+                <th class="note-col">Note</th>
+                <th class="control-id-col">Control/ID</th>
+              </tr>
+            </thead>
+            <tbody id="section-b2-body">
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Section 7.3 -->
+        <div class="control-section">
+          <div class="control-section-header">
+            <span>7.3 Checking documentation of materials and products</span>
+            <span class="control-section-id">B3</span>
+          </div>
+          <table class="control-section-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="date-col">Date</th>
+                <th class="desc-col">Description</th>
+                <th class="status-col">Status</th>
+                <th class="note-col">Note</th>
+                <th class="control-id-col">Control/ID</th>
+              </tr>
+            </thead>
+            <tbody id="section-b3-body">
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Section 7.4 -->
+        <div class="control-section">
+          <div class="control-section-header">
+            <span>7.4 Receipt control of deliveries</span>
+            <span class="control-section-id">B4</span>
+          </div>
+          <table class="control-section-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="date-col">Date</th>
+                <th class="desc-col">Description</th>
+                <th class="status-col">Status</th>
+                <th class="note-col">Note</th>
+                <th class="control-id-col">Control/ID</th>
+              </tr>
+            </thead>
+            <tbody id="section-b4-body">
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Section 7.5 -->
+        <div class="control-section">
+          <div class="control-section-header">
+            <span>7.5 Execution control</span>
+            <span class="control-section-id">B5</span>
+          </div>
+          <table class="control-section-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="date-col">Date</th>
+                <th class="desc-col">Description</th>
+                <th class="status-col">Status</th>
+                <th class="note-col">Note</th>
+                <th class="control-id-col">Control/ID</th>
+              </tr>
+            </thead>
+            <tbody id="section-b5-body">
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Section 7.6 -->
+        <div class="control-section">
+          <div class="control-section-header">
+            <span>7.6 Final Inspection</span>
+            <span class="control-section-id">B6</span>
+          </div>
+          <table class="control-section-table">
+            <thead>
+              <tr>
+                <th class="pos-col">Pos.</th>
+                <th class="date-col">Date</th>
+                <th class="desc-col">Description</th>
+                <th class="status-col">Status</th>
+                <th class="note-col">Note</th>
+                <th class="control-id-col">Control/ID</th>
+              </tr>
+            </thead>
+            <tbody id="section-b6-body">
+              <!-- Will be populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="control-carried-out-footer">
+        <div class="footer-left">
+          <span>Part of</span>
+          <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
+          <span>Assurement ApS</span>
+        </div>
+        <div class="footer-right">
+          <span class="page-info">Side 12 af 34</span>
+        </div>
+      </div>
+      <div class="page-number" id="page-12-number"></div>
+    </div>
+  </section>
   <script src="html2canvas.min.js"></script>
   <script src="jspdf.umd.min.js"></script>
   
@@ -2319,8 +2581,157 @@ document is a dynamic document.</p>
         // Load document completion status data
         await loadCompletionStatus(specialTextData);
         
+        // Load control carried out data
+        await loadControlCarriedOut();
+        
       } catch (error) {
         console.error('Error loading data:', error);
+      }
+    }
+
+    // Load control carried out sections 7.1-7.6
+    async function loadControlCarriedOut() {
+      try {
+        // Fetch submitted entries from the new API
+        const submittedEntriesResponse = await fetch(`${BASE_URL}/get-static-checklist-submitted-entries?projectId=${PROJECT_ID}&professionSubjectMatterId=${PROFESSION}&companyId=${COMPANY_ID}`, { mode: 'cors' });
+        const submittedEntriesData = await submittedEntriesResponse.json();
+        console.log('Submitted entries data:', submittedEntriesData);
+        
+        const entriesMap = submittedEntriesData.entriesMap || {};
+        const staticDocumentCheckList = submittedEntriesData.staticDocumentCheckList || [];
+        
+        console.log('Static document checklist data:', staticDocumentCheckList);
+        console.log('Entries map:', entriesMap);
+        
+        // Define default data for sections without data
+        const defaultSectionData = {
+          b1: [
+            { pos: '7.1.1', description: 'Self-monitoring' },
+            { pos: '7.1.2', description: 'Follow-up on project material' },
+            { pos: '7.1.3', description: 'Information' },
+            { pos: '7.1.4', description: 'Buildability' },
+            { pos: '7.1.5', description: 'Materials' }
+          ],
+          b2: [
+            { pos: '7.2.1', description: 'Working drawings, instructions, self-control' },
+            { pos: '7.2.2', description: 'Working drawings, instructions and assembly guides for buildability' },
+            { pos: '7.2.3', description: 'Health and safety rules' },
+            { pos: '7.2.4', description: 'Comprehension' },
+            { pos: '7.2.5', description: 'Coordination' },
+            { pos: '7.2.6', description: 'Interfaces' }
+          ],
+          b3: [
+            { pos: '7.3.1', description: 'Purchased materials and products' },
+            { pos: '7.3.2', description: 'Materials and products meet requirements in project material' },
+            { pos: '7.3.3', description: 'Specific materials.' },
+            { pos: '7.3.4', description: 'Additional components such as. pre-produced products to be included in the construction' },
+            { pos: '7.3.5', description: 'Selected parts covered by harmonised standard, etc.' }
+          ],
+          b4: [
+            { pos: '7.4.1', description: 'Receipt control' }
+          ],
+          b5: [
+            { pos: '7.5.1', description: 'Execution control' }
+          ],
+          b6: [
+            { pos: '7.6.1', description: 'Final inspection' }
+          ]
+        };
+
+        // Filter and organize API data
+        const apiData = {
+          b1: staticDocumentCheckList.filter(item => item.DS_GroupId === 'B1' && item.ItemId.startsWith('7.1')),
+          b2: staticDocumentCheckList.filter(item => item.DS_GroupId === 'B2' && item.ItemId.startsWith('7.2')),
+          b3: staticDocumentCheckList.filter(item => item.DS_GroupId === 'B3' && item.ItemId.startsWith('7.3'))
+        };
+
+        // Populate B1, B2, B3 with API data or default
+        ['b1', 'b2', 'b3'].forEach(section => {
+          const tbody = document.getElementById(`section-${section}-body`);
+          if (tbody) {
+            tbody.innerHTML = '';
+            
+            let dataToUse = apiData[section];
+            
+            // If no API data, use default
+            if (!dataToUse || dataToUse.length === 0) {
+              dataToUse = defaultSectionData[section];
+            }
+            
+            if (dataToUse && dataToUse.length > 0) {
+              dataToUse.forEach(item => {
+                const row = document.createElement('tr');
+                
+                // Get entry data if submitted
+                const checklistId = item._id?.toString() || item.id;
+                const entryData = entriesMap[checklistId] || {};
+                
+                // Determine status - show "Approved" only if approvedBy is true, otherwise empty
+                let displayStatus = '';
+                if (entryData.approvedBy) {
+                  displayStatus = 'Approved';
+                } else if (entryData.status) {
+                  displayStatus = entryData.status;
+                }
+                
+                // Format dates (empty if no date)
+                const formattedDate = entryData.date ? new Date(entryData.date).toLocaleDateString('en-GB') : '';
+                const formattedApprovedDate = entryData.approvedDate ? new Date(entryData.approvedDate).toLocaleDateString('en-GB') : '';
+                
+                // Note = comment (empty if no comment)
+                const noteText = entryData.comment || '';
+                
+                // Use API data if available
+                if (item.ItemId) {
+                  row.innerHTML = `
+                    <td class="pos-col">${item.ItemId}</td>
+                    <td class="date-col">${formattedDate}</td>
+                    <td class="desc-col">${item['Contol of'] || item.description || ''}</td>
+                    <td class="status-col">${displayStatus}</td>
+                    <td class="note-col">${noteText}</td>
+                    <td class="control-id-col">${entryData.independentController ? entryData.independentController.name || 'Independent Controller' : ''}</td>
+                  `;
+                } else {
+                  // Use default data
+                  row.innerHTML = `
+                    <td class="pos-col">${item.pos}</td>
+                    <td class="date-col">${formattedDate}</td>
+                    <td class="desc-col">${item.description}</td>
+                    <td class="status-col">${displayStatus}</td>
+                    <td class="note-col">${noteText}</td>
+                    <td class="control-id-col">${entryData.independentController ? entryData.independentController.name || 'Independent Controller' : ''}</td>
+                  `;
+                }
+                tbody.appendChild(row);
+              });
+            }
+          }
+        });
+
+        // Populate B4, B5, B6 with default data (no API data for these yet)
+        ['b4', 'b5', 'b6'].forEach(section => {
+          const tbody = document.getElementById(`section-${section}-body`);
+          if (tbody && defaultSectionData[section]) {
+            tbody.innerHTML = '';
+            
+            defaultSectionData[section].forEach(item => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                <td class="pos-col">${item.pos}</td>
+                <td class="date-col"></td>
+                <td class="desc-col">${item.description}</td>
+                <td class="status-col"></td>
+                <td class="note-col"></td>
+                <td class="control-id-col">Independent control of self-monitoring.</td>
+              `;
+              tbody.appendChild(row);
+            });
+          }
+        });
+
+        console.log('Control carried out sections loaded');
+      } catch (error) {
+        console.error('Error loading control carried out data:', error);
       }
     }
 

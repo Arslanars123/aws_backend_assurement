@@ -457,29 +457,44 @@ app.post(
 
       // Standardize picture to always be a simple string (filename)
       const picture = standardizePicture(pictureObject);
-        
-     
-      
+
       // If no picture uploaded, check if user with same email has a picture
       let finalPicture = picture;
       if (!picture) {
-        console.log('🔍 No picture uploaded, checking for existing picture...');
+        console.log("🔍 No picture uploaded, checking for existing picture...");
         // Find all users with same email
-        const existingUsers = await db.collection("users").find({ username: username }).toArray();
-        console.log('🔍 Found', existingUsers.length, 'users with email:', username);
-        
+        const existingUsers = await db
+          .collection("users")
+          .find({ username: username })
+          .toArray();
+        console.log(
+          "🔍 Found",
+          existingUsers.length,
+          "users with email:",
+          username
+        );
+
         // Find the first user that has a picture
-        const userWithPicture = existingUsers.find(user => user.picture && user.picture !== null);
-        
+        const userWithPicture = existingUsers.find(
+          (user) => user.picture && user.picture !== null
+        );
+
         if (userWithPicture && userWithPicture.picture) {
           finalPicture = userWithPicture.picture;
-          console.log('✅ Found existing picture for email:', username, 'Picture:', finalPicture);
+          console.log(
+            "✅ Found existing picture for email:",
+            username,
+            "Picture:",
+            finalPicture
+          );
         } else {
-          console.log('❌ No existing picture found for any user with email:', username);
+          console.log(
+            "❌ No existing picture found for any user with email:",
+            username
+          );
         }
       }
-      
-     
+
       const contactPictureFile = req.files?.contactPicture?.[0];
       const contactPictureObject = contactPictureFile
         ? {
@@ -586,18 +601,31 @@ app.post(
       }
 
       // If user already exists and is being added to another project, don't auto-assign as project manager
-      if (existingUser && existingUser.projectsId && Array.isArray(projectsId)) {
-        const newProjects = Array.isArray(projectsId) ? projectsId : [projectsId];
-        const existingProjects = Array.isArray(existingUser.projectsId) ? existingUser.projectsId : [];
-        
+      if (
+        existingUser &&
+        existingUser.projectsId &&
+        Array.isArray(projectsId)
+      ) {
+        const newProjects = Array.isArray(projectsId)
+          ? projectsId
+          : [projectsId];
+        const existingProjects = Array.isArray(existingUser.projectsId)
+          ? existingUser.projectsId
+          : [];
+
         // Check if any of the new projects are different from existing projects
-        const hasNewProjects = newProjects.some(newProject => !existingProjects.includes(newProject));
-        
+        const hasNewProjects = newProjects.some(
+          (newProject) => !existingProjects.includes(newProject)
+        );
+
         if (hasNewProjects && !standardizedPM) {
           // User is being added to a new project but no explicit PM status provided
           // Keep their existing PM status, don't auto-assign
-          standardizedPM = existingUser.isProjectManager || 'no';
-          console.log('🔄 User being added to new project, preserving existing PM status:', standardizedPM);
+          standardizedPM = existingUser.isProjectManager || "no";
+          console.log(
+            "🔄 User being added to new project, preserving existing PM status:",
+            standardizedPM
+          );
         }
       }
 
@@ -630,7 +658,7 @@ app.post(
       // Only include pictures if they exist (not null)
       if (finalPicture) {
         userData.picture = finalPicture;
-        console.log('✅ Adding picture to userData:', finalPicture);
+        console.log("✅ Adding picture to userData:", finalPicture);
       }
       if (picture) {
         userData.picture = picture;
@@ -668,7 +696,10 @@ app.post(
         if (finalPicture) {
           // If new user has a picture, always update all users with same email
           commonDetails.picture = finalPicture;
-          console.log('🔄 STORE-USER: Updating picture for all users with email:', username);
+          console.log(
+            "🔄 STORE-USER: Updating picture for all users with email:",
+            username
+          );
         } else {
           // If new user has no picture, check existing users
           const existingUsers = await db
@@ -919,12 +950,15 @@ app.post("/updateUser", async (req, res) => {
     const objectIds = userIds.map((id) => new ObjectId(id));
 
     // Get all users first to check their existing roles
-    const users = await db.collection("users").find({
-      _id: { $in: objectIds }
-    }).toArray();
+    const users = await db
+      .collection("users")
+      .find({
+        _id: { $in: objectIds },
+      })
+      .toArray();
 
     const bulkOps = objectIds.map((userId) => {
-      const user = users.find(u => u._id.toString() === userId.toString());
+      const user = users.find((u) => u._id.toString() === userId.toString());
       const updateQuery = {
         $addToSet: {
           projectsId: projectId,
@@ -939,7 +973,11 @@ app.post("/updateUser", async (req, res) => {
         // User is being added to a new project without explicit role
         // Set their userRole to their base role, not project manager
         updateQuery.$set = { userRole: user.role || "Worker" };
-        console.log(`🔄 Adding user ${user.username} to project ${projectId} as ${user.role || "Worker"}`);
+        console.log(
+          `🔄 Adding user ${user.username} to project ${projectId} as ${
+            user.role || "Worker"
+          }`
+        );
       }
 
       return {
@@ -3633,17 +3671,17 @@ app.get("/get-deviations", async (req, res) => {
 app.get("/get-deviation-b7", async (req, res) => {
   try {
     const { projectId, subjectMatterId } = req.query;
-    
+
     if (!projectId || !subjectMatterId) {
-      return res.status(400).json({ 
-        error: "Missing required parameters: projectId and subjectMatterId" 
+      return res.status(400).json({
+        error: "Missing required parameters: projectId and subjectMatterId",
       });
     }
 
     const query = {
-      "projectsId": { $in: [projectId] },
+      projectsId: { $in: [projectId] },
       "profession.SubjectMatterId": subjectMatterId,
-      "type": "Static Report"
+      type: "Static Report",
     };
 
     console.log("Querying deviations with:", query);
@@ -7666,7 +7704,9 @@ app.post("/update-user-project-manager", async (req, res) => {
     }
 
     // Get the current user data
-    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
+    const user = await db
+      .collection("users")
+      .findOne({ _id: new ObjectId(userId) });
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -10548,6 +10588,122 @@ app.post("/approve-static-document-checklist", async (req, res) => {
   }
 });
 
+// API endpoint to get submitted static document checklist entries with data
+app.get("/get-static-checklist-submitted-entries", async (req, res) => {
+  // Add CORS headers
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+
+  try {
+    const { projectId, professionSubjectMatterId, companyId } = req.query;
+
+    console.log("=== GET STATIC CHECKLIST SUBMITTED ENTRIES ===");
+    console.log("Project ID:", projectId);
+    console.log("Profession Subject Matter ID:", professionSubjectMatterId);
+    console.log("Company ID:", companyId);
+
+    if (!projectId || !companyId) {
+      return res.status(400).json({
+        error: "Missing required parameters: projectId, companyId",
+      });
+    }
+
+    // Fetch project details
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId),
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        error: "Project not found",
+      });
+    }
+
+    // Get profession-specific static document checklist
+    let staticDocumentCheckList = [];
+    if (
+      professionSubjectMatterId &&
+      project.professionAssociatedData?.[professionSubjectMatterId]
+    ) {
+      staticDocumentCheckList =
+        project.professionAssociatedData[professionSubjectMatterId]
+          .staticDocumentCheckList || [];
+    }
+
+    // Try multiple query variations to get submitted entries
+    let submittedEntries = [];
+
+    try {
+      // Query with profession._id as ObjectId
+      submittedEntries = await db
+        .collection("staticDocumentChecklistProjectAndProfessionWise")
+        .find({
+          projectId: projectId,
+          "profession._id": professionSubjectMatterId,
+        })
+        .toArray();
+      console.log(
+        "Query 1 (ObjectId/ObjectId): Found",
+        submittedEntries.length,
+        "entries"
+      );
+    } catch (error) {
+      console.log("Query 1 failed:", error.message);
+    }
+
+    if (submittedEntries.length === 0) {
+      try {
+        // Query with profession.SubjectMatterId
+        submittedEntries = await db
+          .collection("staticDocumentChecklistProjectAndProfessionWise")
+          .find({
+            projectId: projectId,
+            "profession.SubjectMatterId": professionSubjectMatterId,
+          })
+          .toArray();
+        console.log(
+          "Query 2 (SubjectMatterId): Found",
+          submittedEntries.length,
+          "entries"
+        );
+      } catch (error) {
+        console.log("Query 2 failed:", error.message);
+      }
+    }
+
+    // Create a map of submitted entries by checklist ID
+    const entriesMap = {};
+    submittedEntries.forEach((entry) => {
+      const checklistId = entry.staticDocumentCheckListId?.toString();
+      if (checklistId) {
+        entriesMap[checklistId] = {
+          comment: entry.comment || entry.checklistItem?.comment || "",
+          date: entry.date || entry.selectedDate || entry.submittedDate || "",
+          approvedDate: entry.approvedDate || null,
+          approvedBy: entry.approvedBy || false,
+          independentController: entry.independentController || null,
+          status: entry.status || "",
+        };
+      }
+    });
+
+    console.log("Returning entries map:", Object.keys(entriesMap));
+
+    res.status(200).json({
+      success: true,
+      entriesMap: entriesMap,
+      staticDocumentCheckList: staticDocumentCheckList,
+    });
+  } catch (error) {
+    console.error("Error getting submitted entries:", error);
+    res.status(500).json({ error: "Failed to get submitted entries" });
+  }
+});
+
 // API endpoint to get static document checklist with status for a specific profession
 app.get("/get-static-document-checklist-with-status", async (req, res) => {
   // Add CORS headers
@@ -10981,12 +11137,7 @@ app.post(
         req.files ? Object.keys(req.files) : "No files"
       );
 
-      const {
-        projectId,
-        staticReportId,
-        comment,
-        date,
-      } = req.body;
+      const { projectId, staticReportId, comment, date } = req.body;
 
       // Safely parse JSON fields with null checks
       const profession = req.body.profession
@@ -10995,7 +11146,7 @@ app.post(
       const selectedWorkers = req.body.selectedWorkers
         ? JSON.parse(req.body.selectedWorkers)
         : null;
-      
+
       let independentController = null;
       if (req.body.independentController) {
         try {
@@ -11003,7 +11154,10 @@ app.post(
           console.log("Parsed independentController:", independentController);
         } catch (error) {
           console.error("Error parsing independentController:", error);
-          console.log("Raw independentController:", req.body.independentController);
+          console.log(
+            "Raw independentController:",
+            req.body.independentController
+          );
         }
       }
       const controlPlan = req.body.controlPlan
@@ -11019,13 +11173,20 @@ app.post(
 
       console.log("Parsed fields:");
       console.log("  - profession:", profession ? "Present" : "Null");
-      console.log("  - selectedWorkers:", selectedWorkers ? (selectedWorkers.name || "Present") : "Null");
+      console.log(
+        "  - selectedWorkers:",
+        selectedWorkers ? selectedWorkers.name || "Present" : "Null"
+      );
       console.log("  - controlPlan:", controlPlan ? "Present" : "Null");
       console.log("  - drawing:", drawing ? "Present" : "Null");
       console.log("  - buildingParts:", buildingParts ? "Present" : "Null");
       console.log(
         "  - independentController:",
-        independentController ? (independentController.name || JSON.stringify(independentController) || "Present") : "Null"
+        independentController
+          ? independentController.name ||
+              JSON.stringify(independentController) ||
+              "Present"
+          : "Null"
       );
       console.log("  - comment:", comment ? "Present" : "Null");
       console.log("  - date:", date ? "Present" : "Null");
@@ -11257,11 +11418,17 @@ app.post(
       }
       if (selectedWorkers !== null) {
         staticReportEntry.selectedWorkers = selectedWorkers;
-        console.log("Storing selectedWorkers:", selectedWorkers.name || selectedWorkers);
+        console.log(
+          "Storing selectedWorkers:",
+          selectedWorkers.name || selectedWorkers
+        );
       }
       if (independentController !== null) {
         staticReportEntry.independentController = independentController;
-        console.log("Storing independentController:", independentController.name || independentController);
+        console.log(
+          "Storing independentController:",
+          independentController.name || independentController
+        );
       }
       if (controlPlan !== null) staticReportEntry.controlPlan = controlPlan;
       if (comment !== null) staticReportEntry.comment = comment;
