@@ -11151,7 +11151,6 @@ app.post(
           rowIndex: req.body.entryRowIndex || null,
           language: req.body.entryLanguage || null,
           subjectMatterId: req.body.entrySubjectMatterId || null,
-          buildingPart: parsedBuildingPart,
         },
         buildingPart: parsedBuildingPart,
       };
