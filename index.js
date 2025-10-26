@@ -11153,6 +11153,7 @@ app.post(
           subjectMatterId: req.body.entrySubjectMatterId || null,
           buildingPart: parsedBuildingPart,
         },
+        buildingPart: parsedBuildingPart,
       };
 
       // Only add fields that are not null
