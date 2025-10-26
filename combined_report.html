@@ -2689,26 +2689,137 @@ document is a dynamic document.</p>
           }
         });
 
-        // Populate B4, B5, B6 with default data (no API data for these yet)
-        ['b4', 'b5', 'b6'].forEach(section => {
-          const tbody = document.getElementById(`section-${section}-body`);
-          if (tbody && defaultSectionData[section]) {
-            tbody.innerHTML = '';
+        // Populate B4, B5, B6 with data from get-controls-of-static-report API
+        try {
+          // Get project EuroCodes from API
+          let projectEuroCodes = [];
+          try {
+            const euroCodeApiUrl = `${BASE_URL}/get-project-profession-eurocodes?projectId=${PROJECT_ID}&subjectMatterId=${PROFESSION}`;
+            console.log('Fetching EuroCodes from:', euroCodeApiUrl);
             
-            defaultSectionData[section].forEach(item => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td class="pos-col">${item.pos}</td>
-                <td class="date-col"></td>
-                <td class="desc-col">${item.description}</td>
-                <td class="status-col"></td>
-                <td class="note-col"></td>
-                <td class="control-id-col">Independent control of self-monitoring.</td>
-              `;
-              tbody.appendChild(row);
-            });
+            const euroCodeResponse = await fetch(euroCodeApiUrl, { mode: 'cors' });
+            console.log('EuroCode API response status:', euroCodeResponse.status);
+            
+            const euroCodeData = await euroCodeResponse.json();
+            console.log('EuroCode API response data:', euroCodeData);
+            
+            if (euroCodeData.success) {
+              projectEuroCodes = euroCodeData.euroCodes || [];
+              console.log('✅ Successfully fetched project EuroCodes:', projectEuroCodes);
+            } else {
+              console.log('❌ EuroCode API returned success: false');
+              console.log('Error details:', euroCodeData.error);
+              console.log('Available docs:', euroCodeData.availableDocs);
+            }
+          } catch (euroCodeError) {
+            console.error('❌ Error fetching project EuroCodes:', euroCodeError);
           }
-        });
+          
+          console.log('Project EuroCodes for B4-B6:', projectEuroCodes);
+          
+          // Call POST endpoint
+          const controlsResponse = await fetch(`${BASE_URL}/get-controls-of-static-report`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              projectEuroCodes: projectEuroCodes,
+              subjectMatterId: PROFESSION
+            }),
+            mode: 'cors'
+          });
+          
+          const controlsData = await controlsResponse.json();
+          console.log('Controls data (B4, B5, B6):', controlsData);
+          
+          const controlsEntries = controlsData.entries || [];
+          
+          // Populate B4, B5, B6
+          ['b4', 'b5', 'b6'].forEach(section => {
+            const tbody = document.getElementById(`section-${section}-body`);
+            if (tbody) {
+              tbody.innerHTML = '';
+              
+              // Filter controls entries by section based on pos field
+              const sectionPrefix = '7.' + (section === 'b4' ? '4' : section === 'b5' ? '5' : '6');
+              const filteredEntries = controlsEntries.filter(entry => entry.pos && entry.pos.startsWith(sectionPrefix));
+              
+              console.log(`Section ${section}, prefix ${sectionPrefix}, found ${filteredEntries.length} entries`);
+              
+              if (filteredEntries.length > 0) {
+                filteredEntries.forEach(item => {
+                  // Get entry data if submitted
+                  const checklistId = item._id?.toString() || item.id;
+                  const entryData = entriesMap[checklistId] || {};
+                  
+                  // Determine status - show "Approved" only if approvedBy is true, otherwise empty
+                  let displayStatus = '';
+                  if (entryData.approvedBy) {
+                    displayStatus = 'Approved';
+                  } else if (entryData.status) {
+                    displayStatus = entryData.status;
+                  }
+                  
+                  // Format dates (empty if no date)
+                  const formattedDate = entryData.date ? new Date(entryData.date).toLocaleDateString('en-GB') : '';
+                  
+                  // Note = comment (empty if no comment)
+                  const noteText = entryData.comment || '';
+                  
+                  const row = document.createElement('tr');
+                  row.innerHTML = `
+                    <td class="pos-col">${item.pos}</td>
+                    <td class="date-col">${formattedDate}</td>
+                    <td class="desc-col">${item.checkingThe || ''}</td>
+                    <td class="status-col">${displayStatus}</td>
+                    <td class="note-col">${noteText}</td>
+                    <td class="control-id-col">${entryData.independentController ? entryData.independentController.name || 'Independent Controller' : 'Independent control of self-monitoring.'}</td>
+                  `;
+                  tbody.appendChild(row);
+                });
+              } else {
+                // Use default data if no API data
+                if (defaultSectionData[section]) {
+                  defaultSectionData[section].forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                      <td class="pos-col">${item.pos}</td>
+                      <td class="date-col"></td>
+                      <td class="desc-col">${item.description}</td>
+                      <td class="status-col"></td>
+                      <td class="note-col"></td>
+                      <td class="control-id-col">Independent control of self-monitoring.</td>
+                    `;
+                    tbody.appendChild(row);
+                  });
+                }
+              }
+            }
+          });
+        } catch (controlsError) {
+          console.error('Error loading controls data for B4, B5, B6:', controlsError);
+          // Fallback to default data
+          ['b4', 'b5', 'b6'].forEach(section => {
+            const tbody = document.getElementById(`section-${section}-body`);
+            if (tbody && defaultSectionData[section]) {
+              tbody.innerHTML = '';
+              
+              defaultSectionData[section].forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                  <td class="pos-col">${item.pos}</td>
+                  <td class="date-col"></td>
+                  <td class="desc-col">${item.description}</td>
+                  <td class="status-col"></td>
+                  <td class="note-col"></td>
+                  <td class="control-id-col">Independent control of self-monitoring.</td>
+                `;
+                tbody.appendChild(row);
+              });
+            }
+          });
+        }
 
         console.log('Control carried out sections loaded');
       } catch (error) {
