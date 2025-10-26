@@ -3226,39 +3226,28 @@ document is a dynamic document.</p>
             
             // 3. Annotated PDFs
             if (hasAnnotatedPdfs) {
+              const annotatedItem = document.createElement('div');
+              annotatedItem.className = 'drawing-item';
+              
+              let annotatedContent = `<h4>Annotated Drawings</h4>`;
+              
               entry.annotatedPdfs.forEach((annotatedPdf, index) => {
-                const annotatedItem = document.createElement('div');
-                annotatedItem.className = 'drawing-item';
-                
-                const isPdf = annotatedPdf.mimetype === 'application/pdf';
                 const annotatedPdfUrl = annotatedPdf.s3Location || `${BASE_URL}/uploads/${annotatedPdf.filename}`;
-                
-                let annotatedContent = '';
-                
-                if (isPdf) {
-                  annotatedContent = `
-                    <h4>Annotated PDF ${index + 1}: ${annotatedPdf.originalname || 'annotated.pdf'}</h4>
-                    <iframe
-                      src="${annotatedPdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
-                      width="100%"
-                      height="400"
-                      style="border: 1px solid #ccc;"
-                      title="Annotated PDF ${index + 1}"
-                      scrolling="no"
-                    ></iframe>
-                    <a href="${annotatedPdfUrl}" target="_blank">View Full PDF</a>
-                  `;
-                } else {
-                  annotatedContent = `
-                    <h4>Annotated Image ${index + 1}: ${annotatedPdf.originalname || 'annotated.png'}</h4>
-                    <img src="${annotatedPdfUrl}" alt="${annotatedPdf.originalname || 'annotated'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
-                    <a href="${annotatedPdfUrl}" target="_blank">View Full Image</a>
-                  `;
-                }
-                
-                annotatedItem.innerHTML = annotatedContent;
-                drawingsContainer.appendChild(annotatedItem);
+                                
+                annotatedContent += `
+                  <div style="margin-bottom: 15px;">
+                    <img
+                        src="${annotatedPdfUrl}"
+                        alt="Annotated"
+                        style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
+                      />
+                    <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${annotatedPdf.originalname || 'Annotated Drawing'}</p>
+                  </div>
+                `;
               });
+              
+              annotatedItem.innerHTML = annotatedContent;
+              drawingsContainer.appendChild(annotatedItem);
             }
             
             drawingsCell.appendChild(drawingsContainer);
@@ -3356,39 +3345,29 @@ document is a dynamic document.</p>
             
             // 3. Annotated PDFs
             if (hasAnnotatedPdfs) {
+              const annotatedItem = document.createElement('div');
+              annotatedItem.className = 'drawing-item';
+              
+              let annotatedContent = `<h4>Annotated Drawings</h4>`;
+              
               entry.annotatedPdfs.forEach((annotatedPdf, index) => {
-                const annotatedItem = document.createElement('div');
-                annotatedItem.className = 'drawing-item';
-                
-                const isPdf = annotatedPdf.mimetype === 'application/pdf';
                 const annotatedPdfUrl = annotatedPdf.s3Location || `${BASE_URL}/uploads/${annotatedPdf.filename}`;
                 
-                let annotatedContent = '';
-                
-                if (isPdf) {
-                  annotatedContent = `
-                    <h4>Annotated PDF ${index + 1}: ${annotatedPdf.originalname || 'annotated.pdf'}</h4>
-                    <iframe
-                      src="${annotatedPdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
-                      width="100%"
-                      height="400"
-                      style="border: 1px solid #ccc;"
-                      title="Annotated PDF ${index + 1}"
-                      scrolling="no"
-                    ></iframe>
-                    <a href="${annotatedPdfUrl}" target="_blank">View Full PDF</a>
-                  `;
-                } else {
-                  annotatedContent = `
-                    <h4>Annotated Image ${index + 1}: ${annotatedPdf.originalname || 'annotated.png'}</h4>
-                    <img src="${annotatedPdfUrl}" alt="${annotatedPdf.originalname || 'annotated'}" style="width: 100%; max-height: 400px; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" crossorigin="anonymous" />
-                    <a href="${annotatedPdfUrl}" target="_blank">View Full Image</a>
-                  `;
-                }
-                
-                annotatedItem.innerHTML = annotatedContent;
-                drawingsContainer.appendChild(annotatedItem);
+                annotatedContent += `
+                  <div style="margin-bottom: 15px;">
+                    <img
+                      src="${annotatedPdfUrl}"
+                      alt="Annotated ${index + 1}"
+                      style="width: 100%; height: auto; object-fit: contain; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 5px;"
+                      crossorigin="anonymous"
+                    />
+                    <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${annotatedPdf.originalname || 'Annotated Drawing'}</p>
+                  </div>
+                `;
               });
+              
+              annotatedItem.innerHTML = annotatedContent;
+              drawingsContainer.appendChild(annotatedItem);
             }
             
             drawingsCell.appendChild(drawingsContainer);
