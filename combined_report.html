@@ -1698,15 +1698,7 @@
     
     // Get dynamic IDs from URL parameters
     const { companyId: COMPANY_ID, projectId: PROJECT_ID, subjectMatterId: SUBJECT_MATTER_ID, profession: PROFESSION, startPage: START_PAGE } = getUrlParams();
-    
-    // Log the parameters being used
-    console.log('Using parameters:', {
-      COMPANY_ID,
-      PROJECT_ID,
-      SUBJECT_MATTER_ID,
-      PROFESSION,
-      url: window.location.href
-    });
+  
     
     // Display parameters in UI
     function displayParameters() {
@@ -1714,7 +1706,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       
       if (urlParams.has('companyId') || urlParams.has('projectId') || urlParams.has('subjectMatterId') || urlParams.has('startPage')) {
-        paramInfo.innerHTML = `Company: ${COMPANY_ID.substring(0,8)}... | Project: ${PROJECT_ID.substring(0,8)}... | Subject: ${SUBJECT_MATTER_ID} | Start Page: ${START_PAGE}`;
+        paramInfo.innerHTML = `Rport Company ${COMPANY_ID}`;
       } else {
         paramInfo.innerHTML = 'Using default parameters';
       }
@@ -1815,15 +1807,11 @@
         const signaturesResponse = await fetch(`${BASE_URL}/get-static-report-signatures`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companyId: COMPANY_ID, projectId: PROJECT_ID })
+          body: JSON.stringify({ companyId: COMPANY_ID, projectId: PROJECT_ID, subjectMatterId: PROFESSION })
         });
-        const signatures = await signaturesResponse.json();
-        console.log('Signatures data:', signatures);
-        
-        // Filter signatures by subjectMatterId
-        const filteredSignatures = signatures.filter(sig => sig.subjectMatterId === SUBJECT_MATTER_ID);
-        console.log('Filtered signatures:', filteredSignatures);
-        
+        const filteredSignatures = await signaturesResponse.json();
+        console.log('Signatures data:', filteredSignatures);
+      
         // Populate project details
         if (project._id) document.getElementById('project-id').textContent = project._id;
         if (project.name) document.getElementById('project-name-full').textContent = project.name;
