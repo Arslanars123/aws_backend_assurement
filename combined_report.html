@@ -1898,97 +1898,64 @@ document is a dynamic document.</p>
 
         // Fetch deviation B7 data
         try {
-          const deviationResponse = await fetch(`${BASE_URL}/get-deviation-b7?projectId=${PROJECT_ID}&subjectMatterId=${SUBJECT_MATTER_ID}`, { mode: 'cors' });
+          const deviationResponse = await fetch(`${BASE_URL}/get-deviations?companyId=${COMPANY_ID}&projectId=${PROJECT_ID}&type=Static%20Report`, { mode: 'cors' });
           const deviationData = await deviationResponse.json();
           console.log('Deviation B7 data:', deviationData);
           
+          // Filter deviations by profession.SubjectMatterId
+          const filteredDeviations = Array.isArray(deviationData) 
+            ? deviationData.filter(dev => dev.profession && dev.profession.SubjectMatterId === PROFESSION)
+            : [];
+          console.log('Filtered deviations by PROFESSION:', PROFESSION, filteredDeviations);
+          
           // Populate deviation container
           const deviationContainer = document.getElementById('deviation-container');
-          if (deviationContainer && deviationData) {
+          if (deviationContainer) {
             deviationContainer.innerHTML = '';
             
-            // Check if it's an array
-            const deviations = Array.isArray(deviationData) ? deviationData : (deviationData.data ? deviationData.data : []);
+            // Add heading and description text
+            const headingDiv = document.createElement('div');
+            headingDiv.style.marginBottom = '20px';
             
-            if (deviations.length > 0) {
-              deviations.forEach(deviation => {
+            const heading = document.createElement('h2');
+            heading.textContent = '5.1 Handling of any deviations B7';
+            heading.style.fontSize = '16px';
+            heading.style.fontWeight = '700';
+            heading.style.color = '#0a2540';
+            heading.style.marginBottom = '12px';
+            headingDiv.appendChild(heading);
+            
+            const descriptionText = document.createElement('p');
+            descriptionText.textContent = 'It is the Contractor\'s responsibility that the corrective action is carried out, and then that the independent inspector re-checks the deviations that may have occurred during the process. The list below shows in writing the registered deviations. If the list is empty, no one is registered.';
+            descriptionText.style.fontSize = '11px';
+            descriptionText.style.lineHeight = '1.5';
+            descriptionText.style.marginBottom = '20px';
+            descriptionText.style.color = '#3c5166';
+            headingDiv.appendChild(descriptionText);
+            
+            deviationContainer.appendChild(headingDiv);
+            
+            if (filteredDeviations.length > 0) {
+              filteredDeviations.forEach(deviation => {
                 // Create card
                 const card = document.createElement('div');
                 card.className = 'deviation-card';
                 
-                // ID (using deviationNumber from database)
+                // Deviation Number
                 const idDiv = document.createElement('div');
                 idDiv.className = 'deviation-id';
-                idDiv.textContent = `ID: ${deviation.deviationNumber || deviation._id || 'N/A'}`;
+                idDiv.textContent = `Deviation Number: ${deviation.deviationNumber || deviation._id || 'N/A'}`;
                 card.appendChild(idDiv);
                 
-                // Mark Drawing section
-                const drawingHeading = document.createElement('h3');
-                drawingHeading.textContent = 'Mark Drawing';
-                drawingHeading.style.fontSize = '14px';
-                drawingHeading.style.fontWeight = '600';
-                drawingHeading.style.color = '#0a2540';
-                drawingHeading.style.marginBottom = '10px';
-                card.appendChild(drawingHeading);
-                
-                const drawingDiv = document.createElement('div');
-                drawingDiv.className = 'deviation-drawing';
-                
-                if (deviation.annotatedPdfs && deviation.annotatedPdfs.length > 0) {
-                  // Use annotated PDF (PNG image)
-                  const drawingImg = document.createElement('img');
-                  drawingImg.crossOrigin = 'anonymous';
-                  drawingImg.src = deviation.annotatedPdfs[0].s3Location;
-                  drawingImg.alt = 'Mark drawing';
-                  drawingImg.style.width = '100%';
-                  drawingImg.style.height = 'auto';
-                  drawingImg.style.border = '1px solid #ddd';
-                  drawingImg.style.borderRadius = '4px';
-                  drawingImg.addEventListener('error', function() {
-                    console.error('Failed to load drawing image:', this.src);
-                    console.log('Trying fallback to local upload...');
-                    
-                    // Try fallback to local upload if S3 fails
-                    if (deviation.annotatedPdfs[0].filename) {
-                      const localImg = document.createElement('img');
-                      localImg.crossOrigin = null; // Remove CORS for local files
-                      localImg.src = `${BASE_URL}/uploads/${deviation.annotatedPdfs[0].filename}`;
-                      localImg.alt = 'Mark drawing';
-                      localImg.style.width = '100%';
-                      localImg.style.height = 'auto';
-                      localImg.style.border = '1px solid #ddd';
-                      localImg.style.borderRadius = '4px';
-                      this.parentNode.replaceChild(localImg, this);
-                    }
-                  });
-                  drawingDiv.appendChild(drawingImg);
-                } else if (deviation.drawing && deviation.drawing.mainDrawings && deviation.drawing.mainDrawings.length > 0) {
-                  // If no annotated PDF, but main drawing (PDF) exists
-                  const noAnnotatedPdfText = document.createElement('p');
-                  noAnnotatedPdfText.textContent = 'No annotated PDF available.';
-                  noAnnotatedPdfText.style.color = '#666';
-                  noAnnotatedPdfText.style.fontStyle = 'italic';
-                  drawingDiv.appendChild(noAnnotatedPdfText);
-                } else {
-                  // If neither annotated PDF nor main drawing exists
-                  const noDrawingText = document.createElement('p');
-                  noDrawingText.textContent = 'You don\'t have mark drawing.';
-                  noDrawingText.style.color = '#999';
-                  noDrawingText.style.fontStyle = 'italic';
-                  drawingDiv.appendChild(noDrawingText);
-                }
-                
-                card.appendChild(drawingDiv);
-                
-                // Selected Building Part section
+                // Selected Building Part section (FIRST as requested)
                 if (deviation.buildingParts && deviation.buildingParts.buildingPartDetail) {
                   const buildingPartHeading = document.createElement('h3');
-                  buildingPartHeading.textContent = 'Selected Building Part';
+                  buildingPartHeading.textContent = 'Building Part';
                   buildingPartHeading.style.fontSize = '14px';
                   buildingPartHeading.style.fontWeight = '600';
                   buildingPartHeading.style.color = '#0a2540';
                   buildingPartHeading.style.marginBottom = '10px';
-                  buildingPartHeading.style.marginTop = '20px';
+                  buildingPartHeading.style.marginTop = '15px';
                   card.appendChild(buildingPartHeading);
                   
                   const buildingPartDiv = document.createElement('div');
@@ -2008,12 +1975,10 @@ document is a dynamic document.</p>
                       if (deviation.buildingParts.buildingPartDetail.image.filename) {
                         const localImg = document.createElement('img');
                         localImg.crossOrigin = null; // Remove CORS for local files
-                        
-                      localImg.src = `${BASE_URL}/uploads/${deviation.buildingParts.buildingPartDetail.image.filename}`;
-                       console.log('Base URL image test:');
-                      console.log('Local image source:', localImg.src);
-                     
-                       localImg.alt = deviation.buildingParts.buildingPartDetail.name || 'Building part';
+                        localImg.src = `${BASE_URL}/uploads/${deviation.buildingParts.buildingPartDetail.image.filename}`;
+                        console.log('Base URL image test:');
+                        console.log('Local image source:', localImg.src);
+                        localImg.alt = deviation.buildingParts.buildingPartDetail.name || 'Building part';
                         this.parentNode.replaceChild(localImg, this);
                       } else {
                         buildingPartDiv.textContent = 'Building part';
@@ -2023,14 +1988,73 @@ document is a dynamic document.</p>
                   }
                   
                   // Add building part name
-                  const nameSpan = document.createElement('span');
-                  nameSpan.textContent = deviation.buildingParts.buildingPartDetail.name || deviation.buildingParts.buildingPartName || '';
-                  buildingPartDiv.appendChild(nameSpan);
+                  if (deviation.buildingParts.buildingPartDetail.name) {
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = deviation.buildingParts.buildingPartDetail.name;
+                    nameSpan.style.fontWeight = '600';
+                    buildingPartDiv.appendChild(nameSpan);
+                  }
                   
                   card.appendChild(buildingPartDiv);
                 }
                 
-                // Mark Pictures section
+                // Annotated PDFs section (SECOND as requested)
+                if (deviation.annotatedPdfs && deviation.annotatedPdfs.length > 0) {
+                  const annotatedHeading = document.createElement('h3');
+                  annotatedHeading.textContent = 'Annotated PDFs';
+                  annotatedHeading.style.fontSize = '14px';
+                  annotatedHeading.style.fontWeight = '600';
+                  annotatedHeading.style.color = '#0a2540';
+                  annotatedHeading.style.marginBottom = '10px';
+                  annotatedHeading.style.marginTop = '20px';
+                  card.appendChild(annotatedHeading);
+                  
+                  const annotatedDiv = document.createElement('div');
+                  annotatedDiv.className = 'deviation-drawing';
+                  
+                  deviation.annotatedPdfs.forEach((annotatedPdf, index) => {
+                    const pdfDiv = document.createElement('div');
+                    pdfDiv.style.marginBottom = '15px';
+                    
+                    const pdfImg = document.createElement('img');
+                    pdfImg.crossOrigin = 'anonymous';
+                    pdfImg.src = annotatedPdf.s3Location;
+                    pdfImg.alt = `Annotated PDF ${index + 1}`;
+                    pdfImg.style.width = '100%';
+                    pdfImg.style.height = 'auto';
+                    pdfImg.style.border = '1px solid #ddd';
+                    pdfImg.style.borderRadius = '4px';
+                    pdfImg.addEventListener('error', function() {
+                      console.error('Failed to load annotated PDF:', this.src);
+                      console.log('Trying fallback to local upload...');
+                      
+                      // Try fallback to local upload if S3 fails
+                      if (annotatedPdf.filename) {
+                        const localImg = document.createElement('img');
+                        localImg.crossOrigin = null; // Remove CORS for local files
+                        localImg.src = `${BASE_URL}/uploads/${annotatedPdf.filename}`;
+                        localImg.alt = `Annotated PDF ${index + 1}`;
+                        localImg.style.width = '100%';
+                        localImg.style.height = 'auto';
+                        localImg.style.border = '1px solid #ddd';
+                        localImg.style.borderRadius = '4px';
+                        this.parentNode.replaceChild(localImg, this);
+                      } else {
+                        const placeholder = document.createElement('p');
+                        placeholder.textContent = 'PDF not available';
+                        placeholder.style.color = '#666';
+                        placeholder.style.fontStyle = 'italic';
+                        this.parentNode.appendChild(placeholder);
+                      }
+                    });
+                    pdfDiv.appendChild(pdfImg);
+                    annotatedDiv.appendChild(pdfDiv);
+                  });
+                  
+                  card.appendChild(annotatedDiv);
+                }
+                
+                // Mark Pictures section (THIRD as requested)
                 if (deviation.markPictures && deviation.markPictures.length > 0) {
                   const markPicturesHeading = document.createElement('h3');
                   markPicturesHeading.textContent = 'Mark Pictures';
@@ -2087,11 +2111,13 @@ document is a dynamic document.</p>
               });
             } else {
               // Show empty state
-              deviationContainer.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: #999;">
-                  No deviations found
-                </div>
-              `;
+              deviationContainer.appendChild(document.createElement('div'));
+              const emptyDiv = document.createElement('div');
+              emptyDiv.style.textAlign = 'center';
+              emptyDiv.style.padding = '40px';
+              emptyDiv.style.color = '#999';
+              emptyDiv.textContent = 'No deviations registered';
+              deviationContainer.appendChild(emptyDiv);
             }
           }
         } catch (error) {
