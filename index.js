@@ -10766,7 +10766,7 @@ app.get("/get-static-report-registration-entries", async (req, res) => {
     console.log("Found entries:", entries.length);
 
     // Process entries to include required fields
-    const processedEntries = entries.map(async (entry) => {
+    const processedEntries = entries.map((entry) => {
       const pos = entry.staticReportItem?.pos || "";
       const constructionPart = entry.staticReportItem?.constructionPart || "";
 
