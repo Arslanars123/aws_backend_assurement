@@ -2717,6 +2717,49 @@ document is a dynamic document.</p>
           
           console.log('Project EuroCodes for B4-B6:', projectEuroCodes);
           
+          // Get registration entries from StaticReportRegistrationEntries collection
+          let registrationEntries = [];
+          try {
+            const registrationApiUrl = `${BASE_URL}/get-static-report-registration-entries?companyId=${COMPANY_ID}&projectId=${PROJECT_ID}&subjectMatterId=${PROFESSION}`;
+            console.log('Fetching registration entries from:', registrationApiUrl);
+            
+            const registrationResponse = await fetch(registrationApiUrl, { mode: 'cors' });
+            const registrationData = await registrationResponse.json();
+            
+            if (registrationData.success && registrationData.data && registrationData.data.entries) {
+              registrationEntries = registrationData.data.entries;
+              console.log('✅ Successfully fetched registration entries:', registrationEntries);
+            } else {
+              console.log('❌ Registration entries API returned no data');
+            }
+          } catch (registrationError) {
+            console.error('❌ Error fetching registration entries:', registrationError);
+          }
+          
+          // Create a map of registration entries by pos
+          const registrationMap = {};
+          registrationEntries.forEach(entry => {
+            const pos = entry.pos || entry.staticReportItem?.pos;
+            if (pos) {
+              // Determine status based on submission and approval
+              let statusText = 'Approved'; // Default hardcoded value
+              if (entry.isSubmitted) {
+                statusText = 'Submitted / Approved';
+              } 
+              // If not submitted, statusText shows "Approved" (hardcoded)
+              
+              registrationMap[pos] = {
+                comment: entry.comment || '',
+                date: entry.submissionCreatedDate || entry.registrationDate || '',
+                approvedBy: entry.approvedBy || false,
+                isSubmitted: entry.isSubmitted || false,
+                status: statusText
+              };
+            }
+          });
+          
+          console.log('Registration map:', registrationMap);
+          
           // Call POST endpoint
           const controlsResponse = await fetch(`${BASE_URL}/get-controls-of-static-report`, {
             method: 'POST',
@@ -2749,23 +2792,20 @@ document is a dynamic document.</p>
               
               if (filteredEntries.length > 0) {
                 filteredEntries.forEach(item => {
-                  // Get entry data if submitted
-                  const checklistId = item._id?.toString() || item.id;
-                  const entryData = entriesMap[checklistId] || {};
+                  // Get entry data from registration map (StaticReportRegistrationEntries)
+                  const registrationData = registrationMap[item.pos] || {};
                   
-                  // Determine status - show "Approved" only if approvedBy is true, otherwise empty
-                  let displayStatus = '';
-                  if (entryData.approvedBy) {
-                    displayStatus = 'Approved';
-                  } else if (entryData.status) {
-                    displayStatus = entryData.status;
+                  // Use status from registration data (already calculated)
+                  let displayStatus = 'Approved'; // Default hardcoded value
+                  if (registrationData.status) {
+                    displayStatus = registrationData.status;
                   }
                   
                   // Format dates (empty if no date)
-                  const formattedDate = entryData.date ? new Date(entryData.date).toLocaleDateString('en-GB') : '';
+                  const formattedDate = registrationData.date ? new Date(registrationData.date).toLocaleDateString('en-GB') : '';
                   
                   // Note = comment (empty if no comment)
-                  const noteText = entryData.comment || '';
+                  const noteText = registrationData.comment || '';
                   
                   const row = document.createElement('tr');
                   row.innerHTML = `
@@ -2774,7 +2814,7 @@ document is a dynamic document.</p>
                     <td class="desc-col">${item.checkingThe || ''}</td>
                     <td class="status-col">${displayStatus}</td>
                     <td class="note-col">${noteText}</td>
-                    <td class="control-id-col">${entryData.independentController ? entryData.independentController.name || 'Independent Controller' : 'Independent control of self-monitoring.'}</td>
+                    <td class="control-id-col">Independent control of self-monitoring.</td>
                   `;
                   tbody.appendChild(row);
                 });

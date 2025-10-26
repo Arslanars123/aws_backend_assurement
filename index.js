@@ -11060,6 +11060,7 @@ app.get("/get-static-report-registration-entries", async (req, res) => {
         }
 
         return {
+          ...entry,
           _id: entry._id,
           registrationDate: entry.submissionCreatedDate,
           registrationId: `${pos}_${Math.random().toString(36).substr(2, 9)}`,
