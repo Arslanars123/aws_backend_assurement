@@ -2232,11 +2232,20 @@ document is a dynamic document.</p>
 
         // Update document ID with special text
         const documentId = document.getElementById('document-id');
+        const specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : 'Static Control Plan';
         if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
           documentId.textContent = `B3. ${specialTextData.data.specialText}`;
         } else {
           documentId.textContent = 'B3.';
         }
+
+        // Update all Construction Part cells with special text
+        document.querySelectorAll('.control-section-table tbody tr').forEach(row => {
+          const constructionPartCell = row.querySelector('td:last-child');
+          if (constructionPartCell) {
+            constructionPartCell.textContent = specialText;
+          }
+        });
 
         // Fetch project details
         const projectResponse = await fetch(`${BASE_URL}/get-project-detail/${PROJECT_ID}`);
@@ -3738,5 +3747,355 @@ document is a dynamic document.</p>
       setTimeout(enableExportButton, 1000);
     });
   </script>
+
+  <!-- Additional Control Section Table -->
+  <section class="page">
+    <div class="control-carried-out-page">
+      <!-- Header -->
+      <div class="control-carried-out-header">
+        <h1>7. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHECK</h1>
+      </div>
+
+      <!-- Section 7.1 -->
+      <div class="control-section">
+        <div class="control-section-header">
+          <span>7.1 Verification of the basis for execution from design</span>
+          <span class="control-section-id">B1</span>
+        </div>
+        <table class="control-section-table">
+          <thead>
+            <tr>
+              <th class="pos-col">Pos.</th>
+              <th class="date-col">Date</th>
+              <th class="desc-col">Description</th>
+              <th class="status-col">Status</th>
+              <th class="note-col">Note</th>
+              <th class="control-id-col">Control/ID</th>
+              <th class="construction-part-col">Construction Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>7.1.4</td>
+              <td></td>
+              <td>Understanding</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.1.5</td>
+              <td></td>
+              <td>Coordination</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.1.6</td>
+              <td></td>
+              <td>Interfaces</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.1.3</td>
+              <td></td>
+              <td>Work environment regulations</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.1.1</td>
+              <td></td>
+              <td>Working drawings, instructions.</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.1.2</td>
+              <td></td>
+              <td>Working drawings, instructions, and assembly guidelines for buildability</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 7.2 -->
+      <div class="control-section">
+        <div class="control-section-header">
+          <span>7.2 Verification of the basis for execution of the work</span>
+          <span class="control-section-id">B2</span>
+        </div>
+        <table class="control-section-table">
+          <thead>
+            <tr>
+              <th class="pos-col">Pos.</th>
+              <th class="date-col">Date</th>
+              <th class="desc-col">Description</th>
+              <th class="status-col">Status</th>
+              <th class="note-col">Note</th>
+              <th class="control-id-col">Control/ID</th>
+              <th class="construction-part-col">Construction Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>7.2.1</td>
+              <td></td>
+              <td>Project organization</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.2.2</td>
+              <td></td>
+              <td>Project management</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.2.3</td>
+              <td></td>
+              <td>Quality management</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 7.3 -->
+      <div class="control-section">
+        <div class="control-section-header">
+          <span>7.3 Checking documentation of materials and products</span>
+          <span class="control-section-id">B3</span>
+        </div>
+        <table class="control-section-table">
+          <thead>
+            <tr>
+              <th class="pos-col">Pos.</th>
+              <th class="date-col">Date</th>
+              <th class="desc-col">Description</th>
+              <th class="status-col">Status</th>
+              <th class="note-col">Note</th>
+              <th class="control-id-col">Control/ID</th>
+              <th class="construction-part-col">Construction Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>7.3.1</td>
+              <td></td>
+              <td>Material certificates</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.3.2</td>
+              <td></td>
+              <td>Product documentation</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.3.3</td>
+              <td></td>
+              <td>Compliance documentation</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 7.4 -->
+      <div class="control-section">
+        <div class="control-section-header">
+          <span>7.4 Receipt control of deliveries</span>
+          <span class="control-section-id">B4</span>
+        </div>
+        <table class="control-section-table">
+          <thead>
+            <tr>
+              <th class="pos-col">Pos.</th>
+              <th class="date-col">Date</th>
+              <th class="desc-col">Description</th>
+              <th class="status-col">Status</th>
+              <th class="note-col">Note</th>
+              <th class="control-id-col">Control/ID</th>
+              <th class="construction-part-col">Construction Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>7.4.1</td>
+              <td></td>
+              <td>Delivery inspection</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.4.2</td>
+              <td></td>
+              <td>Storage conditions</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.4.3</td>
+              <td></td>
+              <td>Material handling</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 7.5 -->
+      <div class="control-section">
+        <div class="control-section-header">
+          <span>7.5 Execution control</span>
+          <span class="control-section-id">B5</span>
+        </div>
+        <table class="control-section-table">
+          <thead>
+            <tr>
+              <th class="pos-col">Pos.</th>
+              <th class="date-col">Date</th>
+              <th class="desc-col">Description</th>
+              <th class="status-col">Status</th>
+              <th class="note-col">Note</th>
+              <th class="control-id-col">Control/ID</th>
+              <th class="construction-part-col">Construction Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>7.5.1</td>
+              <td></td>
+              <td>Process control</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.5.2</td>
+              <td></td>
+              <td>Quality control</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.5.3</td>
+              <td></td>
+              <td>Documentation control</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 7.6 -->
+      <div class="control-section">
+        <div class="control-section-header">
+          <span>7.6 Final Inspection</span>
+          <span class="control-section-id">B6</span>
+        </div>
+        <table class="control-section-table">
+          <thead>
+            <tr>
+              <th class="pos-col">Pos.</th>
+              <th class="date-col">Date</th>
+              <th class="desc-col">Description</th>
+              <th class="status-col">Status</th>
+              <th class="note-col">Note</th>
+              <th class="control-id-col">Control/ID</th>
+              <th class="construction-part-col">Construction Part</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>7.6.1</td>
+              <td></td>
+              <td>Final verification</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.6.2</td>
+              <td></td>
+              <td>Documentation review</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>7.6.3</td>
+              <td></td>
+              <td>Handover preparation</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div class="control-carried-out-footer">
+        <div class="footer-left">
+          <span>Part of</span>
+          <img src="logo.png" alt="Assurement Logo" class="footer-logo-small" />
+          <span>Assurement ApS</span>
+        </div>
+        <div class="footer-right">
+          <span class="page-info">Side 35 af 35</span>
+        </div>
+      </div>
+      <div class="page-number"></div>
+    </div>
+  </section>
 </body>
 </html>
