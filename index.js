@@ -415,6 +415,9 @@ app.post(
         });
       }
 
+      // Normalize email to lowercase for consistency
+      const normalizedUsername = username.toLowerCase();
+
       // Helper function to standardize picture storage
       const standardizePicture = (fileData) => {
         if (!fileData) return null;
@@ -462,10 +465,10 @@ app.post(
       let finalPicture = picture;
       if (!picture) {
         console.log("🔍 No picture uploaded, checking for existing picture...");
-        // Find all users with same email
+        // Find all users with same email (case-insensitive)
         const existingUsers = await db
           .collection("users")
-          .find({ username: username })
+          .find({ username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } })
           .toArray();
         console.log(
           "🔍 Found",
@@ -512,9 +515,9 @@ app.post(
         parsedUserProfession = JSON.parse(req.body.userProfession);
       }
 
-      // Check for duplicate email+role+company combination
+      // Check for duplicate email+role+company combination (case-insensitive)
       const duplicateCheck = await db.collection("users").findOne({
-        username: username,
+        username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') },
         role: role,
         companyId: companyId,
       });
@@ -533,10 +536,10 @@ app.post(
         });
       }
 
-      // Check if user with same email already exists and is verified
+      // Check if user with same email already exists and is verified (case-insensitive)
       const existingUser = await db
         .collection("users")
-        .findOne({ username: username });
+        .findOne({ username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } });
       let isVerified = false;
       let verificationCode = null;
       let verificationSentAt = null;
@@ -631,7 +634,7 @@ app.post(
 
       // Create user document with generated password
       const userData = {
-        username,
+        username: normalizedUsername, // Store email in lowercase
         password: generatedPassword, // Generated password sent via email
         role,
         phone,
@@ -641,7 +644,7 @@ app.post(
         city,
         startDate,
         contactPerson,
-        contactPhone,
+        contactPhone: contactPhone || '',
         cvr,
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         companyId,
@@ -701,10 +704,10 @@ app.post(
             username
           );
         } else {
-          // If new user has no picture, check existing users
+          // If new user has no picture, check existing users (case-insensitive)
           const existingUsers = await db
             .collection("users")
-            .find({ username: username })
+            .find({ username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } })
             .toArray();
           console.log(
             "🔍 STORE-USER: Found",
@@ -763,7 +766,7 @@ app.post(
         );
 
         const syncResult = await db.collection("users").updateMany(
-          { username: username },
+          { username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } },
           {
             $set: commonDetails,
           }
@@ -1553,7 +1556,6 @@ app.get("/check-user-exists", async (req, res) => {
           role: user.role || "",
           cvr: user.cvr || "",
           contactPerson: user.contactPerson || "",
-          contactPhone: user.contactPhone || "",
           type: user.type || "",
           safetyCertification: user.safetyCertification || "",
           mainId: user.mainId || "",
@@ -1633,7 +1635,6 @@ app.get("/get-user-with-picture", async (req, res) => {
           startDate: userWithPicture.startDate || "",
           cvr: userWithPicture.cvr || "",
           contactPerson: userWithPicture.contactPerson || "",
-          contactPhone: userWithPicture.contactPhone || "",
           type: userWithPicture.type || "",
           safetyCertification: userWithPicture.safetyCertification || "",
           mainId: userWithPicture.mainId || "",
@@ -5543,6 +5544,8 @@ app.post(
         type,
         mainId,
         userProfession,
+        cvr,
+        contactPerson,
       } = req.body;
 
       const updateData = {};
@@ -5669,107 +5672,134 @@ app.post(
         );
       }
       if (type) updateData.type = type;
+      if (cvr) updateData.cvr = cvr;
+      if (contactPerson) updateData.contactPerson = contactPerson;
 
       // First, get the user to find their username
       const user = await db
         .collection("users")
         .findOne({ _id: new ObjectId(req.params.id) });
 
+      console.log("🔍 UPDATE-USER DEBUG - User lookup:");
+      console.log("User ID:", req.params.id);
+      console.log("User found:", !!user);
+      if (user) {
+        console.log("User username:", user.username);
+        console.log("User email:", user.email);
+        console.log("User role:", user.role);
+        console.log("User companyId:", user.companyId);
+        console.log("User name:", user.name);
+        console.log("User phone:", user.phone);
+        console.log("User address:", user.address);
+        console.log("User city:", user.city);
+        console.log("User postalCode:", user.postalCode);
+        console.log("User startDate:", user.startDate);
+        console.log("User cvr:", user.cvr);
+        console.log("User contactPerson:", user.contactPerson);
+      }
+
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Separate common fields from role-specific fields
-      const commonFields = { ...updateData };
-      const roleSpecificFields = {};
-
-      // Remove role-specific fields from common fields to prevent cross-role synchronization
-      delete commonFields.role;
-      delete commonFields.userProfession;
-      delete commonFields.isProjectManager;
-      delete commonFields.projectsId;
-      delete commonFields.companyId;
-      delete commonFields.type;
-
-      // Only include picture in common fields if it's not null/undefined
-      if (!commonFields.picture) {
-        delete commonFields.picture;
-      }
-
-      console.log(
-        "🔍 UPDATE-USER: Common fields (will sync to all users):",
-        Object.keys(commonFields)
-      );
-      console.log(
-        "🔍 UPDATE-USER: Role-specific fields (will sync to specific user):",
-        Object.keys(roleSpecificFields)
-      );
-      console.log(
-        "🔍 UPDATE-USER: Picture in common fields:",
-        commonFields.picture
-      );
-      console.log("🔍 UPDATE-USER: Picture type:", typeof commonFields.picture);
-
-      // Add role-specific fields back to roleSpecificFields for specific user update
-      if (updateData.userProfession !== undefined) {
-        roleSpecificFields.userProfession = updateData.userProfession;
-      }
-      if (updateData.isProjectManager !== undefined) {
-        roleSpecificFields.isProjectManager = updateData.isProjectManager;
-      }
-      if (updateData.role !== undefined) {
-        roleSpecificFields.role = updateData.role;
-      }
-      if (updateData.projectsId !== undefined) {
-        roleSpecificFields.projectsId = updateData.projectsId;
-      }
-      if (updateData.companyId !== undefined) {
-        roleSpecificFields.companyId = updateData.companyId;
-      }
-      if (updateData.type !== undefined) {
-        roleSpecificFields.type = updateData.type;
+      // Test direct update capability
+      console.log("🔍 UPDATE-USER DEBUG - Testing direct update capability");
+      try {
+        const testResult = await db
+          .collection("users")
+          .updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { lastUpdated: new Date() } }
+          );
+        console.log("🔍 UPDATE-USER DEBUG - Direct update test result:");
+        console.log("Matched count:", testResult.matchedCount);
+        console.log("Modified count:", testResult.modifiedCount);
+      } catch (testError) {
+        console.error("🔍 UPDATE-USER DEBUG - Direct update test failed:", testError);
       }
 
       let totalUpdated = 0;
 
-      // Update ALL users with the same username (email only, no companyId) with common fields
+      // Define common fields that should sync to all users with same email
+      const commonFields = {
+        username: updateData.username,
+        name: updateData.name,
+        phone: updateData.phone,
+        address: updateData.address,
+        city: updateData.city,
+        postalCode: updateData.postalCode,
+        startDate: updateData.startDate,
+        picture: updateData.picture,
+      };
+
+      // Define role-specific fields that should only update the specific user
+      const roleSpecificFields = {
+        cvr: updateData.cvr,
+        contactPerson: updateData.contactPerson,
+        role: updateData.role,
+        type: updateData.type,
+        mainId: updateData.mainId,
+        userProfession: updateData.userProfession,
+        isProjectManager: updateData.isProjectManager,
+      };
+
+      // Remove undefined values from common fields
+      Object.keys(commonFields).forEach(key => {
+        if (commonFields[key] === undefined) {
+          delete commonFields[key];
+        }
+      });
+
+      // Remove undefined values from role-specific fields
+      Object.keys(roleSpecificFields).forEach(key => {
+        if (roleSpecificFields[key] === undefined) {
+          delete roleSpecificFields[key];
+        }
+      });
+
+      console.log("🔍 UPDATE-USER DEBUG - Update strategy:");
+      console.log("Common fields (will sync to all users with same email):", commonFields);
+      console.log("Role-specific fields (will update only this user):", roleSpecificFields);
+
+      // Step 1: Update ALL users with the same username (email) with common fields
       if (Object.keys(commonFields).length > 0) {
+        console.log("🔍 UPDATE-USER DEBUG - Updating all users with username:", user.username);
+        
         const commonResult = await db
           .collection("users")
           .updateMany({ username: user.username }, { $set: commonFields });
+        
         totalUpdated += commonResult.modifiedCount;
-
-        console.log(
-          `🔄 Updated common fields (including picture) for ${commonResult.modifiedCount} users with email: ${user.username}`
-        );
+        
+        console.log("🔍 UPDATE-USER DEBUG - Common fields result:");
+        console.log("Matched count:", commonResult.matchedCount);
+        console.log("Modified count:", commonResult.modifiedCount);
       }
 
-      // Update only the specific user with role-specific fields
+      // Step 2: Update only the specific user with role-specific fields
       if (Object.keys(roleSpecificFields).length > 0) {
+        console.log("🔍 UPDATE-USER DEBUG - Updating specific user with role-specific fields");
+        
         const specificResult = await db
           .collection("users")
           .updateOne(
             { _id: new ObjectId(req.params.id) },
             { $set: roleSpecificFields }
           );
-        if (specificResult.modifiedCount > 0) {
-          totalUpdated += specificResult.modifiedCount;
-        }
+        
+        totalUpdated += specificResult.modifiedCount;
+        
+        console.log("🔍 UPDATE-USER DEBUG - Role-specific fields result:");
+        console.log("Matched count:", specificResult.matchedCount);
+        console.log("Modified count:", specificResult.modifiedCount);
       }
 
-      if (totalUpdated === 0) {
-        return res
-          .status(404)
-          .json({ error: "No users found with matching email" });
-      }
-
+      // Return success response
       res.status(200).json({
         message: "Users updated successfully",
         usersUpdated: totalUpdated,
-        commonFieldsUpdated:
-          Object.keys(commonFields).length > 0 ? "Yes" : "No",
-        roleSpecificFieldsUpdated:
-          Object.keys(roleSpecificFields).length > 0 ? "Yes" : "No",
+        commonFieldsUpdated: Object.keys(commonFields).length,
+        roleSpecificFieldsUpdated: Object.keys(roleSpecificFields).length
       });
     } catch (error) {
       console.error(error);
@@ -5875,7 +5905,12 @@ app.post(
 app.post("/users/login", async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = await db.collection("users").findOne({ username, password });
+    // Convert username (email) to lowercase for case-insensitive comparison
+    const normalizedUsername = username.toLowerCase();
+    const user = await db.collection("users").findOne({ 
+      username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') }, 
+      password 
+    });
 
     if (!user) {
       return res.status(404).json({ error: "Invalid username or password" });
@@ -6013,7 +6048,6 @@ app.post("/get-worker-user-data", async (req, res) => {
         picture: user.picture,
         contactPicture: user.contactPicture,
         contactPerson: user.contactPerson,
-        contactPhone: user.contactPhone,
         cvr: user.cvr,
         projectsId: user.projectsId,
         companyId: user.companyId,
@@ -18816,14 +18850,15 @@ app.post("/forgot-password-request", async (req, res) => {
     // Define allowed roles based on platform
     const allowedRoles =
       platform === "react"
-        ? ["Admin"] // React dashboard only for Admin
+        ? ["Admin", "Superadmin"] // React dashboard for Admin and Superadmin
         : ["Worker", "Sub Contractor", "Independent Controller", "Admin"]; // Flutter for all roles
 
-    // Find users with this email and allowed roles
+    // Find users with this email and allowed roles (case-insensitive)
+    const normalizedEmail = email.toLowerCase();
     const users = await db
       .collection("users")
       .find({
-        username: email,
+        username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
         role: { $in: allowedRoles },
       })
       .toArray();
@@ -18853,10 +18888,10 @@ app.post("/forgot-password-request", async (req, res) => {
     // Generate forgot password code
     const forgotPasswordCode = generateVerificationCode();
 
-    // Update all matching users with forgot password code
+    // Update all matching users with forgot password code (case-insensitive)
     const result = await db.collection("users").updateMany(
       {
-        username: email,
+        username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
         role: { $in: allowedRoles },
       },
       {
@@ -18917,12 +18952,13 @@ app.post("/verify-forgot-password-code", async (req, res) => {
     // Define allowed roles based on platform
     const allowedRoles =
       platform === "react"
-        ? ["Admin"] // React dashboard only for Admin
+        ? ["Admin", "Superadmin"] // React dashboard for Admin and Superadmin
         : ["Worker", "Sub Contractor", "Independent Controller", "Admin"]; // Flutter for all roles
 
-    // Find user with this email, code, and allowed role
+    // Find user with this email, code, and allowed role (case-insensitive)
+    const normalizedEmail = email.toLowerCase();
     const user = await db.collection("users").findOne({
-      username: email,
+      username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
       forgotPasswordCode: code,
       role: { $in: allowedRoles },
       isVerified: true,
@@ -18984,13 +19020,14 @@ app.post("/reset-password", async (req, res) => {
     // Define allowed roles based on platform
     const allowedRoles =
       platform === "react"
-        ? ["Admin"] // React dashboard only for Admin
+        ? ["Admin", "Superadmin"] // React dashboard for Admin and Superadmin
         : ["Worker", "Sub Contractor", "Independent Controller", "Admin"]; // Flutter for all roles
 
-    // Find all users with this email and allowed roles, and update their passwords
+    // Find all users with this email and allowed roles, and update their passwords (case-insensitive)
+    const normalizedEmail = email.toLowerCase();
     const result = await db.collection("users").updateMany(
       {
-        username: email,
+        username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
         role: { $in: allowedRoles },
       },
       {
