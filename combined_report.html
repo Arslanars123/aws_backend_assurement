@@ -2185,6 +2185,10 @@ document is a dynamic document.</p>
     // -----------------------------
     async function loadData() {
       console.log('Local image source:');
+      
+      // Declare specialText at function scope so it's accessible throughout
+      let specialText = 'Static Control Plan'; // Default value
+      
       try {
         // Fetch profession details
         const professionResponse = await fetch(`${BASE_URL}/get-professions?SubjectMatterId=${PROFESSION}`, { mode: 'cors' });
@@ -2262,7 +2266,7 @@ document is a dynamic document.</p>
 
         // Update document ID with special text
         const documentId = document.getElementById('document-id');
-        const specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : 'Static Control Plan';
+        specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : 'Static Control Plan';
         if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
           documentId.textContent = `B3. ${specialTextData.data.specialText}`;
         } else {
@@ -2365,10 +2369,8 @@ document is a dynamic document.</p>
             const firstItem = gammasData[0]; // Use only first index as requested
             console.log('Using first item:', firstItem);
             
-            // Get special text from API
-            const specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText 
-              ? specialTextData.data.specialText 
-              : 'special text';
+            // specialText is already defined at function scope, no need to redeclare
+            // Just use it directly
             
             constructionExecutionTableBody.innerHTML = '';
             const row = document.createElement('tr');
@@ -2849,6 +2851,15 @@ document is a dynamic document.</p>
         console.log('Static document checklist data:', staticDocumentCheckList);
         console.log('Entries map:', entriesMap);
         
+
+        const specialTextResponse = await fetch(`${BASE_URL}/get-project-special-text?projectId=${PROJECT_ID}`, { mode: 'cors' });
+        const specialTextData = await specialTextResponse.json();
+
+        console.log('specialTextData',specialTextData);
+        
+        // Update document ID with special text
+        const documentId = document.getElementById('document-id');
+        const specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : '';
         // Define default data for sections without data
         const defaultSectionData = {
           b1: [
@@ -2934,6 +2945,87 @@ document is a dynamic document.</p>
                 tbody.appendChild(row);
               });
             }
+          }
+        });
+
+        // Populate Section 9 B1, B2, B3 with same data as Section 7 but with Construction Part column
+        ['b1', 'b2', 'b3'].forEach(section => {
+          const tbody = document.getElementById(`section-${section}-body-9`);
+          console.log(`Section 9 ${section}: tbody found =`, tbody !== null);
+          
+          if (tbody) {
+            tbody.innerHTML = '';
+            
+            let dataToUse = apiData[section];
+            
+            console.log(`Section 9 ${section}: dataToUse from API =`, dataToUse);
+            
+            // If no API data, use default
+            if (!dataToUse || dataToUse.length === 0) {
+              dataToUse = defaultSectionData[section];
+              console.log(`Section 9 ${section}: using default data =`, dataToUse);
+            }
+            
+            console.log(`Section 9 ${section}: final dataToUse length =`, dataToUse?.length);
+            console.log(`Section 9 ${section}: specialText =`, specialText);
+            
+            if (dataToUse && dataToUse.length > 0) {
+              console.log(`Section 9 ${section}: Starting to populate ${dataToUse.length} rows`);
+              dataToUse.forEach((item, index) => {
+                console.log(`Section 9 ${section}: Creating row ${index}`, item);
+                const row = document.createElement('tr');
+                
+                // Get entry data if submitted
+                const checklistId = item._id?.toString() || item.id;
+                const entryData = entriesMap[checklistId] || {};
+                
+                // Determine status - show "Approved" only if approvedBy is true, otherwise empty
+                let displayStatus = '';
+                if (entryData.approvedBy) {
+                  displayStatus = 'Approved';
+                } else if (entryData.status) {
+                  displayStatus = entryData.status;
+                }
+                
+                // Format dates (empty if no date)
+                const formattedDate = entryData.date ? new Date(entryData.date).toLocaleDateString('en-GB') : '';
+                const formattedApprovedDate = entryData.approvedDate ? new Date(entryData.approvedDate).toLocaleDateString('en-GB') : '';
+                
+                // Note = comment (empty if no comment)
+                const noteText = entryData.comment || '';
+                
+                // Use API data if available
+                if (item.ItemId) {
+                  row.innerHTML = `
+                    <td class="pos-col">${item.ItemId}</td>
+                    <td class="date-col">${formattedDate}</td>
+                    <td class="desc-col">${item['Contol of'] || item.description || ''}</td>
+                    <td class="status-col">${displayStatus}</td>
+                    <td class="note-col">${noteText}</td>
+                    <td class="control-id-col">${entryData.independentController ? entryData.independentController.name || 'Independent Controller' : ''}</td>
+                    <td class="construction-part-col">${specialText}</td>
+                  `;
+                } else {
+                  // Use default data
+                  row.innerHTML = `
+                    <td class="pos-col">${item.pos}</td>
+                    <td class="date-col">${formattedDate}</td>
+                    <td class="desc-col">${item.description}</td>
+                    <td class="status-col">${displayStatus}</td>
+                    <td class="note-col">${noteText}</td>
+                    <td class="control-id-col">${entryData.independentController ? entryData.independentController.name || 'Independent Controller' : ''}</td>
+                    <td class="construction-part-col">${specialText}</td>
+                  `;
+                }
+                tbody.appendChild(row);
+                console.log(`Section 9 ${section}: Row ${index} appended, tbody now has ${tbody.children.length} rows`);
+              });
+              console.log(`Section 9 ${section}: Finished populating. Total rows in tbody = ${tbody.children.length}`);
+            } else {
+              console.log(`Section 9 ${section}: No data to populate (dataToUse is empty or null)`);
+            }
+          } else {
+            console.log(`Section 9 ${section}: tbody element not found!`);
           }
         });
 
@@ -3108,6 +3200,44 @@ document is a dynamic document.</p>
               });
             }
           });
+        }
+
+        // Populate Section 9 B4, B5, B6 with same data as Section 7 but with Construction Part column
+        try {
+          ['b4', 'b5', 'b6'].forEach(section => {
+            const tbody = document.getElementById(`section-${section}-body-9`);
+            const section7tbody = document.getElementById(`section-${section}-body`);
+            
+            if (tbody && section7tbody) {
+              tbody.innerHTML = '';
+              
+              // Get all rows from section 7 and clone them with Construction Part column
+              const section7Rows = section7tbody.querySelectorAll('tr');
+              
+              section7Rows.forEach(section7Row => {
+                const cells = section7Row.querySelectorAll('td');
+                if (cells.length > 0) {
+                  const row = document.createElement('tr');
+                  
+                  // Copy all cells from section 7
+                  let rowHtml = '';
+                  cells.forEach(cell => {
+                    const className = cell.className;
+                    const content = cell.innerHTML;
+                    rowHtml += `<td class="${className}">${content}</td>`;
+                  });
+                  
+                  // Add Construction Part column
+                  rowHtml += `<td class="construction-part-col">${specialText}</td>`;
+                  
+                  row.innerHTML = rowHtml;
+                  tbody.appendChild(row);
+                }
+              });
+            }
+          });
+        } catch (section9Error) {
+          console.error('Error populating Section 9 B4, B5, B6:', section9Error);
         }
 
         console.log('Control carried out sections loaded');
@@ -3785,13 +3915,13 @@ document is a dynamic document.</p>
     <div class="control-carried-out-page">
       <!-- Header -->
       <div class="control-carried-out-header">
-        <h1>7. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHECK</h1>
+        <h1>9. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHECK</h1>
       </div>
 
       <!-- Section 7.1 -->
       <div class="control-section">
         <div class="control-section-header">
-          <span>7.1 Verification of the basis for execution from design</span>
+          <span>9.1 Verification of the basis for execution from design</span>
           <span class="control-section-id">B1</span>
         </div>
         <table class="control-section-table">
@@ -3806,7 +3936,7 @@ document is a dynamic document.</p>
               <th class="construction-part-col">Construction Part</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="section-b1-body-9">
             
           </tbody>
         </table>
@@ -3815,7 +3945,7 @@ document is a dynamic document.</p>
       <!-- Section 7.2 -->
       <div class="control-section">
         <div class="control-section-header">
-          <span>7.2 Verification of the basis for execution of the work</span>
+          <span>9.2 Verification of the basis for execution of the work</span>
           <span class="control-section-id">B2</span>
         </div>
         <table class="control-section-table">
@@ -3830,7 +3960,7 @@ document is a dynamic document.</p>
               <th class="construction-part-col">Construction Part</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="section-b2-body-9">
            
           </tbody>
         </table>
@@ -3839,7 +3969,7 @@ document is a dynamic document.</p>
       <!-- Section 7.3 -->
       <div class="control-section">
         <div class="control-section-header">
-          <span>7.3 Checking documentation of materials and products</span>
+          <span>9.3 Checking documentation of materials and products</span>
           <span class="control-section-id">B3</span>
         </div>
         <table class="control-section-table">
@@ -3854,7 +3984,7 @@ document is a dynamic document.</p>
               <th class="construction-part-col">Construction Part</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="section-b3-body-9">
           </tbody>
         </table>
       </div>
@@ -3862,7 +3992,7 @@ document is a dynamic document.</p>
       <!-- Section 7.4 -->
       <div class="control-section">
         <div class="control-section-header">
-          <span>7.4 Receipt control of deliveries</span>
+          <span>9.4 Receipt control of deliveries</span>
           <span class="control-section-id">B4</span>
         </div>
         <table class="control-section-table">
@@ -3877,7 +4007,7 @@ document is a dynamic document.</p>
               <th class="construction-part-col">Construction Part</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="section-b4-body-9">
            
           </tbody>
         </table>
@@ -3886,7 +4016,7 @@ document is a dynamic document.</p>
       <!-- Section 7.5 -->
       <div class="control-section">
         <div class="control-section-header">
-          <span>7.5 Execution control</span>
+          <span>9.5 Execution control</span>
           <span class="control-section-id">B5</span>
         </div>
         <table class="control-section-table">
@@ -3901,7 +4031,7 @@ document is a dynamic document.</p>
               <th class="construction-part-col">Construction Part</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="section-b5-body-9">
          
           </tbody>
         </table>
@@ -3910,7 +4040,7 @@ document is a dynamic document.</p>
       <!-- Section 7.6 -->
       <div class="control-section">
         <div class="control-section-header">
-          <span>7.6 Final Inspection</span>
+          <span>9.6 Final Inspection</span>
           <span class="control-section-id">B6</span>
         </div>
         <table class="control-section-table">
@@ -3925,7 +4055,7 @@ document is a dynamic document.</p>
               <th class="construction-part-col">Construction Part</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="section-b6-body-9">
           
           </tbody>
         </table>
