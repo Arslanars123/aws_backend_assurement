@@ -995,6 +995,21 @@
       </div>
     </header>
 
+    <!-- Profession Section -->
+    <section class="epanel" style="margin-bottom: 10px;">
+      <div class="epanel-head">
+        <div class="epanel-title">Profession:</div>
+      </div>
+      <div style="padding: 10px;">
+        <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center;">
+          <div style="font-weight: 600;">Subject Matter ID:</div>
+          <div id="professionId"></div>
+          <div style="font-weight: 600;">Group Name:</div>
+          <div id="professionGroupName"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="epanel">
       <div class="epanel-head">
         <div class="epanel-title">Executing party:</div>
@@ -2171,6 +2186,21 @@ document is a dynamic document.</p>
     async function loadData() {
       console.log('Local image source:');
       try {
+        // Fetch profession details
+        const professionResponse = await fetch(`${BASE_URL}/get-professions?SubjectMatterId=${PROFESSION}`, { mode: 'cors' });
+        const professionData = await professionResponse.json();
+        console.log('Profession data:', professionData);
+
+        // Populate profession information
+        if (professionData && professionData.length > 0) {
+          const profession = professionData[0];
+          document.getElementById('professionId').textContent = profession.SubjectMatterId || PROFESSION;
+          document.getElementById('professionGroupName').textContent = profession.GroupName || '';
+        } else {
+          document.getElementById('professionId').textContent = PROFESSION;
+          document.getElementById('professionGroupName').textContent = 'Not found';
+        }
+
         // Fetch company details
         const companyResponse = await fetch(`${BASE_URL}/get-company-detail/${COMPANY_ID}`, { mode: 'cors' });
         const company = await companyResponse.json();
