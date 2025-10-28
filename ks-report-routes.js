@@ -4,7 +4,7 @@ const path = require("path");
 const fs = require("fs");
 
 // Helper function to fetch KS report data
-async function fetchKsReportData(db, companyId, projectId) {
+async function fetchKsReportData(db, companyId, projectId, profession) {
   const baseMatch = {
     companyId: companyId,
     projectsId: { $in: [projectId] },
@@ -27,6 +27,7 @@ async function fetchKsReportData(db, companyId, projectId) {
     draws,
     schemes,
     supervisionDetails,
+    professionDetails,
   ] = await Promise.all([
     // Company details
     db.collection("companies").findOne({ _id: new ObjectId(companyId) }),
@@ -131,11 +132,15 @@ async function fetchKsReportData(db, companyId, projectId) {
       .collection("project-supervision-check-list")
       .find({ projectId: new ObjectId(projectId) })
       .toArray(),
+
+    // Profession details
+    db.collection("professions").findOne({ SubjectMatterId: profession }),
   ]);
 
   return {
     companyDetails: companyDetails || {},
     projectDetail: projectDetail || {},
+    professionDetails: professionDetails || {},
     users: {
       workers: workers || [],
       projectManagers: projectManagers || [],
@@ -189,7 +194,12 @@ function createKsReportRoutes(db) {
       }
 
       // Fetch data
-      const data = await fetchKsReportData(db, companyId, projectId);
+      const data = await fetchKsReportData(
+        db,
+        companyId,
+        projectId,
+        profession
+      );
 
       // Read the HTML templates
       const reportPage1Path = path.join(
@@ -296,9 +306,20 @@ function createKsReportRoutes(db) {
       // Populate data into HTML
       const companyDetails = data.companyDetails || {};
       const projectDetail = data.projectDetail || {};
+      const professionDetails = data.professionDetails || {};
       const companyLogo = companyDetails.picture?.s3Location || "";
       const companyName = companyDetails.name || "";
       const firstLetter = companyName.charAt(0).toUpperCase();
+
+      // Replace profession placeholders
+      reportPage1Html = reportPage1Html.replace(
+        /id="professionName"><\/div>/g,
+        `id="professionName">${professionDetails.GroupName || ""}</div>`
+      );
+      reportPage1Html = reportPage1Html.replace(
+        /id="professionId"><\/div>/g,
+        `id="professionId">${professionDetails.SubjectMatterId || ""}</div>`
+      );
       const postNoCity = `${companyDetails.postalCode || ""} ${
         companyDetails.city || ""
       }`.trim();
@@ -2952,8 +2973,16 @@ function createKsReportRoutes(db) {
         });
       }
 
+      // Get profession from query params if available
+      const { profession } = req.query;
+
       // Use the helper function to fetch data
-      const data = await fetchKsReportData(db, companyId, projectId);
+      const data = await fetchKsReportData(
+        db,
+        companyId,
+        projectId,
+        profession
+      );
 
       return res.status(200).json({
         success: true,

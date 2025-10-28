@@ -293,7 +293,11 @@ async function startServer() {
 
     // Register KS report routes after database connection is established
     const createKsReportRoutes = require("./ks-report-routes");
+const createProfessionRoutes = require("./profession-routes");
     app.use("/", createKsReportRoutes(db));
+    
+    // Register profession routes after database connection is established
+    app.use("/", createProfessionRoutes(db));
 
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {

@@ -995,6 +995,21 @@
       </div>
     </header>
 
+    <!-- Profession Section -->
+    <section class="epanel" style="margin-bottom: 10px;">
+      <div class="epanel-head">
+        <div class="epanel-title">Profession:</div>
+      </div>
+      <div style="padding: 10px;">
+        <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center;">
+          <div style="font-weight: 600;">Subject Matter ID:</div>
+          <div id="professionId"></div>
+          <div style="font-weight: 600;">Group Name:</div>
+          <div id="professionGroupName"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="epanel">
       <div class="epanel-head">
         <div class="epanel-title">Executing party:</div>
@@ -2171,6 +2186,21 @@ document is a dynamic document.</p>
     async function loadData() {
       console.log('Local image source:');
       try {
+        // Fetch profession details
+        const professionResponse = await fetch(`${BASE_URL}/get-professions?SubjectMatterId=${PROFESSION}`, { mode: 'cors' });
+        const professionData = await professionResponse.json();
+        console.log('Profession data:', professionData);
+
+        // Populate profession information
+        if (professionData && professionData.length > 0) {
+          const profession = professionData[0];
+          document.getElementById('professionId').textContent = profession.SubjectMatterId || PROFESSION;
+          document.getElementById('professionGroupName').textContent = profession.GroupName || '';
+        } else {
+          document.getElementById('professionId').textContent = PROFESSION;
+          document.getElementById('professionGroupName').textContent = 'Not found';
+        }
+
         // Fetch company details
         const companyResponse = await fetch(`${BASE_URL}/get-company-detail/${COMPANY_ID}`, { mode: 'cors' });
         const company = await companyResponse.json();
@@ -2842,6 +2872,8 @@ document is a dynamic document.</p>
           b3: staticDocumentCheckList.filter(item => item.DS_GroupId === 'B3' && item.ItemId.startsWith('7.3'))
         };
 
+        console.log("apiData === ",apiData);
+        
         // Populate B1, B2, B3 with API data or default
         ['b1', 'b2', 'b3'].forEach(section => {
           const tbody = document.getElementById(`section-${section}-body`);
@@ -3775,60 +3807,7 @@ document is a dynamic document.</p>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>7.1.4</td>
-              <td></td>
-              <td>Understanding</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.1.5</td>
-              <td></td>
-              <td>Coordination</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.1.6</td>
-              <td></td>
-              <td>Interfaces</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.1.3</td>
-              <td></td>
-              <td>Work environment regulations</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.1.1</td>
-              <td></td>
-              <td>Working drawings, instructions.</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.1.2</td>
-              <td></td>
-              <td>Working drawings, instructions, and assembly guidelines for buildability</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
+            
           </tbody>
         </table>
       </div>
@@ -3852,33 +3831,7 @@ document is a dynamic document.</p>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>7.2.1</td>
-              <td></td>
-              <td>Project organization</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.2.2</td>
-              <td></td>
-              <td>Project management</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.2.3</td>
-              <td></td>
-              <td>Quality management</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
+           
           </tbody>
         </table>
       </div>
@@ -3902,33 +3855,6 @@ document is a dynamic document.</p>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>7.3.1</td>
-              <td></td>
-              <td>Material certificates</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.3.2</td>
-              <td></td>
-              <td>Product documentation</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.3.3</td>
-              <td></td>
-              <td>Compliance documentation</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
           </tbody>
         </table>
       </div>
@@ -3952,33 +3878,7 @@ document is a dynamic document.</p>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>7.4.1</td>
-              <td></td>
-              <td>Delivery inspection</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.4.2</td>
-              <td></td>
-              <td>Storage conditions</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.4.3</td>
-              <td></td>
-              <td>Material handling</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
+           
           </tbody>
         </table>
       </div>
@@ -4002,33 +3902,7 @@ document is a dynamic document.</p>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>7.5.1</td>
-              <td></td>
-              <td>Process control</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.5.2</td>
-              <td></td>
-              <td>Quality control</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.5.3</td>
-              <td></td>
-              <td>Documentation control</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
+         
           </tbody>
         </table>
       </div>
@@ -4052,33 +3926,7 @@ document is a dynamic document.</p>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>7.6.1</td>
-              <td></td>
-              <td>Final verification</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.6.2</td>
-              <td></td>
-              <td>Documentation review</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>7.6.3</td>
-              <td></td>
-              <td>Handover preparation</td>
-              <td></td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
+          
           </tbody>
         </table>
       </div>
