@@ -2264,14 +2264,7 @@ document is a dynamic document.</p>
         const specialTextResponse = await fetch(`${BASE_URL}/get-project-special-text?projectId=${PROJECT_ID}`, { mode: 'cors' });
         const specialTextData = await specialTextResponse.json();
 
-        // Update document ID with special text
-        const documentId = document.getElementById('document-id');
-        specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : 'Static Control Plan';
-        if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
-          documentId.textContent = `B3. ${specialTextData.data.specialText}`;
-        } else {
-          documentId.textContent = 'B3.';
-        }
+        specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : 'Static Control Plan';       
 
         // Update all Construction Part cells with special text
         document.querySelectorAll('.control-section-table tbody tr').forEach(row => {
@@ -2342,6 +2335,20 @@ document is a dynamic document.</p>
           const gammasResponse = await fetch(`${BASE_URL}/get-gammas?companyId=${COMPANY_ID}&projectId=${PROJECT_ID}`, { mode: 'cors' });
           const gammasData = await gammasResponse.json();
           console.log('Gammas data:', gammasData);
+          // Concatenate all x values from gammas and update Document ID
+          try {
+            const xConcat = Array.isArray(gammasData)
+              ? gammasData.map(g => (g && g.x ? String(g.x).trim() : ''))
+                  .filter(Boolean)
+                  .join(', ')
+              : '';
+            const documentIdEl = document.getElementById('document-id');
+            if (documentIdEl) {
+              documentIdEl.textContent = xConcat ? `B3. ${xConcat}` : 'B3.';
+            }
+          } catch (e) {
+            console.log('Error concatenating gammas x values:', e);
+          }
           
           // Fetch special text for control section
           const specialTextResponse = await fetch(`${BASE_URL}/get-project-special-text?projectId=${PROJECT_ID}`, { mode: 'cors' });
@@ -2857,9 +2864,7 @@ document is a dynamic document.</p>
 
         console.log('specialTextData',specialTextData);
         
-        // Update document ID with special text
-        const documentId = document.getElementById('document-id');
-        const specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : '';
+const specialText = specialTextData.success && specialTextData.data && specialTextData.data.specialText ? specialTextData.data.specialText : '';
         // Define default data for sections without data
         const defaultSectionData = {
           b1: [
