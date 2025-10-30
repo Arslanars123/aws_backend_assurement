@@ -1527,6 +1527,51 @@ document is a dynamic document.</p>
 
       <!-- 1.4 Inspectors associated with -->
       <div class="subsection">
+        <h3>1.4 Inspectors associated with</h3>
+        <table class="inspectors-table" style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+          <thead>
+            <tr>
+              <th style="border:1px solid #ddd;padding:8px;">Name</th>
+              <th style="border:1px solid #ddd;padding:8px;">Inspector Type</th>
+            </tr>
+          </thead>
+          <tbody id="inspectors-tbody">
+            <tr>
+              <td colspan="2" style="text-align:center;border:1px solid #ddd;padding:8px;">Loading...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <script>
+        document.addEventListener("DOMContentLoaded", function () {
+          const tbody = document.getElementById("inspectors-tbody");
+          fetch("http://localhost:3000/get-independent-controller?companyId=68f3e4cd07a5ac84c1ffbac6&projectId=68fe04dd82709bcfca8e3147")
+            .then(res => res.json())
+            .then(data => {
+              // Assuming the API returns an array of inspectors like [{name: "...", type: "..."}]
+              // If the type is not present in the data, set type as "Independent Controller"
+              tbody.innerHTML = "";
+              if (Array.isArray(data) && data.length) {
+                data.forEach((inspector, idx) => {
+                  const name = inspector.name || inspector.fullName || inspector.username || "N/A";
+                  const type = inspector.type || "Independent Controller";
+                  const tr = document.createElement("tr");
+                  tr.innerHTML = `
+                    <td style="border:1px solid #ddd;padding:8px;">${name}</td>
+                    <td style="border:1px solid #ddd;padding:8px;">${type}</td>
+                  `;
+                  tbody.appendChild(tr);
+                });
+              } else {
+                tbody.innerHTML = `<tr><td colspan="2" style="text-align:center;border:1px solid #ddd;padding:8px;">No inspectors found.</td></tr>`;
+              }
+            })
+            .catch((error) => {
+              tbody.innerHTML = `<tr><td colspan="2" style="text-align:center;border:1px solid #ddd;padding:8px;color:red;">Failed to load inspector data</td></tr>`;
+              console.error("Failed to load inspector data", error);
+            });
+        });
+      </script>
       <!-- 1.5 Explanation of the use of assistant inspectors -->
       <div class="subsection">
         <h3>1.5 Explanation of the use of assistant inspectors</h3>
