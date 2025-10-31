@@ -1853,6 +1853,10 @@ document is a dynamic document.</p>
 
       <!-- Main Content -->
       <div class="deviation-content">
+        <div id="deviations-table-section" style="margin-bottom: 16px;">
+          <h2 style="font-size: 16px; font-weight: 700; color: #0a2540; margin: 0 0 8px;">Deviation B7 - Table</h2>
+          <div id="deviations-table"></div>
+        </div>
         <div id="deviation-container">
           <!-- Will be populated dynamically -->
         </div>
@@ -2136,6 +2140,7 @@ document is a dynamic document.</p>
 
   <script src="html2canvas.min.js"></script>
   <script src="jspdf.umd.min.js"></script>
+  <script src="services/deviationsTable.js"></script>
   
   <!-- Fallback CDN scripts if local ones fail -->
   <script>
@@ -2496,6 +2501,9 @@ document is a dynamic document.</p>
             
             if (filteredDeviations.length > 0) {
               filteredDeviations.forEach(deviation => {
+
+                console.log('deviation =>>>', deviation);
+                
                 // Create card
                 const card = document.createElement('div');
                 card.className = 'deviation-card';
@@ -2612,8 +2620,7 @@ document is a dynamic document.</p>
                   
                   card.appendChild(annotatedDiv);
                 }
-                
-                // Mark Pictures section (THIRD as requested)
+                                // Mark Pictures section (THIRD as requested)
                 if (deviation.markPictures && deviation.markPictures.length > 0) {
                   const markPicturesHeading = document.createElement('h3');
                   markPicturesHeading.textContent = 'Mark Pictures';
@@ -2651,15 +2658,9 @@ document is a dynamic document.</p>
                     // Add mark label
                     const indexDiv = document.createElement('div');
                     indexDiv.className = 'mark-picture-index';
-                    indexDiv.textContent = `Mark ${index + 1}`;
+                    indexDiv.textContent = deviation?.markPictureDescriptions?.[index] || `Mark ${index + 1}`;
                     pictureItem.appendChild(indexDiv);
-                    
-                    // Add description from markPictureDescriptions array
-                    const descDiv = document.createElement('div');
-                    descDiv.className = 'mark-picture-description';
-                    descDiv.textContent = deviation.markPictureDescriptions && deviation.markPictureDescriptions[index] ? deviation.markPictureDescriptions[index] : '';
-                    pictureItem.appendChild(descDiv);
-                    
+              
                     picturesDiv.appendChild(pictureItem);
                   });
                   
