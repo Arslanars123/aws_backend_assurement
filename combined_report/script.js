@@ -1228,10 +1228,20 @@ const specialText = specialTextData.success && specialTextData.data && specialTe
           const markPictureUrl = firstMarkPicture ? `${BASE_URL}/uploads/${firstMarkPicture.filename}` : '';
           const markDescription = firstMarkPicture ? firstMarkPicture.description : '';
           
+          // Get Description from staticReportItem or entry
+          const description = entry.staticReportItem?.checkingThe || entry.checkingThe || entry.controloff || '';
+          
+          // Get Control/ID - show worker name if available
+          const controlId = entry.selectedWorkers && entry.selectedWorkers.length > 0 
+            ? entry.selectedWorkers.map(w => w.name || w.fullName || '').filter(Boolean).join(', ') 
+            : '';
+          
           row.innerHTML = `
-            <td class="pos-col">${entry.pos || ''}</td>
+            <td class="pos-col">${entry.pos || entry.staticReportItem?.pos || ''}</td>
             <td class="image-col">${markPictureUrl ? `<img src="${markPictureUrl}" />` : ''}</td>
             <td class="desc-col">${markDescription || ''}</td>
+            <td class="desc-col">${description || ''}</td>
+            <td class="control-id-col">${controlId || ''}</td>
           `;
           workerTableBody.appendChild(row);
           
@@ -1243,7 +1253,7 @@ const specialText = specialTextData.success && specialTextData.data && specialTe
           if (hasDrawings || hasBuildingPart || hasAnnotatedPdfs) {
             const drawingsRow = document.createElement('tr');
             const drawingsCell = document.createElement('td');
-            drawingsCell.colSpan = 3;
+            drawingsCell.colSpan = 5;
             
             // Create drawings container
             const drawingsContainer = document.createElement('div');
@@ -1349,10 +1359,20 @@ const specialText = specialTextData.success && specialTextData.data && specialTe
           const markPictureUrl = firstMarkPicture ? `${BASE_URL}/uploads/${firstMarkPicture.filename}` : '';
           const markDescription = firstMarkPicture ? firstMarkPicture.description : '';
           
+          // Get Description from staticReportItem or entry
+          const description = entry.staticReportItem?.checkingThe || entry.checkingThe || entry.controloff || '';
+          
+          // Get Control/ID - show independent controller name if available
+          const controlId = entry.independentController 
+            ? (entry.independentController.name || entry.independentController.fullName || 'Independent Controller')
+            : '';
+          
           row.innerHTML = `
-            <td class="pos-col">${entry.pos || ''}</td>
+            <td class="pos-col">${entry.pos || entry.staticReportItem?.pos || ''}</td>
             <td class="image-col">${markPictureUrl ? `<img src="${markPictureUrl}" />` : ''}</td>
             <td class="desc-col">${markDescription || ''}</td>
+            <td class="desc-col">${description || ''}</td>
+            <td class="control-id-col">${controlId || ''}</td>
           `;
           controllerTableBody.appendChild(row);
           
@@ -1364,7 +1384,7 @@ const specialText = specialTextData.success && specialTextData.data && specialTe
           if (hasDrawings || hasBuildingPart || hasAnnotatedPdfs) {
             const drawingsRow = document.createElement('tr');
             const drawingsCell = document.createElement('td');
-            drawingsCell.colSpan = 3;
+            drawingsCell.colSpan = 5;
             
             // Create drawings container
             const drawingsContainer = document.createElement('div');
