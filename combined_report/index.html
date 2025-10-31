@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Complete Static Control Report</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Export bar -->
+  <div id="exportBar">
+    <button id="exportBtn" type="button">Export Complete Report to PDF</button>
+    <span id="status" aria-live="polite"></span>
+    <div id="paramInfo" style="font-size: 11px; opacity: 0.8; margin-left: 16px;"></div>
+  </div>
+
+  <div id="report-container">
+    <!-- All pages will be loaded here -->
+  </div>
+
+  <script src="html2canvas.min.js"></script>
+  <script src="jspdf.umd.min.js"></script>
+  <script src="../services/deviationsTable.js"></script>
+  
+  <!-- Fallback CDN scripts if local ones fail -->
+  <script>
+    // Fallback for html2canvas
+    if (typeof window.html2canvas === 'undefined') {
+      console.log('Loading html2canvas from CDN...');
+      const script1 = document.createElement('script');
+      script1.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script1.onload = () => console.log('html2canvas loaded from CDN');
+      script1.onerror = () => console.error('Failed to load html2canvas from CDN');
+      document.head.appendChild(script1);
+    }
+    
+    // Fallback for jsPDF
+    if (typeof window.jspdf === 'undefined') {
+      console.log('Loading jsPDF from CDN...');
+      const script2 = document.createElement('script');
+      script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      script2.onload = () => console.log('jsPDF loaded from CDN');
+      script2.onerror = () => console.error('Failed to load jsPDF from CDN');
+      document.head.appendChild(script2);
+    }
+  </script>
+  
+  <!-- Library loading check -->
+  <script>
+    // Check if libraries loaded
+    window.addEventListener('load', () => {
+      if (typeof window.html2canvas !== 'undefined') {
+        console.log('html2canvas loaded successfully');
+      } else {
+        console.error('html2canvas failed to load');
+      }
+      
+      if (typeof window.jspdf !== 'undefined') {
+        console.log('jsPDF loaded successfully');
+      } else {
+        console.error('jsPDF failed to load');
+      }
+    });
+  </script>
+
+  <script src="script.js"></script>
+
+  <script>
+    // Load all pages sequentially
+    const pageFiles = [
+      'page-1.html',
+      'page-2.html',
+      'page-3.html',
+      'page-4.html',
+      'page-5.html',
+      'page-6.html',
+      'page-7.html',
+      'page-8.html',
+      'page-9.html',
+      'page-10.html',
+      'page-11.html',
+      'page-12.html',
+      'page-13.html'
+    ];
+
+    const container = document.getElementById('report-container');
+    
+    // Load all pages
+    async function loadAllPages() {
+      try {
+        for (const pageFile of pageFiles) {
+          const response = await fetch(pageFile);
+          if (response.ok) {
+            const html = await response.text();
+            container.insertAdjacentHTML('beforeend', html);
+          } else {
+            console.error(`Failed to load ${pageFile}`);
+          }
+        }
+        console.log('All pages loaded successfully');
+      } catch (error) {
+        console.error('Error loading pages:', error);
+        container.innerHTML = '<p>Error loading report. Please check the console.</p>';
+      }
+    }
+
+    // Load pages when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadAllPages);
+    } else {
+      loadAllPages();
+    }
+  </script>
+</body>
+</html>
+
