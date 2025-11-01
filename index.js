@@ -6350,12 +6350,36 @@ app.post("/determine-user-roles", async (req, res) => {
     console.log("Determined roles:", roles);
     console.log("Role details:", roleDetails);
 
+    // Include user objects for each role
+    const userObjects = {};
+    
+    // Add worker user object if Worker role exists
+    if (validWorkerUsers.length > 0) {
+      userObjects.Worker = validWorkerUsers[0]; // Include first worker user object
+    }
+    
+    // Add admin user object if Admin role exists
+    if (adminUsers.length > 0) {
+      userObjects.Admin = adminUsers[0];
+    }
+    
+    // Add project manager user object if exists
+    if (projectManagerUser) {
+      userObjects['Project Manager'] = projectManagerUser;
+    }
+    
+    // Add independent controller user object if exists
+    if (independentControllerUsers.length > 0) {
+      userObjects['Independent Controller'] = independentControllerUsers[0];
+    }
+
     res.status(200).json({
       success: true,
       email: email,
       roles: roles,
       roleDetails: roleDetails,
       hasMultipleRoles: roles.length > 1,
+      userObjects: userObjects, // Include complete user objects for each role
       userInfo: {
         foundInUsers: users.length > 0,
         foundInCompanies: companies.length > 0,
@@ -14436,6 +14460,7 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
       projectsId,
       companyId,
       createdAt,
+      currentVersion,
     } = req.fields || req.body; // Handle both multipart and JSON
 
     const parsedProfessions =
@@ -14468,6 +14493,7 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
       projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
       companyId,
       picture,
+      currentVersion: currentVersion || 1, // ✨ Set initial version to 1
       createdAt: createdAt || new Date().toISOString(),
     };
 
@@ -14487,6 +14513,8 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
     if (email && email.trim() !== "") {
       documentToInsert.email = email;
     }
+    
+    console.log(`✅ Creating gamma with currentVersion: ${documentToInsert.currentVersion}`);
 
     // Insert the data into the database
     const result = await db.collection("gammas").insertOne(documentToInsert);
@@ -14539,6 +14567,22 @@ app.post(
         };
       }
 
+      // Get current document to increment version
+      const currentDoc = await db
+        .collection("gammas")
+        .findOne({ _id: new ObjectId(req.params.id) });
+
+      if (!currentDoc) {
+        return res.status(404).json({ error: "gamma not found" });
+      }
+
+      // Increment currentVersion (or set to 1 if not exists)
+      const newVersion = (currentDoc.currentVersion || 0) + 1;
+      updateData.currentVersion = newVersion;
+      updateData.updatedAt = new Date().toISOString();
+
+      console.log(`✅ Incrementing gamma version from ${currentDoc.currentVersion || 0} to ${newVersion}`);
+
       // Update the task document in the database
       const result = await db
         .collection("gammas")
@@ -14548,7 +14592,11 @@ app.post(
         return res.status(404).json({ error: "gamma not found" });
       }
 
-      res.status(200).json({ message: "gamma updated successfully", result });
+      res.status(200).json({ 
+        message: "gamma updated successfully", 
+        result,
+        currentVersion: newVersion 
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Failed to update gamma" });
