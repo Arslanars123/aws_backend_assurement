@@ -293,9 +293,9 @@ async function startServer() {
 
     // Register KS report routes after database connection is established
     const createKsReportRoutes = require("./ks-report-routes");
-const createProfessionRoutes = require("./profession-routes");
+    const createProfessionRoutes = require("./profession-routes");
     app.use("/", createKsReportRoutes(db));
-    
+
     // Register profession routes after database connection is established
     app.use("/", createProfessionRoutes(db));
 
@@ -472,7 +472,9 @@ app.post(
         // Find all users with same email (case-insensitive)
         const existingUsers = await db
           .collection("users")
-          .find({ username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } })
+          .find({
+            username: { $regex: new RegExp(`^${normalizedUsername}$`, "i") },
+          })
           .toArray();
         console.log(
           "🔍 Found",
@@ -521,7 +523,7 @@ app.post(
 
       // Check for duplicate email+role+company combination (case-insensitive)
       const duplicateCheck = await db.collection("users").findOne({
-        username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') },
+        username: { $regex: new RegExp(`^${normalizedUsername}$`, "i") },
         role: role,
         companyId: companyId,
       });
@@ -541,9 +543,9 @@ app.post(
       }
 
       // Check if user with same email already exists and is verified (case-insensitive)
-      const existingUser = await db
-        .collection("users")
-        .findOne({ username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } });
+      const existingUser = await db.collection("users").findOne({
+        username: { $regex: new RegExp(`^${normalizedUsername}$`, "i") },
+      });
       let isVerified = false;
       let verificationCode = null;
       let verificationSentAt = null;
@@ -648,7 +650,7 @@ app.post(
         city,
         startDate,
         contactPerson,
-        contactPhone: contactPhone || '',
+        contactPhone: contactPhone || "",
         cvr,
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         companyId,
@@ -711,7 +713,9 @@ app.post(
           // If new user has no picture, check existing users (case-insensitive)
           const existingUsers = await db
             .collection("users")
-            .find({ username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } })
+            .find({
+              username: { $regex: new RegExp(`^${normalizedUsername}$`, "i") },
+            })
             .toArray();
           console.log(
             "🔍 STORE-USER: Found",
@@ -770,7 +774,7 @@ app.post(
         );
 
         const syncResult = await db.collection("users").updateMany(
-          { username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') } },
+          { username: { $regex: new RegExp(`^${normalizedUsername}$`, "i") } },
           {
             $set: commonDetails,
           }
@@ -5719,7 +5723,10 @@ app.post(
         console.log("Matched count:", testResult.matchedCount);
         console.log("Modified count:", testResult.modifiedCount);
       } catch (testError) {
-        console.error("🔍 UPDATE-USER DEBUG - Direct update test failed:", testError);
+        console.error(
+          "🔍 UPDATE-USER DEBUG - Direct update test failed:",
+          testError
+        );
       }
 
       let totalUpdated = 0;
@@ -5748,33 +5755,42 @@ app.post(
       };
 
       // Remove undefined values from common fields
-      Object.keys(commonFields).forEach(key => {
+      Object.keys(commonFields).forEach((key) => {
         if (commonFields[key] === undefined) {
           delete commonFields[key];
         }
       });
 
       // Remove undefined values from role-specific fields
-      Object.keys(roleSpecificFields).forEach(key => {
+      Object.keys(roleSpecificFields).forEach((key) => {
         if (roleSpecificFields[key] === undefined) {
           delete roleSpecificFields[key];
         }
       });
 
       console.log("🔍 UPDATE-USER DEBUG - Update strategy:");
-      console.log("Common fields (will sync to all users with same email):", commonFields);
-      console.log("Role-specific fields (will update only this user):", roleSpecificFields);
+      console.log(
+        "Common fields (will sync to all users with same email):",
+        commonFields
+      );
+      console.log(
+        "Role-specific fields (will update only this user):",
+        roleSpecificFields
+      );
 
       // Step 1: Update ALL users with the same username (email) with common fields
       if (Object.keys(commonFields).length > 0) {
-        console.log("🔍 UPDATE-USER DEBUG - Updating all users with username:", user.username);
-        
+        console.log(
+          "🔍 UPDATE-USER DEBUG - Updating all users with username:",
+          user.username
+        );
+
         const commonResult = await db
           .collection("users")
           .updateMany({ username: user.username }, { $set: commonFields });
-        
+
         totalUpdated += commonResult.modifiedCount;
-        
+
         console.log("🔍 UPDATE-USER DEBUG - Common fields result:");
         console.log("Matched count:", commonResult.matchedCount);
         console.log("Modified count:", commonResult.modifiedCount);
@@ -5782,17 +5798,19 @@ app.post(
 
       // Step 2: Update only the specific user with role-specific fields
       if (Object.keys(roleSpecificFields).length > 0) {
-        console.log("🔍 UPDATE-USER DEBUG - Updating specific user with role-specific fields");
-        
+        console.log(
+          "🔍 UPDATE-USER DEBUG - Updating specific user with role-specific fields"
+        );
+
         const specificResult = await db
           .collection("users")
           .updateOne(
             { _id: new ObjectId(req.params.id) },
             { $set: roleSpecificFields }
           );
-        
+
         totalUpdated += specificResult.modifiedCount;
-        
+
         console.log("🔍 UPDATE-USER DEBUG - Role-specific fields result:");
         console.log("Matched count:", specificResult.matchedCount);
         console.log("Modified count:", specificResult.modifiedCount);
@@ -5803,7 +5821,7 @@ app.post(
         message: "Users updated successfully",
         usersUpdated: totalUpdated,
         commonFieldsUpdated: Object.keys(commonFields).length,
-        roleSpecificFieldsUpdated: Object.keys(roleSpecificFields).length
+        roleSpecificFieldsUpdated: Object.keys(roleSpecificFields).length,
       });
     } catch (error) {
       console.error(error);
@@ -5911,9 +5929,9 @@ app.post("/users/login", async (req, res) => {
     const { username, password } = req.body;
     // Convert username (email) to lowercase for case-insensitive comparison
     const normalizedUsername = username.toLowerCase();
-    const user = await db.collection("users").findOne({ 
-      username: { $regex: new RegExp(`^${normalizedUsername}$`, 'i') }, 
-      password 
+    const user = await db.collection("users").findOne({
+      username: { $regex: new RegExp(`^${normalizedUsername}$`, "i") },
+      password,
     });
 
     if (!user) {
@@ -6352,25 +6370,25 @@ app.post("/determine-user-roles", async (req, res) => {
 
     // Include user objects for each role
     const userObjects = {};
-    
+
     // Add worker user object if Worker role exists
     if (validWorkerUsers.length > 0) {
       userObjects.Worker = validWorkerUsers[0]; // Include first worker user object
     }
-    
+
     // Add admin user object if Admin role exists
     if (adminUsers.length > 0) {
       userObjects.Admin = adminUsers[0];
     }
-    
+
     // Add project manager user object if exists
     if (projectManagerUser) {
-      userObjects['Project Manager'] = projectManagerUser;
+      userObjects["Project Manager"] = projectManagerUser;
     }
-    
+
     // Add independent controller user object if exists
     if (independentControllerUsers.length > 0) {
-      userObjects['Independent Controller'] = independentControllerUsers[0];
+      userObjects["Independent Controller"] = independentControllerUsers[0];
     }
 
     res.status(200).json({
@@ -10285,17 +10303,20 @@ app.post("/approve-static-document-checklist", async (req, res) => {
       staticDocumentCheckListId,
       professionId,
       independentControllerId,
+      notes,
     } = req.body;
 
     if (
       !projectId ||
       !staticDocumentCheckListId ||
       !professionId ||
-      !independentControllerId
+      !independentControllerId ||
+      !notes ||
+      notes.trim() === ""
     ) {
       return res.status(400).json({
         error:
-          "Missing required parameters: projectId, staticDocumentCheckListId, professionId, independentControllerId",
+          "Missing required parameters: projectId, staticDocumentCheckListId, professionId, independentControllerId, notes",
       });
     }
 
@@ -10343,6 +10364,7 @@ app.post("/approve-static-document-checklist", async (req, res) => {
             approvedBy: true,
             approvedDate: new Date(),
             independentController: independentController,
+            notes: notes.trim(),
           },
         }
       );
@@ -10363,6 +10385,7 @@ app.post("/approve-static-document-checklist", async (req, res) => {
               approvedBy: true,
               approvedDate: new Date(),
               independentController: independentController,
+              notes: notes.trim(),
             },
           }
         );
@@ -10383,6 +10406,7 @@ app.post("/approve-static-document-checklist", async (req, res) => {
               approvedBy: true,
               approvedDate: new Date(),
               independentController: independentController,
+              notes: notes.trim(),
             },
           }
         );
@@ -14513,8 +14537,10 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
     if (email && email.trim() !== "") {
       documentToInsert.email = email;
     }
-    
-    console.log(`✅ Creating gamma with currentVersion: ${documentToInsert.currentVersion}`);
+
+    console.log(
+      `✅ Creating gamma with currentVersion: ${documentToInsert.currentVersion}`
+    );
 
     // Insert the data into the database
     const result = await db.collection("gammas").insertOne(documentToInsert);
@@ -14581,7 +14607,11 @@ app.post(
       updateData.currentVersion = newVersion;
       updateData.updatedAt = new Date().toISOString();
 
-      console.log(`✅ Incrementing gamma version from ${currentDoc.currentVersion || 0} to ${newVersion}`);
+      console.log(
+        `✅ Incrementing gamma version from ${
+          currentDoc.currentVersion || 0
+        } to ${newVersion}`
+      );
 
       // Update the task document in the database
       const result = await db
@@ -14592,10 +14622,10 @@ app.post(
         return res.status(404).json({ error: "gamma not found" });
       }
 
-      res.status(200).json({ 
-        message: "gamma updated successfully", 
+      res.status(200).json({
+        message: "gamma updated successfully",
         result,
-        currentVersion: newVersion 
+        currentVersion: newVersion,
       });
     } catch (error) {
       console.error(error);
@@ -18910,7 +18940,7 @@ app.post("/forgot-password-request", async (req, res) => {
     const users = await db
       .collection("users")
       .find({
-        username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
+        username: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
         role: { $in: allowedRoles },
       })
       .toArray();
@@ -18943,7 +18973,7 @@ app.post("/forgot-password-request", async (req, res) => {
     // Update all matching users with forgot password code (case-insensitive)
     const result = await db.collection("users").updateMany(
       {
-        username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
+        username: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
         role: { $in: allowedRoles },
       },
       {
@@ -19010,7 +19040,7 @@ app.post("/verify-forgot-password-code", async (req, res) => {
     // Find user with this email, code, and allowed role (case-insensitive)
     const normalizedEmail = email.toLowerCase();
     const user = await db.collection("users").findOne({
-      username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
+      username: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
       forgotPasswordCode: code,
       role: { $in: allowedRoles },
       isVerified: true,
@@ -19079,7 +19109,7 @@ app.post("/reset-password", async (req, res) => {
     const normalizedEmail = email.toLowerCase();
     const result = await db.collection("users").updateMany(
       {
-        username: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
+        username: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
         role: { $in: allowedRoles },
       },
       {
