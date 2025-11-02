@@ -1264,6 +1264,7 @@ async function loadControlCarriedOut() {
           body: JSON.stringify({
             projectEuroCodes: projectEuroCodes,
             subjectMatterId: PROFESSION,
+            projectId: PROJECT_ID,
           }),
           mode: "cors",
         }
