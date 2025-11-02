@@ -10,11 +10,15 @@ function createStaticReportControlsRoutes(db) {
       const { projectEuroCodes = [], subjectMatterId, projectId } = req.body;
 
       if (!Array.isArray(projectEuroCodes) || projectEuroCodes.length === 0) {
-        return res.status(400).json({ error: "projectEuroCodes array is required" });
+        return res
+          .status(400)
+          .json({ error: "projectEuroCodes array is required" });
       }
 
       // Normalize to strings so 5 and "5" match the same docs
-      const euroCodesStr = projectEuroCodes.map(v => String(v).trim()).filter(Boolean);
+      const euroCodesStr = projectEuroCodes
+        .map((v) => String(v).trim())
+        .filter(Boolean);
 
       console.log("🔍 Pipeline debug - subjectMatterId:", subjectMatterId);
       console.log("🔍 Pipeline debug - euroCodesStr:", euroCodesStr);
@@ -37,9 +41,9 @@ function createStaticReportControlsRoutes(db) {
             subjectMatterId: 1,
             euroCode: 1,
             language: 1,
-            entryIndex: 1
-          }
-        }
+            entryIndex: 1,
+          },
+        },
       ];
 
       console.log("🔍 Pipeline stages:", JSON.stringify(pipeline, null, 2));
@@ -48,10 +52,13 @@ function createStaticReportControlsRoutes(db) {
       const debugPipeline = [
         { $addFields: { euroCodeStr: { $toString: "$euroCode" } } },
         { $match: { euroCodeStr: { $in: euroCodesStr } } },
-        { $limit: 5 }
+        { $limit: 5 },
       ];
-      
-      const debugDocs = await db.collection("controls of static report").aggregate(debugPipeline).toArray();
+
+      const debugDocs = await db
+        .collection("controls of static report")
+        .aggregate(debugPipeline)
+        .toArray();
       console.log("🔍 Documents matching EuroCode filter:", debugDocs.length);
       if (debugDocs.length > 0) {
         console.log("🔍 Sample matching document:", {
@@ -59,59 +66,76 @@ function createStaticReportControlsRoutes(db) {
           subjectMatterId: debugDocs[0].subjectMatterId,
           euroCode: debugDocs[0].euroCode,
           euroCodeStr: debugDocs[0].euroCodeStr,
-          entriesCount: debugDocs[0].entries?.length || 0
+          entriesCount: debugDocs[0].entries?.length || 0,
         });
       }
 
-      const rows = await db.collection("controls of static report").aggregate(pipeline).toArray();
+      const rows = await db
+        .collection("controls of static report")
+        .aggregate(pipeline)
+        .toArray();
 
       if (!rows.length) {
         // Debug: Check what EuroCodes actually exist in the database
-        const allEuroCodes = await db.collection("controls of static report").distinct("euroCode");
+        const allEuroCodes = await db
+          .collection("controls of static report")
+          .distinct("euroCode");
         console.log("🔍 All EuroCodes in database:", allEuroCodes);
         console.log("🔍 Requested EuroCodes:", euroCodesStr);
-        
+
         return res.status(404).json({
           error: "No controls matched the given euro codes",
           requestedEuroCodes: euroCodesStr,
-          availableEuroCodes: allEuroCodes
+          availableEuroCodes: allEuroCodes,
         });
       }
 
-      let entries = rows.map(r => ({
+      let entries = rows.map((r) => ({
         ...r.entry,
         _id: `${r.documentId}_${r.entryIndex}`,
         documentId: r.documentId,
         subjectMatterId: r.subjectMatterId,
         euroCode: r.euroCode,
         language: r.language,
-        entryIndex: r.entryIndex
+        entryIndex: r.entryIndex,
       }));
 
       // If projectId is provided, check for edited data and replace entries
       if (projectId) {
-        console.log("🔄 Checking for edited data to replace original entries...");
-        console.log(`🔍 Query params - projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`);
-        
-        // Get all edited controls for this project + subjectMatterId
-        const editedControls = await db.collection("editcontrols").find({
-          projectId: projectId,
-          subjectMatterId: subjectMatterId
-        }).toArray();
+        console.log(
+          "🔄 Checking for edited data to replace original entries..."
+        );
+        console.log(
+          `🔍 Query params - projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
+        );
 
-        console.log(`📝 Found ${editedControls.length} edited controls for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`);
-        
+        // Get all edited controls for this project + subjectMatterId
+        const editedControls = await db
+          .collection("editcontrols")
+          .find({
+            projectId: projectId,
+            subjectMatterId: subjectMatterId,
+          })
+          .toArray();
+
+        console.log(
+          `📝 Found ${editedControls.length} edited controls for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
+        );
+
         if (editedControls.length > 0) {
-          console.log('📋 Edited controls:', editedControls.map(ec => ({ 
-            pos: ec.editedFields?.pos, 
-            subjectMatterId: ec.subjectMatterId,
-            projectId: ec.projectId 
-          })));
+          console.log(
+            "📋 Edited controls:",
+            editedControls.map((ec) => ({
+              pos: ec.editedFields?.pos,
+              subjectMatterId: ec.subjectMatterId,
+              projectId: ec.projectId,
+            }))
+          );
         }
 
         // Create a map of edited data by projectId + subjectMatterId + pos for precise lookup
         const editedDataMap = new Map();
-        editedControls.forEach(editedControl => {
+        editedControls.forEach((editedControl) => {
           if (editedControl.editedFields && editedControl.editedFields.pos) {
             // Create composite key: projectId_subjectMatterId_pos
             const key = `${editedControl.projectId}_${editedControl.subjectMatterId}_${editedControl.editedFields.pos}`;
@@ -124,16 +148,22 @@ function createStaticReportControlsRoutes(db) {
 
         // Replace entries with edited data if exists (matching projectId + subjectMatterId + pos)
         let replacedCount = 0;
-        entries = entries.map(entry => {
+        entries = entries.map((entry) => {
           // Create composite key using REQUEST's subjectMatterId (not entry's)
           const key = `${projectId}_${subjectMatterId}_${entry.pos}`;
           const editedData = editedDataMap.get(key);
-          
-          console.log(`🔍 Checking entry pos="${entry.pos}" - key: ${key}, hasEditedData: ${!!editedData}`);
-          
+
+          console.log(
+            `🔍 Checking entry pos="${
+              entry.pos
+            }" - key: ${key}, hasEditedData: ${!!editedData}`
+          );
+
           if (editedData) {
             replacedCount++;
-            console.log(`✅ Replacing entry #${replacedCount} - projectId="${projectId}", subjectMatterId="${subjectMatterId}", pos="${entry.pos}"`);
+            console.log(
+              `✅ Replacing entry #${replacedCount} - projectId="${projectId}", subjectMatterId="${subjectMatterId}", pos="${entry.pos}"`
+            );
             console.log(`   Original subject: "${entry.subject}"`);
             console.log(`   Edited subject: "${editedData.subject}"`);
             return {
@@ -144,21 +174,25 @@ function createStaticReportControlsRoutes(db) {
           }
           return entry;
         });
-        
-        console.log(`📊 Total entries replaced: ${replacedCount} out of ${entries.length}`);
+
+        console.log(
+          `📊 Total entries replaced: ${replacedCount} out of ${entries.length}`
+        );
       }
 
       res.status(200).json({
         meta: {
           requestedProjectEuroCodes: euroCodesStr,
-          docsMatched: new Set(rows.map(r => String(r.documentId))).size,
-          entriesCount: entries.length
+          docsMatched: new Set(rows.map((r) => String(r.documentId))).size,
+          entriesCount: entries.length,
         },
-        entries
+        entries,
       });
     } catch (err) {
       console.error("get-controls-of-static-report error:", err);
-      res.status(500).json({ error: "Failed to fetch controls of static report" });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch controls of static report" });
     }
   });
 
@@ -206,43 +240,36 @@ function createStaticReportControlsRoutes(db) {
       if (!originalEntryId || !projectId || !editedFields) {
         return res.status(400).json({
           success: false,
-          message: "Missing required fields: originalEntryId, projectId, and editedFields are required",
+          message:
+            "Missing required fields: originalEntryId, projectId, and editedFields are required",
         });
       }
 
       const finalSubjectMatterId = subjectMatterId || profession || null;
-      
+
       // Find gamma document by projectId and profession.SubjectMatterId
       // projectsId in gamma can be array or single value
       const gammaDoc = await db.collection("gammas").findOne({
         $or: [
-          { projectsId: projectId },  // If projectsId is single value
-          { projectsId: { $in: [projectId] } }  // If projectsId is array
+          { projectsId: projectId }, // If projectsId is single value
+          { projectsId: { $in: [projectId] } }, // If projectsId is array
         ],
         "profession.SubjectMatterId": finalSubjectMatterId,
       });
 
-      let currentVersion = 1;
-
       if (gammaDoc) {
-        // Gamma document found, increment its currentVersion
-        currentVersion = (gammaDoc.currentVersion || 0) + 1;
-        
-        // Update the gamma document's currentVersion
         await db.collection("gammas").updateOne(
           { _id: gammaDoc._id },
           {
             $set: {
-              currentVersion: currentVersion,
               lastEditedAt: new Date().toISOString(),
             },
           }
         );
-        
-        console.log(`✅ Gamma version incremented to ${currentVersion} for projectId: ${projectId}, subjectMatterId: ${finalSubjectMatterId}, gammaId: ${gammaDoc._id}`);
       } else {
-        console.log(`⚠️ No gamma document found for projectId: ${projectId}, subjectMatterId: ${finalSubjectMatterId}. Using version 1.`);
-        currentVersion = 1;
+        console.log(
+          `⚠️ No gamma document found for projectId: ${projectId}, subjectMatterId: ${finalSubjectMatterId}. Using version 1.`
+        );
       }
 
       // Check if an editcontrol document already exists for this projectId + subjectMatterId + pos
@@ -271,7 +298,6 @@ function createStaticReportControlsRoutes(db) {
               profession: profession || subjectMatterId || null,
               euroCodes: euroCodes || [],
               editedFields: editedFields,
-              version: currentVersion, // Update with new version
               editedAt: editedAt || new Date().toISOString(),
               editedBy: editedBy || "unknown",
               updatedAt: new Date().toISOString(),
@@ -279,7 +305,6 @@ function createStaticReportControlsRoutes(db) {
           }
         );
         editedControlId = existingEditControl._id;
-        console.log("✅ Edited control UPDATED successfully:", editedControlId, "with version:", currentVersion);
       } else {
         // Document doesn't exist, CREATE new one
         const editedControl = {
@@ -291,7 +316,6 @@ function createStaticReportControlsRoutes(db) {
           subjectMatterId: finalSubjectMatterId,
           euroCodes: euroCodes || [],
           editedFields: editedFields,
-          version: currentVersion, // Include the version number
           editedAt: editedAt || new Date().toISOString(),
           editedBy: editedBy || "unknown",
           createdAt: new Date().toISOString(),
@@ -299,15 +323,16 @@ function createStaticReportControlsRoutes(db) {
 
         result = await db.collection("editcontrols").insertOne(editedControl);
         editedControlId = result.insertedId;
-        console.log("✅ Edited control CREATED successfully:", editedControlId, "with version:", currentVersion);
       }
 
       if (result.acknowledged || result.modifiedCount > 0) {
         return res.status(200).json({
           success: true,
-          message: existingEditControl ? "Edited control updated successfully" : "Edited control created successfully",
+          message: existingEditControl
+            ? "Edited control updated successfully"
+            : "Edited control created successfully",
           editedControlId: editedControlId,
-          version: currentVersion,
+          version: gammaDoc.currentVersion || result?.values?.currentVersion,
           action: existingEditControl ? "updated" : "created",
         });
       } else {
@@ -459,10 +484,12 @@ function createStaticReportControlsRoutes(db) {
       }
 
       // Check if already approved
-      const existingApproval = await db.collection("approved control plan").findOne({
-        projectId: projectId,
-        subjectMatterId: subjectMatterId,
-      });
+      const existingApproval = await db
+        .collection("approved control plan")
+        .findOne({
+          projectId: projectId,
+          subjectMatterId: subjectMatterId,
+        });
 
       if (existingApproval) {
         // Update existing approval
@@ -480,7 +507,9 @@ function createStaticReportControlsRoutes(db) {
             },
           }
         );
-        console.log(`✅ Control plan approval updated for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`);
+        console.log(
+          `✅ Control plan approval updated for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
+        );
       } else {
         // Create new approval
         await db.collection("approved control plan").insertOne({
@@ -491,7 +520,9 @@ function createStaticReportControlsRoutes(db) {
           approvedAt: new Date().toISOString(),
           createdAt: new Date().toISOString(),
         });
-        console.log(`✅ Control plan approved for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`);
+        console.log(
+          `✅ Control plan approved for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
+        );
       }
 
       return res.status(200).json({
