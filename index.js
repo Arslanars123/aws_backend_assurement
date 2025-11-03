@@ -922,7 +922,7 @@ app.get("/get-users-by-email/:email", async (req, res) => {
     const users = await db
       .collection("users")
       .find({
-        username: email,
+        username: email?.toLowerCase(),
       })
       .toArray();
 

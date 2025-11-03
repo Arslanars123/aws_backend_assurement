@@ -1,1 +1,0 @@
-import{j as d}from"./index-BovixxnR.js";const m=({tag:s="div",type:r="bordered",className:n,color:e,size:t,children:o})=>{const a=s||"div";return d.jsx(a,{role:"status",className:`${r==="bordered"?"spinner-border":r==="grow"?"spinner-grow":""} ${e?`text-${e}`:"text-primary"} ${t?"thumb-"+t:""} ${n}`,children:o})};export{m as S};
