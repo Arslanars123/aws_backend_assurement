@@ -291,6 +291,10 @@ async function startServer() {
     const createStaticReportControlsRoutes = require("./static-report-controls-routes");
     app.use("/", createStaticReportControlsRoutes(db));
 
+    // Register static control plan PDF routes
+    const createStaticControlPlanPdfRoutes = require("./static-control-plan-pdf-routes");
+    app.use("/", createStaticControlPlanPdfRoutes(db));
+
     // Register KS report routes after database connection is established
     const createKsReportRoutes = require("./ks-report-routes");
     const createProfessionRoutes = require("./profession-routes");
@@ -298,6 +302,43 @@ async function startServer() {
 
     // Register profession routes after database connection is established
     app.use("/", createProfessionRoutes(db));
+
+    // SPA Fallback: Serve React app for dashboard routes (MUST be after all API routes)
+    app.get("*", (req, res) => {
+      // Skip API routes - these should be handled by specific route handlers above
+      const isApiRoute = 
+        req.path.startsWith("/get-") ||
+        req.path.startsWith("/post-") ||
+        req.path.startsWith("/store-") ||
+        req.path.startsWith("/update-") ||
+        req.path.startsWith("/delete-") ||
+        req.path.startsWith("/save-") ||
+        req.path.startsWith("/check-") ||
+        req.path.startsWith("/approve-") ||
+        req.path.startsWith("/remove-") ||
+        req.path.startsWith("/add-") ||
+        req.path.startsWith("/upload") ||
+        req.path.startsWith("/uploads") ||
+        req.path.startsWith("/templates") ||
+        req.path.startsWith("/health") ||
+        req.path.startsWith("/api") ||
+        req.path.startsWith("/abdullahksreport") ||
+        req.path.startsWith("/combined-report") ||
+        req.path.startsWith("/completion-status-page") ||
+        req.path.startsWith("/generate-") ||
+        (req.path.endsWith(".html") && !req.path.includes("/dashboard")) ||
+        req.path === "/" ||
+        req.path === "";
+
+      if (isApiRoute) {
+        // If it's an API route that didn't match any handler, return 404 JSON
+        return res.status(404).json({ error: "API route not found", path: req.path });
+      }
+
+      // For dashboard/client routes, serve the React app
+      const indexPath = path.join(__dirname, "public", "index.html");
+      res.sendFile(indexPath);
+    });
 
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, "0.0.0.0", () => {
@@ -19330,3 +19371,4 @@ app.get("/get-project-main-drawings", async (req, res) => {
     });
   }
 });
+

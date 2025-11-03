@@ -17,8 +17,8 @@ app.use("/uploads/previews", express.static("uploads/previews"));
 app.use("/templates", express.static("static-report-templates"));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Serve HTML files from root directory
-app.use(express.static(__dirname));
+// NOTE: Removed serving static files from root directory to prevent 
+// conflicts with React Router. HTML files from root should be accessed via API routes.
 
 console.log("app.js loaded");
 module.exports = app;
