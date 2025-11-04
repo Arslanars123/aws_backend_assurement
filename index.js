@@ -306,7 +306,7 @@ async function startServer() {
     // SPA Fallback: Serve React app for dashboard routes (MUST be after all API routes)
     app.get("*", (req, res) => {
       // Skip API routes - these should be handled by specific route handlers above
-      const isApiRoute = 
+      const isApiRoute =
         req.path.startsWith("/get-") ||
         req.path.startsWith("/post-") ||
         req.path.startsWith("/store-") ||
@@ -332,7 +332,9 @@ async function startServer() {
 
       if (isApiRoute) {
         // If it's an API route that didn't match any handler, return 404 JSON
-        return res.status(404).json({ error: "API route not found", path: req.path });
+        return res
+          .status(404)
+          .json({ error: "API route not found", path: req.path });
       }
 
       // For dashboard/client routes, serve the React app
@@ -6013,7 +6015,7 @@ app.post("/users/login", async (req, res) => {
     const token = jwt.sign(
       {
         id: user._id,
-        username: user.username,
+        username: user.username?.toLowerCase(),
         role: user.role,
         companyId: user.companyId,
         name: user.name,
@@ -6026,8 +6028,8 @@ app.post("/users/login", async (req, res) => {
     const userResponse = {
       id: user._id,
       name: user.name,
-      username: user.username,
-      email: user.email,
+      username: user.username?.toLowerCase(),
+      email: user.email?.toLowerCase(),
       phone: user.phone,
       role: user.role,
       companyId: user.companyId,
@@ -13615,7 +13617,7 @@ app.post(
         address,
         postalCode,
         city,
-        email,
+        email: email?.toLowerCase(),
         companyPhone,
         contactPerson,
         contactPhone,
@@ -13632,9 +13634,9 @@ app.post(
       try {
         // Reuse existing password if a user with this email already exists
         let adminPassword;
-        const existingUser = await db
-          .collection("users")
-          .findOne({ $or: [{ username: email }, { email: email }] });
+        const existingUser = await db.collection("users").findOne({
+          $or: [{ username: email?.toLowerCase() }, { email: email }],
+        });
 
         if (existingUser && existingUser.password) {
           adminPassword = existingUser.password; // reuse first user's password as-is (hashed or plain as stored)
@@ -13645,7 +13647,7 @@ app.post(
         const verificationCode = generateVerificationCode();
 
         const adminUserData = {
-          username: email,
+          username: email?.toLowerCase(),
           password: adminPassword,
           role: "admin",
           phone: companyPhone,
@@ -13666,7 +13668,7 @@ app.post(
 
         try {
           await sendCompanyAdminWelcomeEmail(
-            email,
+            email?.toLowerCase(),
             contactPerson || name,
             adminPassword,
             verificationCode,
@@ -13682,7 +13684,7 @@ app.post(
             emailSent: true,
             company: {
               name,
-              email,
+              email: email?.toLowerCase(),
               contactPerson,
             },
           });
@@ -13700,7 +13702,7 @@ app.post(
               "Please contact support to resend login credentials email.",
             company: {
               name,
-              email,
+              email: email?.toLowerCase(),
               contactPerson,
             },
           });
@@ -13719,7 +13721,7 @@ app.post(
           warning: "Please contact support to create admin user manually.",
           company: {
             name,
-            email,
+            email: email?.toLowerCase(),
             contactPerson,
           },
         });
@@ -19371,4 +19373,3 @@ app.get("/get-project-main-drawings", async (req, res) => {
     });
   }
 });
-
