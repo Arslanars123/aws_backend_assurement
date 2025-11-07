@@ -424,7 +424,6 @@ app.get("/health", async (req, res) => {
     });
   }
 });
-
 // Route to handle user creation with file upload and email verification
 app.post(
   "/store-user",
@@ -592,21 +591,37 @@ app.post(
       let isVerified = false;
       let verificationCode = null;
       let verificationSentAt = null;
-      let shouldSendEmail = true;
+      let shouldSendEmail = false;
       let generatedPassword = null;
+      let passwordToUse = existingUser?.password || null;
 
-      if (existingUser && existingUser.isVerified === true) {
-        // Email already verified, set new user as verified by default
-        isVerified = true;
-        shouldSendEmail = false;
-        console.log(
-          `✅ User with email ${username} already verified. New user will be verified by default.`
-        );
+      if (existingUser) {
+        if (passwordToUse) {
+          console.log(`🔐 Reusing existing password for email ${username}.`);
+        } else {
+          generatedPassword = generateRandomPassword();
+          passwordToUse = generatedPassword;
+          console.log(
+            `🔐 Existing user record missing password. Generated new password for ${username}.`
+          );
+        }
+
+        if (existingUser.isVerified === true) {
+          isVerified = true;
+          verificationSentAt = existingUser.verificationSentAt || null;
+          console.log(
+            `✅ User with email ${username} already verified. New user will be verified by default.`
+          );
+        } else {
+          isVerified = true;
+          console.log(
+            `ℹ️ Existing user not marked verified. Marking new record verified for ${username}.`
+          );
+        }
       } else {
-        // Generate password for new user (no verification needed)
         generatedPassword = generateRandomPassword();
-        isVerified = true; // Set as verified since we're sending password directly
-        shouldSendEmail = true;
+        passwordToUse = generatedPassword;
+        isVerified = true;
         console.log(
           `✅ New user ${username} will receive generated password via email.`
         );
@@ -684,7 +699,7 @@ app.post(
       // Create user document with generated password
       const userData = {
         username: normalizedUsername, // Store email in lowercase
-        password: generatedPassword, // Generated password sent via email
+        password: passwordToUse,
         role,
         phone,
         name,
@@ -835,13 +850,16 @@ app.post(
         // Don't fail the user creation if common details update fails
       }
 
-      // Send password email only if needed
-      if (shouldSendEmail && generatedPassword) {
+      // Send password email
+      const passwordForEmail = generatedPassword || passwordToUse;
+      shouldSendEmail = true;
+
+      if (shouldSendEmail && passwordForEmail) {
         try {
           await sendUserWelcomeEmail(
             username,
             name || username,
-            generatedPassword
+            passwordForEmail
           );
 
           res.status(201).json({
@@ -1191,7 +1209,6 @@ app.get("/get-safety", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch Safety Coordinators" });
   }
 });
-
 app.get("/get-advisors", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
@@ -1213,7 +1230,6 @@ app.get("/get-advisors", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch Advisors" });
   }
 });
-
 app.get("/get-cons", async (req, res) => {
   try {
     const { companyId, projectId } = req.query;
@@ -1989,7 +2005,6 @@ app.get("/get-tasks-by-subject-matter", async (req, res) => {
     });
   }
 });
-
 // New API: Get Project Management Supervision Plan from supers collections
 app.post("/get-project-management-supervision", async (req, res) => {
   try {
@@ -2790,7 +2805,6 @@ app.get("/get-plans", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch plans" });
   }
 });
-
 app.get("/get-requests", async (req, res) => {
   try {
     const { companyId, projectId, profession } = req.query;
@@ -3583,7 +3597,6 @@ app.post("/add/professions_in_a_company", async (req, res) => {
     res.status(500).json({ error: "Failed to add or update professions" });
   }
 });
-
 app.post("/get-project-detail", async (req, res) => {
   try {
     if (!db) {
@@ -4170,7 +4183,6 @@ async function injectStaticReportRegistrationDataFromAPI(
     );
   }
 }
-
 // Helper function to inject static document checklist data into HTML
 async function injectStaticDocumentChecklistData(
   templateContent,
@@ -4705,7 +4717,6 @@ function generateTableOfContents(templateFiles) {
 
   return toc;
 }
-
 // Helper function to replace dynamic content
 async function replaceDynamicContent(
   templateContent,
@@ -5459,7 +5470,6 @@ app.get("/test-replacement", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 app.get("/get-parts", async (req, res) => {
   try {
     const { SubjectMatterId } = req.query;
@@ -6188,7 +6198,6 @@ app.post("/get-project-users", async (req, res) => {
     });
   }
 });
-
 // 6.5. Determine user roles based on email
 app.post("/determine-user-roles", async (req, res) => {
   try {
@@ -6753,7 +6762,6 @@ app.post("/get-user-projects", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 // 11. Get all companies and projects for a specific email (username)
 app.post("/get-user-companies-projects", async (req, res) => {
   try {
@@ -7415,7 +7423,6 @@ app.get("/debug-company/:companyId", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 // Debug: Get all project managers
 app.get("/debug-project-managers", async (req, res) => {
   try {
@@ -8891,12 +8898,98 @@ app.get(
   //authorizeRoles(["admin"]),
   async (req, res) => {
     try {
+      const { email, role } = req.query || {};
+
+      if (email) {
+        const normalizedEmail = email.toLowerCase();
+        const userQuery = {
+          username: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
+        };
+
+        if (role) {
+          const normalizedRoleParam = role.toString().toLowerCase();
+          userQuery.role = {
+            $regex: new RegExp(`^${normalizedRoleParam}$`, "i"),
+          };
+        }
+
+        const adminUsers = await db
+          .collection("users")
+          .find(userQuery)
+          .toArray();
+
+        if (!adminUsers || adminUsers.length === 0) {
+          return res.status(200).json([]);
+        }
+
+        const rawCompanyIds = Array.from(
+          new Set(
+            adminUsers
+              .map((user) => user.companyId)
+              .filter(
+                (companyId) => companyId !== undefined && companyId !== null
+              )
+          )
+        );
+
+        const objectIdList = [];
+        const stringIdList = [];
+
+        rawCompanyIds.forEach((companyId) => {
+          try {
+            if (companyId && typeof companyId === "object" && companyId._id) {
+              const embeddedId = companyId._id;
+              if (ObjectId.isValid(embeddedId)) {
+                objectIdList.push(new ObjectId(embeddedId));
+              } else {
+                stringIdList.push(embeddedId.toString());
+              }
+            } else if (ObjectId.isValid(companyId)) {
+              objectIdList.push(new ObjectId(companyId));
+            } else if (
+              typeof companyId === "string" &&
+              companyId.trim().length > 0
+            ) {
+              stringIdList.push(companyId.trim());
+            }
+          } catch (e) {
+            console.warn(
+              "Invalid companyId encountered while filtering companies",
+              companyId,
+              e.message
+            );
+          }
+        });
+
+        if (objectIdList.length === 0 && stringIdList.length === 0) {
+          return res.status(200).json([]);
+        }
+
+        const companyQuery = { $or: [] };
+        if (objectIdList.length > 0) {
+          companyQuery.$or.push({ _id: { $in: objectIdList } });
+        }
+        if (stringIdList.length > 0) {
+          companyQuery.$or.push({ _id: { $in: stringIdList } });
+        }
+
+        const finalQuery = companyQuery.$or.length > 0 ? companyQuery : {};
+
+        const companies = await db
+          .collection("companies")
+          .find(finalQuery, { projection: { password: 0 } })
+          .toArray();
+
+        return res.status(200).json(companies);
+      }
+
       const companies = await db
         .collection("companies")
         .find({}, { projection: { password: 0 } })
         .toArray();
       res.status(200).json(companies);
     } catch (error) {
+      console.error("Failed to fetch companies:", error);
       res.status(500).json({ error: "Failed to fetch companies" });
     }
   }
@@ -9645,7 +9738,6 @@ app.post("/close-task", async (req, res) => {
     res.status(500).json({ error: "Failed to toggle task" });
   }
 });
-
 app.post("/close-static-control", async (req, res) => {
   try {
     const { projectId, posId, subjectMatterId } = req.body;
@@ -9744,7 +9836,6 @@ app.get("/get-static-control-status", async (req, res) => {
     res.status(500).json({ error: "Failed to get static control status" });
   }
 });
-
 // API endpoint to get task submission analytics
 app.get(
   "/get-task-submission-analytics",
@@ -10337,7 +10428,6 @@ app.get("/check-static-document-checklist-status", async (req, res) => {
     res.status(500).json({ error: "Failed to check checklist status" });
   }
 });
-
 // API endpoint to approve static document checklist items
 app.post("/approve-static-document-checklist", async (req, res) => {
   try {
@@ -10472,7 +10562,6 @@ app.post("/approve-static-document-checklist", async (req, res) => {
     res.status(500).json({ error: "Failed to approve checklist item" });
   }
 });
-
 // API endpoint to get submitted static document checklist entries with data
 app.get("/get-static-checklist-submitted-entries", async (req, res) => {
   // Add CORS headers
@@ -10986,7 +11075,6 @@ app.get("/get-static-report-registration-entries", async (req, res) => {
     });
   }
 });
-
 app.post(
   "/submit-static-report",
   upload.fields([
@@ -11726,7 +11814,6 @@ app.post("/get-quality-assurance-signature", async (req, res) => {
     });
   }
 });
-
 // Create new quality assurance signature
 app.post("/create-quality-assurance-signature", async (req, res) => {
   try {
@@ -12943,7 +13030,6 @@ app.post(
     }
   }
 );
-
 app.post(
   "/store-deviation",
   upload.fields([
@@ -13632,43 +13718,50 @@ app.post(
       const companyId = result.insertedId;
 
       try {
-        // Reuse existing password if a user with this email already exists
-        let adminPassword;
-        const existingUser = await db.collection("users").findOne({
-          $or: [{ username: email?.toLowerCase() }, { email: email }],
-        });
-
-        if (existingUser && existingUser.password) {
-          adminPassword = existingUser.password; // reuse first user's password as-is (hashed or plain as stored)
-        } else {
-          adminPassword = generateRandomPassword();
-        }
-
+        const normalizedEmail = email?.toLowerCase();
         const verificationCode = generateVerificationCode();
 
-        const adminUserData = {
-          username: email?.toLowerCase(),
-          password: adminPassword,
+        const existingAdmin = await db.collection("users").findOne(
+          {
+            username: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
+          },
+          { sort: { createdAt: -1 } }
+        );
+
+        const adminPassword =
+          existingAdmin?.password || generateRandomPassword();
+
+        const userData = {
+          username: normalizedEmail,
+          email: normalizedEmail,
           role: "admin",
           phone: companyPhone,
-          name: contactPerson,
-          address: address,
-          postalCode: postalCode,
-          city: city,
-          companyId: companyId,
+          name: contactPerson || name,
+          address,
+          postalCode,
+          city,
+          companyId,
           verificationCode,
           isVerified: true,
           verificationSentAt: new Date(),
+          password: adminPassword,
           createdAt: new Date(),
         };
 
-        const userResult = await db
+        if (existingAdmin?.picture) {
+          userData.picture = existingAdmin.picture;
+        }
+        if (existingAdmin?.contactPicture) {
+          userData.contactPicture = existingAdmin.contactPicture;
+        }
+
+        const userInsertResult = await db
           .collection("users")
-          .insertOne(adminUserData);
+          .insertOne(userData);
 
         try {
           await sendCompanyAdminWelcomeEmail(
-            email?.toLowerCase(),
+            normalizedEmail,
             contactPerson || name,
             adminPassword,
             verificationCode,
@@ -13680,11 +13773,11 @@ app.post(
             message:
               "Company and admin user created successfully! Login credentials sent to admin email.",
             companyId: companyId,
-            userId: userResult.insertedId,
+            userId: userInsertResult.insertedId,
             emailSent: true,
             company: {
               name,
-              email: email?.toLowerCase(),
+              email: normalizedEmail,
               contactPerson,
             },
           });
@@ -13696,13 +13789,13 @@ app.post(
             message:
               "Company and admin user created successfully! However, login credentials email could not be sent.",
             companyId: companyId,
-            userId: userResult.insertedId,
+            userId: userInsertResult.insertedId,
             emailSent: false,
             warning:
               "Please contact support to resend login credentials email.",
             company: {
               name,
-              email: email?.toLowerCase(),
+              email: normalizedEmail,
               contactPerson,
             },
           });
@@ -13732,7 +13825,6 @@ app.post(
     }
   }
 );
-
 app.post(
   "/update-company/:id",
   upload.fields([
@@ -14510,7 +14602,6 @@ app.post(
     }
   }
 );
-
 app.post("/store-gamma", upload.single("picture"), async (req, res) => {
   try {
     // Receive the new fields - use req.fields for multipart form data
@@ -15204,7 +15295,6 @@ app.post(
     }
   }
 );
-
 app.post(
   "/store-note",
   upload.fields([
@@ -17581,21 +17671,6 @@ app.get(
       const preparingProductionTemplate = Handlebars.compile(
         preparingProductionTemplateContent
       );
-      const projectManagementSupervisionTemplate = Handlebars.compile(
-        projectManagementSupervisionTemplateContent
-      );
-      const controlWorkDescriptionTemplate = Handlebars.compile(
-        controlWorkDescriptionTemplateContent
-      );
-      const standardControlPlanTemplate = Handlebars.compile(
-        standardControlPlanTemplateContent
-      );
-      const tenderControlPlanTemplate = Handlebars.compile(
-        tenderControlPlanTemplateContent
-      );
-      const taskEntriesTemplate = Handlebars.compile(
-        taskEntriesTemplateContent
-      );
 
       // Debug: Check if template content is loaded
       console.log(
@@ -18318,7 +18393,6 @@ app.post("/test-email", async (req, res) => {
     });
   }
 });
-
 // Dedicated test email endpoint - always sends to devarsulan@gmail.com
 app.get("/test-email-devarsulan", async (req, res) => {
   try {
@@ -19060,7 +19134,6 @@ app.post("/forgot-password-request", async (req, res) => {
     });
   }
 });
-
 // Verify forgot password code endpoint
 app.post("/verify-forgot-password-code", async (req, res) => {
   try {
