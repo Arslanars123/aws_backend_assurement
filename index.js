@@ -8064,6 +8064,69 @@ app.get(
     }
   }
 );
+
+app.post("/get-project-check-detail", async (req, res) => {
+  try {
+    const { projectId, checkId } = req.body || {};
+
+    if (!projectId || !checkId) {
+      return res
+        .status(400)
+        .json({ error: "projectId and checkId are required" });
+    }
+
+    if (!ObjectId.isValid(projectId)) {
+      return res.status(400).json({ error: "invalid project id" });
+    }
+
+    const project = await db
+      .collection("projects")
+      .findOne({ _id: new ObjectId(projectId) }, { projection: { checks: 1 } });
+
+    if (!project) {
+      return res.status(404).json({ error: "project not found" });
+    }
+
+    const checks = Array.isArray(project.checks) ? project.checks : [];
+    const checkObjectId = ObjectId.isValid(checkId)
+      ? new ObjectId(checkId)
+      : null;
+
+    const matchingCheck = checks.find((check) => {
+      if (!check || !check._id) {
+        return false;
+      }
+
+      const nestedId = check._id;
+
+      if (nestedId instanceof ObjectId) {
+        return checkObjectId
+          ? nestedId.equals(checkObjectId)
+          : nestedId.toString() === checkId;
+      }
+
+      if (typeof nestedId === "string") {
+        return nestedId === checkId;
+      }
+
+      if (nestedId && typeof nestedId.toString === "function") {
+        return nestedId.toString() === checkId;
+      }
+
+      return false;
+    });
+
+    if (!matchingCheck) {
+      return res.status(404).json({ error: "check not found in project" });
+    }
+
+    res.status(200).json(matchingCheck);
+  } catch (error) {
+    console.error("Failed to fetch project check detail:", error);
+    res.status(500).json({ error: "Failed to fetch project check detail" });
+  }
+});
+
 app.post(
   "/delete-description/:id",
   //authenticateToken,
