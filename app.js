@@ -19,6 +19,10 @@ app.use(
   "/abdullahksreport",
   express.static(path.join(__dirname, "abdullahksreport"))
 );
+app.use(
+  "/combined_report",
+  express.static(path.join(__dirname, "combined_report"))
+);
 app.use(express.static(path.join(__dirname, "public")));
 
 // NOTE: Removed serving static files from root directory to prevent 
