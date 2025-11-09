@@ -15,6 +15,10 @@ app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 app.use("/uploads/previews", express.static("uploads/previews"));
 app.use("/templates", express.static("static-report-templates"));
+app.use(
+  "/abdullahksreport",
+  express.static(path.join(__dirname, "abdullahksreport"))
+);
 app.use(express.static(path.join(__dirname, "public")));
 
 // NOTE: Removed serving static files from root directory to prevent 
