@@ -1186,21 +1186,56 @@ module.exports = (db) => {
       }
       .scp-table-simple thead {
         background: rgba(15, 23, 42, 0.06);
+        color: #0f172a;
       }
-      @media print {
-        body {
-          background: #fff;
-        }
-        .scp-toolbar {
-          display: none;
-        }
-        .scp-container {
-          padding: 24px 16px;
-        }
-        .scp-page {
-          box-shadow: none;
-          border: 1px solid #e2e8f0;
-          break-inside: avoid;
+      .scp-signature-table {
+        margin-top: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .scp-signature-row {
+        border: 1px dashed rgba(15, 23, 42, 0.25);
+        border-radius: 20px;
+        padding: 16px 18px;
+        background: rgba(148, 163, 184, 0.08);
+        display: grid;
+        grid-template-columns: minmax(120px, 160px) minmax(200px, 1fr) minmax(140px, 180px);
+        gap: 18px;
+      }
+      .scp-signature-header {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #0369a1;
+        margin: 0 0 0.35rem;
+      }
+      .scp-signature-date {
+        font-size: 0.85rem;
+        color: #0f172a;
+        font-weight: 600;
+      }
+      .scp-signature-placeholder {
+        font-size: 0.82rem;
+        color: #64748b;
+      }
+      .scp-signature-meta {
+        font-size: 0.82rem;
+        color: #475569;
+        margin: 0.15rem 0 0;
+      }
+      .scp-signature-image {
+        max-width: 150px;
+        max-height: 60px;
+        object-fit: contain;
+        border-radius: 6px;
+        background: #fff;
+        padding: 4px;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+      }
+      @media (max-width: 680px) {
+        .scp-signature-row {
+          grid-template-columns: 1fr;
         }
       }
     </style>
@@ -1305,6 +1340,10 @@ module.exports = (db) => {
             )}</p>
           </div>
         </div>
+      </section>
+
+      <section class="scp-page">
+        <h2>Construction Section for Execution</h2>
         <div class="scp-highlight-box">
           <p><strong>B2.</strong> ${escapeHtml(`${xValue} ${specialText}`)}</p>
           <p><strong>Version:</strong> v${escapeHtml(
@@ -1313,40 +1352,56 @@ module.exports = (db) => {
         pdfData.gamma?.cc || "KK3"
       )}</p>
         </div>
-        <div class="scp-signature-grid">
+        <div class="scp-signature-table">
           ${roles
             .map((role) => {
-              const signatureInfo = role.signature
-                ? `<p><strong>${escapeHtml(
-                    role.name || "Select an element."
-                  )}</strong></p>
-                   ${
-                     role.description
-                       ? `<p class="scp-meta-light">${escapeHtml(
-                           role.description
-                         )}</p>`
-                       : ""
-                   }
-                   ${
-                     role.signedAt
-                       ? `<p class="scp-meta-light">Signed ${escapeHtml(
-                           role.signedAt
-                         )}</p>`
-                       : ""
-                   }
-                   ${
-                     role.company
-                       ? `<p class="scp-meta-light">${escapeHtml(
-                           role.company
-                         )}</p>`
-                       : ""
-                   }`
-                : `<p class="scp-meta-light">Select date</p><p>Select an element.</p>`;
+              const signedDate = role.signedAt
+                ? escapeHtml(role.signedAt)
+                : "Select date";
+              const primaryLine = escapeHtml(
+                role.name || role.signature?.value || "Select an element."
+              );
+              const descriptionLine = role.description
+                ? `<p class="scp-signature-meta">${escapeHtml(
+                    role.description
+                  )}</p>`
+                : "";
+              const companyLine = role.company
+                ? `<p class="scp-signature-meta">${escapeHtml(
+                    role.company
+                  )}</p>`
+                : "";
+              let signatureImage = "";
+              const base64 = role.signature?.signature;
+              if (
+                base64 &&
+                typeof base64 === "string" &&
+                base64.startsWith("data:image")
+              ) {
+                signatureImage = `<img class="scp-signature-image" src="${base64}" alt="Signature" />`;
+              }
 
-              return `<article class="scp-signature-card">
-                <h4>${escapeHtml(role.label)}</h4>
-                ${signatureInfo}
-              </article>`;
+              return `<div class="scp-signature-row">
+                <div>
+                  <p class="scp-signature-header">Signed</p>
+                  <p class="scp-signature-date">${signedDate}</p>
+                </div>
+                <div>
+                  <p class="scp-signature-header">${escapeHtml(role.label)}</p>
+                  <p>${primaryLine}</p>
+                  ${descriptionLine}
+                  ${companyLine}
+                </div>
+                <div>
+                  <p class="scp-signature-header">Company</p>
+                  ${
+                    role.signature?.company
+                      ? `<p>${escapeHtml(role.signature.company)}</p>`
+                      : '<p class="scp-signature-placeholder">CONTRACTOR</p>'
+                  }
+                  ${signatureImage}
+                </div>
+              </div>`;
             })
             .join("")}
         </div>
