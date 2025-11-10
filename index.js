@@ -9723,6 +9723,459 @@ app.post("/submit-checklist", async (req, res) => {
   }
 });
 
+const buildProfessionSnapshot = (source, subjectMatterId) => {
+  if (!source) return null;
+
+  const snapshot = {};
+
+  if (source._id) snapshot._id = source._id;
+  if (source.name) snapshot.name = source.name;
+  if (source.professionName) snapshot.professionName = source.professionName;
+  if (source.GroupName || source.groupName)
+    snapshot.GroupName = source.GroupName || source.groupName;
+  if (source.SubjectMatterId || subjectMatterId)
+    snapshot.SubjectMatterId = source.SubjectMatterId || subjectMatterId;
+
+  return snapshot;
+};
+
+const normalizeControlId = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const asNumber = Number(value);
+  if (!Number.isNaN(asNumber) && `${asNumber}` === String(value).trim()) {
+    return asNumber;
+  }
+  return value;
+};
+
+const parseControlIdNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = Number(value);
+  if (Number.isNaN(numeric) || numeric < 1) return null;
+  return Math.floor(numeric);
+};
+
+const normalizeSubjectId = (value) => (value ? String(value) : "");
+
+const sortSubjectTasksForSequencing = (tasks = []) => {
+  return [...tasks].sort((a, b) => {
+    const aNumber =
+      parseControlIdNumber(a?.ControlId ?? a?.controlId) ??
+      Number.MAX_SAFE_INTEGER;
+    const bNumber =
+      parseControlIdNumber(b?.ControlId ?? b?.controlId) ??
+      Number.MAX_SAFE_INTEGER;
+    if (aNumber !== bNumber) return aNumber - bNumber;
+
+    const aCreated = new Date(a?.createdAt || 0).getTime();
+    const bCreated = new Date(b?.createdAt || 0).getTime();
+    return aCreated - bCreated;
+  });
+};
+
+const rebuildTasksWithSubject = (
+  allTasks = [],
+  subjectIdStr,
+  newSubjectTasks = []
+) => {
+  const finalTasks = [];
+  let subjectInserted = false;
+
+  allTasks.forEach((task) => {
+    const taskSubjectId = normalizeSubjectId(
+      task?.SubjectMatterId || task?.subjectMatterId
+    );
+    if (taskSubjectId === subjectIdStr) {
+      if (!subjectInserted) {
+        finalTasks.push(...newSubjectTasks);
+        subjectInserted = true;
+      }
+      return;
+    }
+    finalTasks.push(task);
+  });
+
+  if (!subjectInserted && newSubjectTasks.length > 0) {
+    finalTasks.push(...newSubjectTasks);
+  }
+
+  return finalTasks;
+};
+
+const resequenceSubjectTasks = (allTasks = [], subjectMatterId) => {
+  const subjectIdStr = normalizeSubjectId(subjectMatterId);
+  if (!subjectIdStr) return allTasks;
+
+  const subjectTasks = allTasks.filter((task) => {
+    const taskSubjectId = normalizeSubjectId(
+      task?.SubjectMatterId || task?.subjectMatterId
+    );
+    return taskSubjectId === subjectIdStr;
+  });
+
+  if (subjectTasks.length === 0) {
+    return allTasks;
+  }
+
+  const sortedSubjectTasks = sortSubjectTasksForSequencing(subjectTasks);
+
+  sortedSubjectTasks.forEach((task, index) => {
+    const assignedId = index + 1;
+    task.ControlId = assignedId;
+    task.controlId = assignedId;
+  });
+
+  return rebuildTasksWithSubject(allTasks, subjectIdStr, sortedSubjectTasks);
+};
+
+const insertTaskAndResequence = (
+  allTasks = [],
+  taskToInsert,
+  subjectMatterId,
+  desiredControlIdNumber
+) => {
+  const subjectIdStr = normalizeSubjectId(subjectMatterId);
+  const subjectTasks = allTasks.filter((task) => {
+    const taskSubjectId = normalizeSubjectId(
+      task?.SubjectMatterId || task?.subjectMatterId
+    );
+    return taskSubjectId === subjectIdStr;
+  });
+
+  const sequencedSubjectTasks = sortSubjectTasksForSequencing(subjectTasks);
+
+  const insertIndex = Number.isFinite(desiredControlIdNumber)
+    ? Math.min(
+        Math.max(desiredControlIdNumber - 1, 0),
+        sequencedSubjectTasks.length
+      )
+    : sequencedSubjectTasks.length;
+
+  sequencedSubjectTasks.splice(insertIndex, 0, taskToInsert);
+
+  sequencedSubjectTasks.forEach((task, index) => {
+    const assignedId = index + 1;
+    task.ControlId = assignedId;
+    task.controlId = assignedId;
+  });
+
+  return rebuildTasksWithSubject(
+    allTasks,
+    subjectIdStr,
+    sequencedSubjectTasks
+  );
+};
+
+app.post(
+  "/projects/:projectId/control-plan",
+  checkDatabaseConnection,
+  async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const {
+        subjectMatterId,
+        activity,
+        type,
+        index,
+        controlId,
+        criteria,
+        time,
+        method,
+        comment,
+        professionGroup,
+        professionGroupId,
+        buildingPart,
+        buildingPartId,
+        drawing,
+        drawingId,
+      } = req.body;
+
+      if (!projectId || !ObjectId.isValid(projectId)) {
+        return res.status(400).json({
+          error: "A valid projectId parameter is required.",
+        });
+      }
+
+      if (!subjectMatterId) {
+        return res.status(400).json({
+          error: "subjectMatterId is required to create a control plan entry.",
+        });
+      }
+
+      if (!activity) {
+        return res.status(400).json({
+          error: "Activity is required to create a control plan entry.",
+        });
+      }
+
+      if (!type) {
+        return res.status(400).json({
+          error: "Type is required to create a control plan entry.",
+        });
+      }
+
+      const projectObjectId = new ObjectId(projectId);
+      const project = await db
+        .collection("projects")
+        .findOne({ _id: projectObjectId });
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const now = new Date();
+      let professionData =
+        project?.professionAssociatedData?.[subjectMatterId]?.profession ||
+        project?.professionAssociatedData?.[subjectMatterId];
+
+      if (!professionData) {
+        professionData = await db.collection("professions").findOne({
+          SubjectMatterId: subjectMatterId,
+        });
+      }
+
+      const newTaskId = new ObjectId();
+      const desiredControlIdNumber = parseControlIdNumber(controlId);
+      const newTask = {
+        _id: newTaskId,
+        SubjectMatterId: subjectMatterId,
+        Activity: activity,
+        Type: type,
+        Index: index || "",
+        ControlId: desiredControlIdNumber ?? normalizeControlId(controlId),
+        criteria: criteria || "",
+        time: time || "",
+        method: method || "",
+        comment: comment || "",
+        professionGroup: professionGroup || null,
+        professionGroupId: professionGroupId || null,
+        buildingPart: buildingPart || null,
+        buildingPartId: buildingPartId || null,
+        drawing: drawing || null,
+        drawingId: drawingId || null,
+        isActive: false,
+        isClosed: false,
+        taskEntries: [],
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+
+      const professionSnapshot = buildProfessionSnapshot(
+        professionData,
+        subjectMatterId
+      );
+      if (professionSnapshot) {
+        newTask.profession = professionSnapshot;
+      }
+
+      const currentTasks = Array.isArray(project.tasks) ? project.tasks : [];
+      const tasksWithInsertion = insertTaskAndResequence(
+        currentTasks,
+        newTask,
+        subjectMatterId,
+        desiredControlIdNumber
+      );
+
+      const updateResult = await db.collection("projects").updateOne(
+        { _id: projectObjectId },
+        {
+          $set: {
+            tasks: tasksWithInsertion,
+            updatedAt: now.toISOString(),
+          },
+        }
+      );
+
+      if (!updateResult.acknowledged || updateResult.modifiedCount === 0) {
+        return res
+          .status(500)
+          .json({ error: "Failed to create control plan entry" });
+      }
+
+      res.status(201).json({
+        success: true,
+        task: newTask,
+      });
+    } catch (error) {
+      console.error("Error creating control plan entry:", error);
+      res.status(500).json({
+        error: "Failed to create control plan entry",
+        details: error.message,
+      });
+    }
+  }
+);
+
+app.put(
+  "/projects/:projectId/control-plan/:taskId",
+  checkDatabaseConnection,
+  async (req, res) => {
+    try {
+      const { projectId, taskId } = req.params;
+      if (!projectId || !ObjectId.isValid(projectId)) {
+        return res.status(400).json({
+          error: "A valid projectId parameter is required.",
+        });
+      }
+      if (!taskId || !ObjectId.isValid(taskId)) {
+        return res.status(400).json({
+          error: "A valid taskId parameter is required.",
+        });
+      }
+
+      const {
+        subjectMatterId,
+        activity,
+        type,
+        index,
+        controlId,
+        criteria,
+        time,
+        method,
+        comment,
+        professionGroup,
+        professionGroupId,
+        buildingPart,
+        buildingPartId,
+        drawing,
+        drawingId,
+        isActive,
+        isClosed,
+      } = req.body;
+
+      const projectObjectId = new ObjectId(projectId);
+      const taskObjectId = new ObjectId(taskId);
+
+      const project = await db.collection("projects").findOne({
+        _id: projectObjectId,
+        "tasks._id": taskObjectId,
+      });
+
+      if (!project) {
+        return res
+          .status(404)
+          .json({ error: "Project or control plan entry not found" });
+      }
+
+      const currentTasks = Array.isArray(project.tasks) ? project.tasks : [];
+      const existingTask = currentTasks.find(
+        (task) => task._id.toString() === taskId
+      );
+
+      if (!existingTask) {
+        return res
+          .status(404)
+          .json({ error: "Project or control plan entry not found" });
+      }
+
+      const updatedTask = {
+        ...existingTask,
+      };
+
+      if (activity !== undefined) updatedTask.Activity = activity;
+      if (type !== undefined) updatedTask.Type = type;
+      if (index !== undefined) updatedTask.Index = index;
+      if (criteria !== undefined) updatedTask.criteria = criteria;
+      if (time !== undefined) updatedTask.time = time;
+      if (method !== undefined) updatedTask.method = method;
+      if (comment !== undefined) updatedTask.comment = comment;
+      if (professionGroup !== undefined)
+        updatedTask.professionGroup = professionGroup;
+      if (professionGroupId !== undefined)
+        updatedTask.professionGroupId = professionGroupId;
+      if (buildingPart !== undefined)
+        updatedTask.buildingPart = buildingPart;
+      if (buildingPartId !== undefined)
+        updatedTask.buildingPartId = buildingPartId;
+      if (drawing !== undefined) updatedTask.drawing = drawing;
+      if (drawingId !== undefined) updatedTask.drawingId = drawingId;
+      if (isActive !== undefined) updatedTask.isActive = !!isActive;
+      if (isClosed !== undefined) updatedTask.isClosed = !!isClosed;
+
+      const originalSubjectId = normalizeSubjectId(
+        existingTask.SubjectMatterId || existingTask.subjectMatterId
+      );
+
+      const updatedSubjectId = normalizeSubjectId(
+        subjectMatterId !== undefined
+          ? subjectMatterId
+          : existingTask.SubjectMatterId || existingTask.subjectMatterId
+      );
+
+      updatedTask.SubjectMatterId = updatedSubjectId;
+      updatedTask.subjectMatterId = updatedSubjectId;
+
+      let professionData =
+        project?.professionAssociatedData?.[updatedSubjectId]?.profession ||
+        project?.professionAssociatedData?.[updatedSubjectId];
+
+      if (!professionData && updatedSubjectId) {
+        professionData = await db.collection("professions").findOne({
+          SubjectMatterId: updatedSubjectId,
+        });
+      }
+
+      const professionSnapshot = buildProfessionSnapshot(
+        professionData,
+        updatedSubjectId
+      );
+      if (professionSnapshot) {
+        updatedTask.profession = professionSnapshot;
+      }
+
+      const desiredControlIdNumber = parseControlIdNumber(
+        controlId !== undefined ? controlId : existingTask.ControlId
+      );
+
+      updatedTask.updatedAt = new Date().toISOString();
+      updatedTask.isActive = true;
+
+      const tasksWithoutTarget = currentTasks.filter(
+        (task) => task._id.toString() !== taskId
+      );
+
+      const tasksAfterOriginalResequence = resequenceSubjectTasks(
+        tasksWithoutTarget,
+        originalSubjectId
+      );
+
+      const tasksWithUpdatedEntry = insertTaskAndResequence(
+        tasksAfterOriginalResequence,
+        updatedTask,
+        updatedSubjectId,
+        desiredControlIdNumber
+      );
+
+      const updateResult = await db.collection("projects").updateOne(
+        { _id: projectObjectId },
+        {
+          $set: {
+            tasks: tasksWithUpdatedEntry,
+            updatedAt: updatedTask.updatedAt,
+          },
+        }
+      );
+
+      if (!updateResult.acknowledged || updateResult.modifiedCount === 0) {
+        return res.status(500).json({
+          error: "Failed to update control plan entry",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        task: updatedTask,
+      });
+    } catch (error) {
+      console.error("Error updating control plan entry:", error);
+      res.status(500).json({
+        error: "Failed to update control plan entry",
+        details: error.message,
+      });
+    }
+  }
+);
+
 app.post("/approv-task", async (req, res) => {
   try {
     const { projectId, taskId, isActive } = req.body;
