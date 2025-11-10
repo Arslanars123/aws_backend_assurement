@@ -12,7 +12,65 @@ module.exports = (db) => {
     return error;
   };
 
-  const fetchStaticControlPlanData = async (companyId, projectId, subjectMatterId) => {
+  const euroCodeDescriptions = {
+    0: "Eurocode 0: Basis of design for structures",
+    1: "Eurocode 1: Actions on structures",
+    2: "Eurocode 2: Concrete structures",
+    3: "Eurocode 3: Steel structures",
+    4: "Eurocode 4: Composite structures",
+    5: "Eurocode 5: Timber structures",
+    6: "Eurocode 6: Masonry structures",
+    7: "Eurocode 7: Geotechnical design",
+    8: "Eurocode 8: Design of structures for earthquake resistance",
+    9: "Eurocode 9: Aluminium structures",
+    1520: "EN 1520: Lightweight concrete with porous aggregates",
+    12602: "EN 12602: Cellular concrete",
+  };
+
+  const escapeHtml = (value) => {
+    if (value === undefined || value === null) {
+      return "";
+    }
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+
+  const formatDate = (value) => {
+    if (!value) {
+      return "";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const formatMultiline = (value) => {
+    if (!value) {
+      return "";
+    }
+    return escapeHtml(value).replace(/\r?\n/g, "<br />");
+  };
+
+  const getEuroCodeName = (code) => {
+    const key = String(code);
+    return euroCodeDescriptions[key] || `Eurocode ${code}`;
+  };
+
+  const fetchStaticControlPlanData = async (
+    companyId,
+    projectId,
+    subjectMatterId
+  ) => {
     if (!companyId || !projectId || !subjectMatterId) {
       throw createHttpError(
         400,
@@ -100,11 +158,9 @@ module.exports = (db) => {
     // 5. Get special text from projectspecialtext collection
     let projectSpecialText = "";
     try {
-      const specialTextDoc = await db
-        .collection("projectspecialtext")
-        .findOne({
-          projectId: projectId,
-        });
+      const specialTextDoc = await db.collection("projectspecialtext").findOne({
+        projectId: projectId,
+      });
 
       if (specialTextDoc && specialTextDoc.specialText) {
         projectSpecialText = specialTextDoc.specialText;
@@ -263,7 +319,9 @@ module.exports = (db) => {
 
       // Check for edited data and replace entries
       if (allControlsEntries.length > 0 && projectId && subjectMatterId) {
-        console.log("🔄 Checking for edited data in editcontrols collection...");
+        console.log(
+          "🔄 Checking for edited data in editcontrols collection..."
+        );
         console.log(`   ProjectId: ${projectId}`);
         console.log(`   SubjectMatterId: ${subjectMatterId}`);
 
@@ -334,10 +392,7 @@ module.exports = (db) => {
             if (first74AfterEdit) {
               console.log("   First 7.4 entry AFTER edit replacement:");
               console.log("      pos:", first74AfterEdit.pos);
-              console.log(
-                "      checkingThe:",
-                first74AfterEdit.checkingThe
-              );
+              console.log("      checkingThe:", first74AfterEdit.checkingThe);
               console.log("      _isEdited:", first74AfterEdit._isEdited);
             }
           }
@@ -430,10 +485,7 @@ module.exports = (db) => {
       euroCodes: euroCodes,
       drawings: projectDrawings.map((drawing) => ({
         name:
-          drawing.originalname ||
-          drawing.filename ||
-          drawing.name ||
-          "Drawing",
+          drawing.originalname || drawing.filename || drawing.name || "Drawing",
         path: drawing.s3Location || drawing.path || "",
         s3Key: drawing.s3Key || "",
         uploadedAt: drawing.uploadedAt || drawing.createdAt || "",
@@ -474,7 +526,11 @@ module.exports = (db) => {
           };
 
           // Log first 7.4 entry during mapping
-          if (mappedEntry.pos && mappedEntry.pos.startsWith("7.4") && !logged74) {
+          if (
+            mappedEntry.pos &&
+            mappedEntry.pos.startsWith("7.4") &&
+            !logged74
+          ) {
             logged74 = true;
             console.log("   7.4 entry DURING MAPPING:");
             console.log("      Original entry.checkingThe:", entry.checkingThe);
@@ -482,10 +538,7 @@ module.exports = (db) => {
               "      Mapped entry.checkingThe:",
               mappedEntry.checkingThe
             );
-            console.log(
-              "      Mapped entry.controlOf:",
-              mappedEntry.controlOf
-            );
+            console.log("      Mapped entry.controlOf:", mappedEntry.controlOf);
           }
 
           return mappedEntry;
@@ -516,8 +569,7 @@ module.exports = (db) => {
       console.error("❌ Error generating static control plan PDF:", error);
       const status = error.status || 500;
       res.status(status).json({
-        error:
-          error.message || "Failed to generate static control plan PDF",
+        error: error.message || "Failed to generate static control plan PDF",
       });
     }
   });
@@ -535,7 +587,9 @@ module.exports = (db) => {
       const pdfBuffer = generateStaticControlPlanPDFBuffer(pdfData);
 
       const filenameSubject =
-        subjectMatterId || pdfData?.gamma?.subjectMatterId || "static-control-plan";
+        subjectMatterId ||
+        pdfData?.gamma?.subjectMatterId ||
+        "static-control-plan";
 
       res.set({
         "Content-Type": "application/pdf",
@@ -548,8 +602,7 @@ module.exports = (db) => {
       console.error("❌ Error streaming static control plan PDF:", error);
       const status = error.status || 500;
       res.status(status).json({
-        error:
-          error.message || "Failed to stream static control plan PDF",
+        error: error.message || "Failed to stream static control plan PDF",
       });
     }
   });
@@ -573,7 +626,285 @@ module.exports = (db) => {
 
       const companyName = pdfData?.company?.name || "Static Control Plan";
       const reportTitle =
-        pdfData?.gamma?.profession || pdfData?.gamma?.item || "Static Control Plan";
+        pdfData?.gamma?.profession ||
+        pdfData?.gamma?.item ||
+        "Static Control Plan";
+
+      const safeCompanyName = escapeHtml(companyName);
+      const safeReportTitle = escapeHtml(reportTitle);
+
+      const xValue = pdfData.gamma?.x || "";
+      const specialText = pdfData.project?.specialText || "Special text";
+      const createdDate =
+        formatDate(pdfData.project?.createdAt) ||
+        formatDate(pdfData.gamma?.createdAt) ||
+        formatDate(new Date());
+
+      const selectedEuroCodes =
+        Array.isArray(pdfData.euroCodes) && pdfData.euroCodes.length > 0
+          ? pdfData.euroCodes
+          : Object.keys(euroCodeDescriptions);
+
+      const euroCodeMarkup = selectedEuroCodes
+        .map((code) => `<li>${escapeHtml(getEuroCodeName(code))}</li>`)
+        .join("");
+
+      const drawingsMarkup =
+        pdfData.drawings && pdfData.drawings.length
+          ? pdfData.drawings
+              .map((drawing, index) => {
+                const drawingName =
+                  drawing.name ||
+                  drawing.originalname ||
+                  drawing.filename ||
+                  drawing.s3Key ||
+                  `Drawing ${index + 1}`;
+                const drawingDate = formatDate(
+                  drawing.uploadedAt || drawing.createdAt
+                );
+                const drawingUrl =
+                  drawing.s3Location || drawing.path || drawing.url;
+                return `<div class="scp-drawing-item">
+                  <span>${escapeHtml(drawingName)}</span>
+                  ${
+                    drawingDate
+                      ? `<span class="scp-meta-light">${escapeHtml(
+                          drawingDate
+                        )}</span>`
+                      : ""
+                  }
+                  ${
+                    drawingUrl
+                      ? `<a href="${escapeHtml(
+                          drawingUrl
+                        )}" target="_blank" rel="noopener">Open file</a>`
+                      : ""
+                  }
+                </div>`;
+              })
+              .join("")
+          : `<p class="scp-muted">No drawings uploaded.</p>`;
+
+      const sanitizeCell = (value, fallback = "—") => {
+        if (value === undefined || value === null) {
+          return fallback;
+        }
+        const stringValue =
+          typeof value === "string" ? value.trim() : String(value);
+        if (!stringValue) {
+          return fallback;
+        }
+        return escapeHtml(stringValue);
+      };
+
+      const checklistBySection = (prefix) =>
+        (pdfData.checklistEntries || []).filter((entry) =>
+          entry.pos?.toString().startsWith(prefix)
+        );
+
+      const renderChecklistTable = (title, prefix) => {
+        const entries = checklistBySection(prefix);
+        const rows =
+          entries
+            .map((entry) => {
+              const scope = entry.scope || entry.circumference;
+              const method =
+                entry.controlMethod || entry.method || entry["Control method"];
+              return `<tr>
+              <td>${sanitizeCell(entry.pos)}</td>
+              <td>${sanitizeCell(entry.checkingThe || entry.controlOf)}</td>
+              <td>${sanitizeCell(entry.subject)}</td>
+              <td class="highlight">${sanitizeCell(specialText)}</td>
+              <td>${sanitizeCell(entry.basis)}</td>
+              <td>${sanitizeCell(method)}</td>
+              <td>${sanitizeCell(scope)}</td>
+              <td>${sanitizeCell(entry.acceptanceCriteria)}</td>
+              <td>${sanitizeCell(entry.time)}</td>
+            </tr>`;
+            })
+            .join("") ||
+          `<tr><td colspan="9" class="scp-empty-row">No entries captured for ${escapeHtml(
+            title
+          )}</td></tr>`;
+
+        return `<section class="scp-card">
+          <h2 class="scp-section-title">${escapeHtml(title)}</h2>
+          <div class="scp-table-wrapper">
+            <table class="scp-table">
+              <thead>
+                <tr>
+                  <th>Pos</th>
+                  <th>Control Of</th>
+                  <th>Subject</th>
+                  <th>Construction Part</th>
+                  <th>Basis</th>
+                  <th>Control Method</th>
+                  <th>Scope</th>
+                  <th>Acceptance Criteria</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </section>`;
+      };
+
+      const roles = [
+        { label: "Prepared by", signatureType: 1 },
+        { label: "Self-control (EK)", signatureType: 2 },
+        { label: "Independent controller (EK)", signatureType: 3 },
+      ].map((role) => {
+        const signature = (pdfData.signatures || []).find(
+          (sig) => Number(sig.signatureType) === Number(role.signatureType)
+        );
+
+        return {
+          ...role,
+          signature,
+          name: signature?.name || signature?.fullName || signature?.email,
+          description: signature?.description,
+          signedAt: formatDate(
+            signature?.signatureDate || signature?.createdAt
+          ),
+          company: signature?.company,
+        };
+      });
+
+      const phases = [
+        { name: "UDARBEJDELSESFASE", status: "Under udarbejdelse" },
+        { name: "GODKENDELSESFASE", status: "Under kontrol" },
+        { name: "UDGIVELSESFASE", status: "Godkendt" },
+        { name: "AKTIVFASE", status: "Udgivet" },
+        { name: "REVISIONSPASE", status: "Under revision" },
+        { name: "ARKIVERINGSFASE", status: "Enkelt / arkiveret" },
+      ];
+
+      const basisList = [
+        "Building Regulations 2018",
+        "SBi271 'Documentation and Control of Load-Bearing Structures'",
+        "DS/EN 1990 DK NA:2021, Annex B5",
+        "DS 1140:2019 'Execution of Load-Bearing Structures - General Control'",
+        "DS/INF 1140:2022 'Guidance for DS 1140'",
+      ];
+
+      const qaList = [
+        "System updates and approval by management",
+        "Procedures followed",
+        "Review of execution basis from design phase",
+        "Materials in accordance with execution basis",
+        "Execution basis controlled/approved",
+        "Execution basis from the design phase",
+        "Employee qualifications",
+        "Self-control and independent control described in plans",
+        "Controls documented in reports",
+        "Deviations handled by procedure",
+        "Documentation of construction as executed",
+      ];
+
+      const deviationProcedure = [
+        "Work on the construction part is halted and may not continue until the deviation is corrected.",
+        "The inspector prepares a deviation report that may include illustrations of the deviation and proposed solutions.",
+        "The controller assesses together with the executors whether the defect has a nature that necessitates a reassessment of the working basis for execution and the associated controls.",
+        "The controller assesses together with the executors the implications of the deviation for the further execution and suitability in relation to the intended purpose in the design.",
+        "The controller assesses together with the executors the necessary measures to make the component acceptable.",
+        "The controller assesses together with the executors the necessity of rejection and replacement of the non-repairable building part.",
+        "After rectifying the deviation, this is checked again and the result is documented.",
+        "If it is not possible to correct the deviation, the structural designer must approve the deviation.",
+      ];
+
+      const topBullets = [
+        "Presence of assembly components",
+        "Bearing depths during the assembly of prefabricated construction components",
+        "The subsoil for geotechnical constructions regarding whether the soil is as assumed in the execution basis from the design.",
+      ];
+
+      const requirements = [
+        "Familiarity with best practices for executing construction parts and sections.",
+        "Ability to create an overview and wonder.",
+        "Knowledge of their own limitations and use of professional experts.",
+        "Competencies at least equivalent to the person who performed the work.",
+        "Professional qualifications and competencies for construction work.",
+        "Ability to understand standards, control plans, and good craftsmanship.",
+        "Capability of familiarizing oneself with documents forming the basis for execution.",
+      ];
+
+      const registerRows = [
+        { id: `B2. ${xValue}`, description: "Static control plan" },
+        { id: `B3. ${xValue}`, description: "Static Control Report" },
+        { id: `A5. ${xValue}`, description: "A5 as performed" },
+      ];
+
+      const tocEntries = [
+        { label: "Static documentation", page: 1 },
+        { label: "Eurocode:", page: 1, highlight: true },
+        ...selectedEuroCodes.map((code) => ({
+          label: `• ${getEuroCodeName(code)}`,
+          page: null,
+          indent: true,
+        })),
+        { label: "Construction case:", page: 1 },
+        { label: "Construction section for execution:", page: 1 },
+        { label: "1. General", page: 4, section: true },
+        { label: "1.1 Description of the Control Work", page: 4, indent: true },
+        { label: "1.2 Types of control", page: 4, indent: true },
+        { label: "1.3 Control level", page: 5, indent: true },
+        { label: "1.4 Organization of control work", page: 5, indent: true },
+        { label: "1.5 Controllers", page: 6, indent: true },
+        { label: "1.6 Use of assistance", page: 6, indent: true },
+        { label: "1.7 Follow-up on deviations", page: 7, indent: true },
+        { label: "2. General controls", page: 7, section: true },
+        { label: "2.1 General", page: 7, indent: true },
+        { label: "2.3 Controlsection", page: 7, indent: true },
+        {
+          label: "2.4 Explanation of the selection of controls",
+          page: 8,
+          indent: true,
+        },
+        { label: "2.5 Controlpoints", page: 8, indent: true },
+        { label: "3. Special controls", page: 8, section: true },
+        { label: "3.1 General", page: 8, indent: true },
+        { label: "3.2 Special control points", page: 8, indent: true },
+        { label: "4. Documentation", page: 9, section: true },
+        {
+          label: "4.1 General description of documentation",
+          page: 9,
+          indent: true,
+        },
+        {
+          label: "4.2 Documentation of general controls",
+          page: 9,
+          indent: true,
+        },
+        {
+          label: "4.3 Documentation of special controls",
+          page: 9,
+          indent: true,
+        },
+        {
+          label: "4.4 Documentation for deviations and follow-up",
+          page: 9,
+          indent: true,
+        },
+        {
+          label: "4.5 Control of Control Documentation",
+          page: 9,
+          indent: true,
+        },
+        { label: "5.1 registers", page: 10 },
+        { label: "5.2 Scope of control", page: 10 },
+        { label: "6. Selected control locations", page: 11, section: true },
+        { label: "7. Static control (table)", page: 12, section: true },
+        { label: "7.0 Static Control Plan table for", page: 12, indent: true },
+        {
+          label: "7.3 Control of Documentation of Materials and Products",
+          page: 14,
+          indent: true,
+        },
+        { label: "7.4 Receiving control deliveries", page: 16, indent: true },
+        { label: "7.5 Control of execution", page: 17, indent: true },
+        { label: "7.6 Final control", page: 18, indent: true },
+      ];
 
       const html = `<!DOCTYPE html>
 <html lang="en">
@@ -581,91 +912,855 @@ module.exports = (db) => {
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${companyName} - ${reportTitle}</title>
+    <title>${safeCompanyName} - ${safeReportTitle}</title>
     <style>
+      :root {
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background-color: #0f172a;
-        color: #f1f5f9;
-        min-height: 100vh;
+        font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #f1f5f9;
+        color: #0f172a;
+        line-height: 1.65;
+      }
+      a {
+        color: inherit;
+      }
+      .scp-container {
+        max-width: 1024px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
         display: flex;
         flex-direction: column;
+        gap: 32px;
       }
-      header {
-        padding: 1.25rem 1.5rem;
-        background: linear-gradient(120deg, #1e293b, #0369a1);
-        box-shadow: 0 4px 20px rgba(15, 23, 42, 0.3);
-      }
-      header h1 {
-        margin: 0;
-        font-size: 1.35rem;
-        font-weight: 600;
-        letter-spacing: 0.01em;
-      }
-      header p {
-        margin: 0.25rem 0 0;
-        font-size: 0.95rem;
-        opacity: 0.8;
-      }
-      main {
-        flex: 1;
+      .scp-toolbar {
         display: flex;
-        background-color: #0f172a;
-        padding: 1rem 1.5rem 1.5rem;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        background: linear-gradient(135deg, #0369a1, #0ea5e9);
+        color: #fff;
+        border-radius: 20px;
+        padding: 20px 28px;
+        box-shadow: 0 18px 45px rgba(14, 165, 233, 0.28);
+        position: sticky;
+        top: 16px;
+        z-index: 10;
       }
-      iframe {
-        width: 100%;
-        height: calc(100vh - 190px);
-        border: none;
-        border-radius: 0;
-        background: #fff;
-        box-shadow: 0 25px 50px -12px rgba(15, 118, 110, 0.45);
+      .scp-toolbar h1 {
+        margin: 0;
+        font-size: clamp(1.35rem, 3vw, 1.8rem);
       }
-      .info-bar {
+      .scp-toolbar-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-        font-size: 0.85rem;
-        opacity: 0.75;
+        gap: 12px;
       }
-      .info-chip {
-        background-color: rgba(148, 163, 184, 0.15);
-        border: 1px solid rgba(148, 163, 184, 0.2);
-        padding: 0.35rem 0.75rem;
+      .scp-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.6rem 1rem;
         border-radius: 999px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
-      @media (max-width: 768px) {
-        header h1 {
-          font-size: 1.1rem;
-        }
-        header p {
-          font-size: 0.85rem;
-        }
-        main {
-          padding: 0.5rem;
-        }
-        iframe {
-          height: calc(100vh - 150px);
+      .scp-button.primary {
+        background: #f8fafc;
+        color: #0f172a;
+        box-shadow: 0 16px 35px rgba(15, 23, 42, 0.18);
+      }
+      .scp-button.ghost {
+        background: transparent;
+        border: 1px solid rgba(248, 250, 252, 0.6);
+        color: #f8fafc;
+      }
+      .scp-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+      }
+      .scp-page {
+        background: #fff;
+        border-radius: 28px;
+        padding: clamp(24px, 4vw, 48px);
+        box-shadow: 0 24px 45px rgba(15, 23, 42, 0.12);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+      }
+      .scp-page h2 {
+        margin-top: 0;
+        font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+        color: #0f172a;
+      }
+      .scp-page h3 {
+        margin-top: 2rem;
+        font-size: 1.05rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #475569;
+      }
+      .scp-meta-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: rgba(15, 23, 42, 0.06);
+        border-radius: 999px;
+        font-size: 0.85rem;
+      }
+      .scp-meta-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 16px 0 0;
+      }
+      .scp-highlight-box {
+        border: 1px dashed rgba(15, 23, 42, 0.25);
+        border-radius: 24px;
+        padding: 20px;
+        background: rgba(148, 163, 184, 0.08);
+        margin-top: 20px;
+      }
+      .scp-duo {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 24px;
+        margin-top: 20px;
+      }
+      .scp-list {
+        margin: 0;
+        padding-left: 1.1rem;
+      }
+      .scp-list li {
+        margin-bottom: 0.55rem;
+      }
+      .scp-muted {
+        color: #64748b;
+        font-size: 0.95rem;
+      }
+      .scp-meta-light {
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+      .scp-drawing-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px;
+        border-radius: 16px;
+        background: rgba(148, 163, 184, 0.12);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        margin-bottom: 10px;
+      }
+      .scp-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+        margin-top: 16px;
+      }
+      .scp-info-card {
+        padding: 16px 18px;
+        border-radius: 18px;
+        background: rgba(148, 163, 184, 0.12);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      .scp-info-card h4 {
+        margin: 0 0 6px;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #475569;
+      }
+      .scp-info-card p {
+        margin: 0;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .scp-note {
+        margin-top: 20px;
+        padding: 16px 18px;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.22);
+        border-radius: 18px;
+      }
+      .scp-pill-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .scp-pill {
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(13, 148, 136, 0.12);
+        border: 1px solid rgba(13, 148, 136, 0.22);
+        font-size: 0.85rem;
+        color: #0f766e;
+      }
+      .scp-table-wrapper {
+        margin-top: 20px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 18px;
+        overflow: hidden;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      thead {
+        background: rgba(15, 23, 42, 0.75);
+        color: #f8fafc;
+      }
+      th,
+      td {
+        padding: 12px 14px;
+        text-align: left;
+        font-size: 0.9rem;
+      }
+      tbody tr:nth-child(odd) {
+        background: rgba(148, 163, 184, 0.08);
+      }
+      tbody tr:hover {
+        background: rgba(59, 130, 246, 0.08);
+      }
+      .highlight {
+        background: rgba(253, 224, 71, 0.22);
+        font-weight: 600;
+      }
+      .scp-empty-row {
+        text-align: center;
+        color: #64748b;
+      }
+      .scp-signature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+        margin-top: 20px;
+      }
+      .scp-signature-card {
+        border: 1px dashed rgba(15, 23, 42, 0.25);
+        border-radius: 20px;
+        padding: 16px 18px;
+        background: rgba(148, 163, 184, 0.08);
+      }
+      .scp-signature-card h4 {
+        margin: 0 0 8px;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #0369a1;
+      }
+      .scp-signature-card p {
+        margin: 4px 0;
+      }
+      .scp-step-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .scp-step {
+        padding: 12px 16px;
+        border-radius: 16px;
+        background: rgba(148, 163, 184, 0.12);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+      }
+      .scp-table-simple {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+      }
+      .scp-table-simple th,
+      .scp-table-simple td {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      }
+      .scp-table-simple thead {
+        background: rgba(15, 23, 42, 0.06);
+        color: #0f172a;
+      }
+      .scp-signature-table {
+        margin-top: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .scp-signature-row {
+        border: 1px dashed rgba(15, 23, 42, 0.25);
+        border-radius: 20px;
+        padding: 16px 18px;
+        background: rgba(148, 163, 184, 0.08);
+        display: grid;
+        grid-template-columns: minmax(120px, 160px) minmax(200px, 1fr) minmax(140px, 180px);
+        gap: 18px;
+      }
+      .scp-signature-header {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #0369a1;
+        margin: 0 0 0.35rem;
+      }
+      .scp-signature-date {
+        font-size: 0.85rem;
+        color: #0f172a;
+        font-weight: 600;
+      }
+      .scp-signature-placeholder {
+        font-size: 0.82rem;
+        color: #64748b;
+      }
+      .scp-signature-meta {
+        font-size: 0.82rem;
+        color: #475569;
+        margin: 0.15rem 0 0;
+      }
+      .scp-signature-image {
+        max-width: 150px;
+        max-height: 60px;
+        object-fit: contain;
+        border-radius: 6px;
+        background: #fff;
+        padding: 4px;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+      }
+      @media (max-width: 680px) {
+        .scp-signature-row {
+          grid-template-columns: 1fr;
         }
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1>${companyName}</h1>
-      <p>${reportTitle}</p>
-      <div class="info-bar">
-        <span class="info-chip">Company ID: ${companyId}</span>
-        <span class="info-chip">Project ID: ${projectId}</span>
-        <span class="info-chip">Subject Matter: ${subjectMatterId}</span>
-        <span class="info-chip">Version: v${pdfData?.gamma?.currentVersion || 1}</span>
+    <div class="scp-toolbar">
+      <div>
+        <h1>${safeReportTitle}</h1>
+        <p class="scp-meta-light">${safeCompanyName}</p>
       </div>
-    </header>
-    <main>
-      <iframe src="${pdfUrl}" title="Static Control Plan PDF"></iframe>
-    </main>
+      <div class="scp-toolbar-actions">
+        <a class="scp-button primary" href="${escapeHtml(
+          pdfUrl
+        )}" target="_blank" rel="noopener">Open PDF</a>
+        <button class="scp-button ghost" type="button" onclick="window.print()">Print</button>
+      </div>
+    </div>
+    <div class="scp-container">
+      <section class="scp-page">
+        <h2>Static Control Plan</h2>
+        <p class="scp-muted">For udførende indenfor konstruktionsafsnit</p>
+        <div class="scp-meta-bar">
+          <span class="scp-meta-chip">Company ID: ${escapeHtml(
+            companyId
+          )}</span>
+          <span class="scp-meta-chip">Project ID: ${escapeHtml(
+            projectId
+          )}</span>
+          <span class="scp-meta-chip">Subject Matter: ${escapeHtml(
+            subjectMatterId
+          )}</span>
+          <span class="scp-meta-chip">Version: v${escapeHtml(
+            pdfData.gamma?.currentVersion || 1
+          )}</span>
+        </div>
+        <div class="scp-highlight-box">
+          <p><strong>Company:</strong> ${escapeHtml(
+            pdfData.company?.name || "[Company Name]"
+          )}</p>
+          <p><strong>B3.</strong> ${escapeHtml(xValue)}<br />“${escapeHtml(
+        specialText
+      )}”</p>
+        </div>
+        <div class="scp-note">
+          <h3>Static Documentation</h3>
+          <p>For load-bearing structures according to DS1140 applicable for:</p>
+          <p><strong>Eurocode:</strong> ${escapeHtml(specialText)}</p>
+        </div>
+        <div class="scp-duo">
+          <div>
+            <h3>Applicable EU standards 2024</h3>
+            <ul class="scp-list">
+              ${euroCodeMarkup}
+            </ul>
+          </div>
+          <div>
+            <h3>Uploaded Drawings</h3>
+            ${drawingsMarkup}
+          </div>
+        </div>
+        <p class="scp-meta-light">Static Control Plan - Version ${escapeHtml(
+          pdfData.gamma?.currentVersion || 1
+        )}</p>
+      </section>
+
+      <section class="scp-page">
+        <h2>Construction Case</h2>
+        <div class="scp-info-grid">
+          <div class="scp-info-card">
+            <h4>Created</h4>
+            <p>${escapeHtml(createdDate || "N/A")}</p>
+          </div>
+          <div class="scp-info-card">
+            <h4>Project Name/ID</h4>
+            <p>${escapeHtml(pdfData.project?.name || "N/A")}</p>
+            <p class="scp-meta-light">${escapeHtml(
+              pdfData.project?.caseNumber ||
+                pdfData.project?.projectNumber ||
+                "N/A"
+            )}</p>
+            <p class="scp-meta-light">${escapeHtml(
+              pdfData.project?.address || "N/A"
+            )}</p>
+          </div>
+          <div class="scp-info-card">
+            <h4>Prepared by</h4>
+            <p>${escapeHtml(pdfData.company?.name || "N/A")}</p>
+            <p class="scp-meta-light">${escapeHtml(
+              pdfData.company?.address || "N/A"
+            )}</p>
+            <p class="scp-meta-light">Postal code: ${escapeHtml(
+              pdfData.company?.postalCode || "N/A"
+            )}</p>
+            <p class="scp-meta-light">CVR: ${escapeHtml(
+              pdfData.company?.cvr || pdfData.company?.cvrNumber || "N/A"
+            )}</p>
+            <p class="scp-meta-light">Email: ${escapeHtml(
+              pdfData.company?.email || "N/A"
+            )}</p>
+            <p class="scp-meta-light">Contact: ${escapeHtml(
+              pdfData.company?.contactPerson || "N/A"
+            )}</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="scp-page">
+        <h2>Construction Section for Execution</h2>
+        <div class="scp-highlight-box">
+          <p><strong>B2.</strong> ${escapeHtml(`${xValue} ${specialText}`)}</p>
+          <p><strong>Version:</strong> v${escapeHtml(
+            pdfData.gamma?.currentVersion || 1
+          )} &nbsp; <strong>Construction CL.</strong> ${escapeHtml(
+        pdfData.gamma?.cc || "KK3"
+      )}</p>
+        </div>
+        <div class="scp-signature-table">
+          ${roles
+            .map((role) => {
+              const signedDate = role.signedAt
+                ? escapeHtml(role.signedAt)
+                : "Select date";
+              const primaryLine = escapeHtml(
+                role.name || role.signature?.value || "Select an element."
+              );
+              const descriptionLine = role.description
+                ? `<p class="scp-signature-meta">${escapeHtml(
+                    role.description
+                  )}</p>`
+                : "";
+              const companyLine = role.company
+                ? `<p class="scp-signature-meta">${escapeHtml(
+                    role.company
+                  )}</p>`
+                : "";
+              let signatureImage = "";
+              const base64 = role.signature?.signature;
+              if (
+                base64 &&
+                typeof base64 === "string" &&
+                base64.startsWith("data:image")
+              ) {
+                signatureImage = `<img class="scp-signature-image" src="${base64}" alt="Signature" />`;
+              }
+
+              return `<div class="scp-signature-row">
+                <div>
+                  <p class="scp-signature-header">Signed</p>
+                  <p class="scp-signature-date">${signedDate}</p>
+                </div>
+                <div>
+                  <p class="scp-signature-header">${escapeHtml(role.label)}</p>
+                  <p>${primaryLine}</p>
+                  ${descriptionLine}
+                  ${companyLine}
+                </div>
+                <div>
+                  <p class="scp-signature-header">Company</p>
+                  ${
+                    role.signature?.company
+                      ? `<p>${escapeHtml(role.signature.company)}</p>`
+                      : '<p class="scp-signature-placeholder">CONTRACTOR</p>'
+                  }
+                  ${signatureImage}
+                </div>
+              </div>`;
+            })
+            .join("")}
+        </div>
+      </section>
+
+      <section class="scp-page">
+        <h2>Status of document completion</h2>
+        <div class="scp-duo">
+          <div>
+            <h3>Workflow</h3>
+            <div class="scp-step-list">
+              ${phases
+                .map(
+                  (phase) => `<div class="scp-step">
+                  <strong>${escapeHtml(
+                    phase.name
+                  )}</strong><br />Status: ${escapeHtml(phase.status)}
+                </div>`
+                )
+                .join("")}
+            </div>
+          </div>
+          <div>
+            <h3>Guidance</h3>
+            <p>The figure to the right indicates which phase you are in regarding your document submissions, and should also assist both the contractor and the advisor in proactively communicating back and forth regarding any potential corrections.</p>
+            <p>The document is signed when it is approved by the project engineer of the structure; until then, the document is a dynamic document.</p>
+            <p>Expected approval time is 14 days; thereafter, the content of the document is considered approved.</p>
+          </div>
+        </div>
+        <div class="scp-table-wrapper">
+          <table class="scp-table">
+            <thead>
+              <tr>
+                <th>Status indication</th>
+                <th>Version</th>
+                <th>Approval</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${escapeHtml(createdDate || "N/A")}</td>
+                <td>v${escapeHtml(pdfData.gamma?.currentVersion || 1)}</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="scp-page">
+        <h2>Table of Contents</h2>
+        <div class="scp-highlight-box">
+          ${tocEntries
+            .map((entry) => {
+              const label = escapeHtml(entry.label);
+              const page = entry.page
+                ? `<span>${escapeHtml(entry.page)}</span>`
+                : "";
+              const indent = entry.indent ? "scp-toc-indent" : "";
+              const sectionClass = entry.section ? "scp-toc-section" : "";
+              const highlight = entry.highlight ? "scp-toc-highlight" : "";
+              return `<div class="scp-toc-row ${indent} ${sectionClass} ${highlight}">
+                <span>${label}</span>
+                ${page}
+              </div>`;
+            })
+            .join("")}
+        </div>
+      </section>
+
+      <section class="scp-page">
+        <h2>1. General</h2>
+        <h3>1.1 Description of the Control Work</h3>
+        <p>The static control plan covers the execution of construction and related works, carried out in accordance with the building project's designer. The control focuses on examining materials and execution, with particular attention to material dimensions, placement, and compliance with tolerances.</p>
+        <h3>Basis for the control performed:</h3>
+        <ul class="scp-list">
+          ${basisList.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+        <p>Supplementary rules and regulations according to the mentioned euro code.</p>
+        <p>Rules and regulations form eurocode details. Later version.</p>
+        <p>Control is also based on the executor's documented quality assurance system, which is periodically reviewed.</p>
+        <h3>Quality assurance system includes:</h3>
+        <ul class="scp-list">
+          ${qaList.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+        <p>Independent control is carried out by the executing party, with exceptions for special control points where it's performed by the design organization.</p>
+        <table class="scp-table-simple">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Document</th>
+              <th>Construction Section: Execution</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>B.2. ${escapeHtml(xValue)}</td>
+              <td>Static Control Plan</td>
+              <td>${escapeHtml(specialText)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="scp-page">
+        <h2>1.2 Types of control &amp; 1.3 Control level</h2>
+        <p>The structure is classified into construction class <span class="highlight">${escapeHtml(
+          pdfData.gamma?.exc || "CCX"
+        )} / ${escapeHtml(
+        pdfData.gamma?.cc || "KKX"
+      )}</span>. Self-control and independent control of the executed works are carried out. There is no requirement for third-party control.</p>
+        <h3>Self-control</h3>
+        <p>Self-control is carried out by the person who performed the construction upon completion of parts or the whole. Self-control is performed during execution for concealed parts.</p>
+        <p>Self-control includes assessment of whether:</p>
+        <ul class="scp-list">
+          <li>The entire construction and its parts have been executed.</li>
+          <li>The construction has been executed correctly based on craftsmanship and good building practice.</li>
+          <li>The construction aligns with the execution basis and agreements with the designer/construction management.</li>
+          <li>Tolerances during execution adhere to relevant standards, good practices, and project-specific tolerances.</li>
+          <li>Documentation of execution has been carried out, collected, and systematized according to SBi 271 section 2.6.</li>
+        </ul>
+        <p>Self-control is always performed and documented in a control report.</p>
+        <h3>Independent control</h3>
+        <p>Independent control is carried out by individuals who did not directly participate in the execution of the relevant control section. All independent controls within a section are performed by the same person and not by the work team leader.</p>
+        <p>Independent control is carried out after self-control has been performed and reported.</p>
+        <p>The independent control is performed in accordance with the project-specific static control plan for execution.</p>
+        <h3>1.3 Control level</h3>
+        <p>The control level for general control is governed by the selected execution classes, cf. DS/EN 1990 DK NA, Annex B5.</p>
+      </section>
+
+      <section class="scp-page">
+        <h2>1.4 Organization of control work &amp; 1.5 Controllers</h2>
+        <p>One and only one controller must be assigned per control section, and they must not have participated in the execution of that section.</p>
+        <p>The executing party or their representative has prepared the control plan and will act as the lead controller for selecting controllers and verifying the control report.</p>
+        <p>The goal is for the lead controller to perform on-site control to simplify the work.</p>
+        <h3>1.5 Controllers</h3>
+        <p>Independent control is carried out by an actor who has not acted as the executing party on site.</p>
+        <p>Control is handled by the same organization as the executing party.</p>
+        <p>Controllers must have the right and necessary competencies for performing control, acquired through education and experience.</p>
+        <h3>Minimum requirements for controllers:</h3>
+        <ul class="scp-list">
+          ${requirements.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+        <p>The inspector's qualifications and competencies should be documented in the control report, e.g., by their CV.</p>
+        <h3>1.6 Use of assistance</h3>
+        <p>Assisting inspectors must have at least the competencies described in section 1.3.</p>
+        <p>The ultimate responsibility for the inspection at all times rests with the inspector and is therefore not transferred to the assisting inspector.</p>
+        <p>The inspector must follow up on inspections by assistants, ensure reasonable conduct, and sign the documentation.</p>
+      </section>
+
+      <section class="scp-page">
+        <h2>1.7 Follow-up on deviations</h2>
+        <p>If deviations are found during the inspection, the following procedure is applied:</p>
+        <ul class="scp-list">
+          ${deviationProcedure
+            .map((item) => `<li>${escapeHtml(item)}</li>`)
+            .join("")}
+        </ul>
+        <p>If there are serious or multiple repeated errors at a control point, the inspection may be extended to a maximum inspection of the current control point and/or the structural designer may be involved in the assessment of the deviation.</p>
+        <h2>2. General controls</h2>
+        <p>The general control is performed in accordance with DS 1140. In addition, the general control is carried out in accordance with the rules in DS/EN 1992-DS/EN 1999, including the associated national annexes and in accordance with the rules in the related execution standards, including the associated national application documents. The general control is carried out based on the division in DS 1140, annex B.</p>
+        <table class="scp-table-simple">
+          <thead>
+            <tr><th>Control item</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>B.1 Execution basis from design</td></tr>
+            <tr><td>B.2 Execution basis for the work</td></tr>
+            <tr><td>B.3 Materials and products</td></tr>
+            <tr><td>B.4 Receiving control</td></tr>
+            <tr><td>B.5 Execution</td></tr>
+            <tr><td>B.5.1 Transport and storage on site</td></tr>
+            <tr><td>B.5.2 Previously executed construction</td></tr>
+            <tr><td>B.5.3 Assembly of prefabricated construction components</td></tr>
+            <tr><td>B.5.4 Execution of non-certified construction components</td></tr>
+            <tr><td>B.6 Final control</td></tr>
+          </tbody>
+        </table>
+        <p>The independent control of whether the self-control has been performed is always carried out as a maximum control.</p>
+      </section>
+
+      <section class="scp-page">
+        <h2>2.3 Control section &amp; 2.5 Control plan</h2>
+        <p>A construction section is subdivided into control sections based on factors like construction types, scope, or execution timing. Control sections must be well-defined, delineated, and bounded by a production period of a maximum of 4 weeks. The execution of the construction section is divided according to the tender control plan for the following control sections.</p>
+        <table class="scp-table-simple">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Document</th>
+              <th>Construction Section: Execution</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>B2. ${escapeHtml(xValue)}</td>
+              <td>Static Control Plan</td>
+              <td>${escapeHtml(specialText)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>2.4 Explanation of the selection of controls</h3>
+        <p>Since the present construction section is classified in construction class ${escapeHtml(
+          pdfData.gamma?.cc || "KK"
+        )}, an explanation of the selected control points must be provided, which is done in connection with the control report.</p>
+        <h3>2.5 Control plan</h3>
+        <p>Control points are specified in the control plan prepared by the executing Contractor.</p>
+        <table class="scp-table-simple">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Document</th>
+              <th>Construction Section: Execution</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>B2. ${escapeHtml(xValue)}</td>
+              <td>Static Control Plan</td>
+              <td>${escapeHtml(specialText)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="scp-page">
+        <h2>3. Special controls</h2>
+        <h3>3.1 General</h3>
+        <p>There are no special controls indicated by the building project designers according to the present construction section. If there are special controls, they will be listed under section 3.2.</p>
+        <h3>3.2 Special control points</h3>
+        <p>According to section 3.1, no requirements for special controls have been set. If there are special controls, they will be indicated below in the table; otherwise, none exist.</p>
+        <table class="scp-table-simple">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Document</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>${escapeHtml(pdfData.gamma?._id || "Special control id")}</td>
+              <td>Special control</td>
+              <td>${escapeHtml(
+                pdfData.gamma?.description ||
+                  pdfData.gamma?.note ||
+                  "Note form note"
+              )}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="scp-page">
+        <h2>4. Documentation</h2>
+        <h3>4.1 General description of documentation</h3>
+        <p>Documentation for the current construction section includes a control plan, associated appendices, control reports, and their appendices.</p>
+        <table class="scp-table-simple">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Description</th>
+              <th>Construction Section: Execution</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>B3. ${escapeHtml(xValue)}</td>
+              <td>Static Control Report</td>
+              <td>${escapeHtml(specialText)}</td>
+            </tr>
+            <tr>
+              <td>A5. ${escapeHtml(xValue)}</td>
+              <td>A5 as performed</td>
+              <td>${escapeHtml(specialText)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>The above is updated each time a change occurs regarding the execution.</p>
+        <p>Documentation must include actual control results and a follow-up on comments.</p>
+        <h3>4.2 Documentation of general controls</h3>
+        <p>Documentation of general controls includes a completed control report, clarification of all points, approval and signing by the controller, and documentation of deviations. Documentation must be retained for at least 5 years.</p>
+        <h3>4.3 Documentation of special controls</h3>
+        <p>The structural designer has not specified requirements for special controls in their documentation.</p>
+        <h3>4.4 Documentation for deviations and follow-up</h3>
+        <p>Deviations are recorded and deviation reports are created as appendices to control reports. The building designer is involved if remedies deviate from the execution basis.</p>
+        <h3>4.5 Control of Control Documentation</h3>
+        <p>Control documentation is collected and reviewed by the controller to ensure all documents are present, and all controls are completed, dated, and signed.</p>
+      </section>
+
+      <section class="scp-page">
+        <h2>5. Registers &amp; Scope of control</h2>
+        <table class="scp-table-simple">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Description</th>
+              <th>Construction Section: Execution</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${registerRows
+              .map(
+                (row) => `<tr>
+                <td>${escapeHtml(row.id)}</td>
+                <td>${escapeHtml(row.description)}</td>
+                <td>${escapeHtml(specialText)}</td>
+              </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+        <p>The naming of the documents above is determined by the building designer.</p>
+        <p>The aforementioned documents will be part of the overall static documentation for the current construction section when the work is completed.</p>
+        <p>See also the table further down in the control plan under item 7.1.</p>
+        <h3>5.2 Scope of control</h3>
+        <p>The scope of controls is indicated in the tables under item 7.1 and is determined based on which (classes) the Building Project Designers have specified in the project materials.</p>
+      </section>
+
+      <section class="scp-page">
+        <h2>6. Selected control locations</h2>
+        <div class="scp-note">
+          <p>Marked main drawing.</p>
+          <p class="scp-meta-light">Control locations are selected below on the drawing.</p>
+        </div>
+        <p>Control locations are indicated above where the executive party intends to perform control.</p>
+        <p class="scp-muted">Drawing preview area (link to drawing if available)</p>
+      </section>
+
+      <section class="scp-page">
+        <h2>7. Static control (table)</h2>
+        <table class="scp-table-simple">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Document</th>
+              <th>Construction Section</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>B2. ${escapeHtml(xValue)}</td>
+              <td>Static Control plan</td>
+              <td>${escapeHtml(specialText)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>In the table below, control of the project materials provided at the submission of prices has been carried out, forming the basis for the intended and executed work, which is a dynamic process until design approval.</p>
+      </section>
+
+      ${renderChecklistTable("7.1 Execution basis from design", "7.1")}
+      ${renderChecklistTable("7.2 Execution basis for the work", "7.2")}
+      ${renderChecklistTable(
+        "7.3 Control of Documentation of Materials and Products",
+        "7.3"
+      )}
+      ${renderChecklistTable("7.4 Reception control", "7.4")}
+      ${renderChecklistTable("7.5 Control of execution", "7.5")}
+      ${renderChecklistTable("7.6 Final control", "7.6")}
+    </div>
   </body>
 </html>`;
 
@@ -677,10 +1772,7 @@ module.exports = (db) => {
       const message =
         error.message ||
         "Unable to render static control plan viewer. Please try again later.";
-      res
-        .status(status)
-        .type("text/html")
-        .send(`<!DOCTYPE html>
+      res.status(status).type("text/html").send(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
