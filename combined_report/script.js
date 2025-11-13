@@ -23,14 +23,16 @@ if (typeof window.jspdf === "undefined") {
 // -----------------------------
 // Configuration - Dynamic from URL parameters
 // -----------------------------
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = "http://16.171.14.93";
+
+console.log("BASE_URL ===>", BASE_URL);
 
 // Parse URL parameters
 function getUrlParams() {
   const urlParams = new URLSearchParams(window.location.search);
   return {
-    companyId: urlParams.get("companyId"), // Default fallback
-    projectId: urlParams.get("projectId"), // Default fallback
+    companyId: urlParams.get("companyId"),
+    projectId: urlParams.get("projectId"),
     subjectMatterId:
       urlParams.get("subjectMatterId") || urlParams.get("profession"), // Default fallback
     profession: urlParams.get("profession") || urlParams.get("subjectMatterId"), // Get profession parameter

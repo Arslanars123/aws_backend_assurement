@@ -378,9 +378,9 @@
                     mediaHTML += `
                         <div class="media-preview-item">
                             <div class="image-container">
-                                <img src="http://localhost:3000/uploads/${img.filename}" 
+                                <img src="${process.env.BACKEND_URL}/uploads/${img.filename}" 
                                      alt="${img.originalName}" 
-                                     onclick="window.open('http://localhost:3000/uploads/${img.filename}', '_blank')">
+                                     onclick="window.open('${process.env.BACKEND_URL}/uploads/${img.filename}', '_blank')">
                             </div>
                             <div class="filename-text">${img.originalName}</div>
                             <div class="description-text">${img.description || 'No description'}</div>
@@ -398,9 +398,9 @@
                     mediaHTML += `
                         <div class="media-preview-item">
                             <div class="image-container">
-                                <img src="http://localhost:3000/uploads/${pic.filename}" 
+                                <img src="${process.env.BACKEND_URL}/uploads/${pic.filename}" 
                                      alt="${pic.originalName}" 
-                                     onclick="window.open('http://localhost:3000/uploads/${pic.filename}', '_blank')">
+                                     onclick="window.open('${process.env.BACKEND_URL}/uploads/${pic.filename}', '_blank')">
                             </div>
                             <div class="filename-text">${pic.originalName}</div>
                             <div class="description-text">${pic.description || 'No description'}</div>
@@ -418,9 +418,9 @@
                     mediaHTML += `
                         <div class="media-preview-item">
                             <div class="image-container">
-                                <img src="http://localhost:3000/uploads/${mark.filename}" 
+                                <img src="${process.env.BACKEND_URL}/uploads/${mark.filename}" 
                                      alt="${mark.originalName} (Mark #${mark.markNumber})" 
-                                     onclick="window.open('http://localhost:3000/uploads/${mark.filename}', '_blank')">
+                                     onclick="window.open('${process.env.BACKEND_URL}/uploads/${mark.filename}', '_blank')">
                             </div>
                             <div class="filename-text">${mark.originalName} (Mark #${mark.markNumber})</div>
                             <div class="description-text">${mark.description || 'No description'}</div>

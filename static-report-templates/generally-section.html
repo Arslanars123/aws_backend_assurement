@@ -206,7 +206,7 @@
         // Function to fetch and update controller data from API
         async function fetchControllerData(companyId, projectId) {
             try {
-                const response = await fetch(`http://localhost:3000/get-static-inspection-report-data?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=KP13`);
+                const response = await fetch(`${process.env.BACKEND_URL}/get-static-inspection-report-data?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=KP13`);
                 const data = await response.json();
                 
                 if (data.success && data.data.staticControlPlan.latest) {

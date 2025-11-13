@@ -335,7 +335,7 @@
                 console.log('Fetching data with params:', { companyId, projectId, professionSubjectMatterId });
 
                 // Fetch static document checklist data
-                const response = await fetch(`http://localhost:3000/get-static-document-checklist-with-status?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const response = await fetch(`${process.env.BACKEND_URL}/get-static-document-checklist-with-status?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=${professionSubjectMatterId}`);
                 const data = await response.json();
 
                 console.log('API Response:', data);

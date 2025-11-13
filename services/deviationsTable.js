@@ -2,7 +2,7 @@
 // Fetches: /get-deviations?companyId=&projectId=&type=Static%20Report
 
 (function () {
-  const BASE_URL = "http://localhost:3000";
+  const BASE_URL = `${process.env.BACKEND_URL}`;
 
   function getUrlParams() {
     const urlParams = new URLSearchParams(window.location.search);

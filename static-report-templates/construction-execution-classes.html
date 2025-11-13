@@ -301,7 +301,7 @@
                 const professionSubjectMatterId = getUrlParameter('professionSubjectMatterId') || 'KP13';
 
                 // Fetch static control plan data
-                const response = await fetch(`http://localhost:3000/get-static-inspection-report-data?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const response = await fetch(`${process.env.BACKEND_URL}/get-static-inspection-report-data?companyId=${companyId}&projectId=${projectId}&professionSubjectMatterId=${professionSubjectMatterId}`);
                 const data = await response.json();
 
                 if (data.success && data.data) {
@@ -337,7 +337,7 @@
                     
                     // Fetch special text for the project
                     try {
-                        const specialTextResponse = await fetch(`http://localhost:3000/get-project-special-text?projectId=${projectId}`);
+                        const specialTextResponse = await fetch(`${process.env.BACKEND_URL}/get-project-special-text?projectId=${projectId}`);
                         const specialTextData = await specialTextResponse.json();
                         
                         if (specialTextData.success && specialTextData.data && specialTextData.data.specialText) {
@@ -385,7 +385,7 @@
         // Function to populate special control points table
         async function populateSpecialControlPointsTable(companyId, projectId, professionSubjectMatterId) {
             try {
-                const response = await fetch(`http://localhost:3000/get-special-control-points-table?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const response = await fetch(`${process.env.BACKEND_URL}/get-special-control-points-table?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
                 const result = await response.json();
 
                 if (result.success && result.data && result.data.length > 0) {
@@ -416,7 +416,7 @@
         // Function to populate deviations table
         async function populateDeviationsTable(companyId, projectId, professionSubjectMatterId) {
             try {
-                const response = await fetch(`http://localhost:3000/get-deviations?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
+                const response = await fetch(`${process.env.BACKEND_URL}/get-deviations?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`);
                 const result = await response.json();
 
                 if (result.success && result.deviations && result.deviations.length > 0) {
