@@ -3879,7 +3879,7 @@ async function injectStaticDocumentChecklistDataFromAPI(
   try {
     // Call the working API to get the data
     const response = await fetch(
-      `http://localhost:3000/get-static-document-checklist-with-status?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`
+      `${process.env.BACKEND_URL}/get-static-document-checklist-with-status?projectId=${projectId}&companyId=${companyId}&professionSubjectMatterId=${professionSubjectMatterId}`
     );
     const data = await response.json();
 
@@ -4015,7 +4015,7 @@ async function injectStaticReportRegistrationDataFromAPI(
   try {
     // Call the working API to get the data
     const response = await fetch(
-      `http://localhost:3000/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${professionSubjectMatterId}`
+      `${process.env.BACKEND_URL}/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${professionSubjectMatterId}`
     );
     const data = await response.json();
 
@@ -4064,11 +4064,11 @@ async function injectStaticReportRegistrationDataFromAPI(
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
-                <img src="http://localhost:3000/uploads/${img.filename}" 
+                <img src="${process.env.BACKEND_URL}/uploads/${img.filename}" 
                      alt="${img.originalName}" 
-                     onclick="window.open('http://localhost:3000/uploads/${
-                       img.filename
-                     }', '_blank')">
+                     onclick="window.open('${process.env.BACKEND_URL}/uploads/${
+            img.filename
+          }', '_blank')">
               </div>
               <div class="filename-text">${img.originalName}</div>
               <div class="description-text">${
@@ -4088,11 +4088,11 @@ async function injectStaticReportRegistrationDataFromAPI(
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
-                <img src="http://localhost:3000/uploads/${pic.filename}" 
+                <img src="${process.env.BACKEND_URL}/uploads/${pic.filename}" 
                      alt="${pic.originalName}" 
-                     onclick="window.open('http://localhost:3000/uploads/${
-                       pic.filename
-                     }', '_blank')">
+                     onclick="window.open('${process.env.BACKEND_URL}/uploads/${
+            pic.filename
+          }', '_blank')">
               </div>
               <div class="filename-text">${pic.originalName}</div>
               <div class="description-text">${
@@ -4112,11 +4112,11 @@ async function injectStaticReportRegistrationDataFromAPI(
           mediaHTML += `
             <div class="media-preview-item">
               <div class="image-container">
-                <img src="http://localhost:3000/uploads/${mark.filename}" 
+                <img src="${process.env.BACKEND_URL}/uploads/${mark.filename}" 
                      alt="${mark.originalName} (Mark #${mark.markNumber})" 
-                     onclick="window.open('http://localhost:3000/uploads/${
-                       mark.filename
-                     }', '_blank')">
+                     onclick="window.open('${process.env.BACKEND_URL}/uploads/${
+            mark.filename
+          }', '_blank')">
               </div>
               <div class="filename-text">${mark.originalName} (Mark #${
             mark.markNumber
@@ -4801,7 +4801,7 @@ async function replaceDynamicContent(
       // Replace company logo placeholder with actual logo if available
       if (company && (company.logo || company.picture)) {
         const logoPath = company.logo || company.picture;
-        const logoHtml = `<img src="http://localhost:3000/uploads/${logoPath}" alt="Company Logo" style="width: 80px; height: 60px; object-fit: contain; border-radius: 4px;" />`;
+        const logoHtml = `<img src="${process.env.BACKEND_URL}/uploads/${logoPath}" alt="Company Logo" style="width: 80px; height: 60px; object-fit: contain; border-radius: 4px;" />`;
 
         // Replace the entire company-logo-placeholder div with the image
         templateContent = templateContent.replace(
@@ -5129,14 +5129,14 @@ async function replaceDynamicContent(
                     <div style="font-size: 48px; color: #dc2626; margin-bottom: 20px;">📄</div>
                     <div style="font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 10px;">PDF Drawing</div>
                     <div style="font-size: 14px; color: #6b7280; margin-bottom: 15px;">${mainDrawing.original}</div>
-                    <a href="http://localhost:3000/uploads/${mainDrawing.stored}" target="_blank" style="color: #1e3a8a; text-decoration: underline; font-weight: bold; padding: 10px 20px; border: 2px solid #1e3a8a; border-radius: 4px; display: inline-block;">
+                    <a href="${process.env.BACKEND_URL}/uploads/${mainDrawing.stored}" target="_blank" style="color: #1e3a8a; text-decoration: underline; font-weight: bold; padding: 10px 20px; border: 2px solid #1e3a8a; border-radius: 4px; display: inline-block;">
                       Click to View PDF
                     </a>
                   </div>
                 `;
               } else {
                 drawingContent = `
-                  <img src="http://localhost:3000/uploads/${mainDrawing.stored}" alt="${mainDrawing.original}" style="max-width: 100%; max-height: 400px; object-fit: contain;" />
+                  <img src="${process.env.BACKEND_URL}/uploads/${mainDrawing.stored}" alt="${mainDrawing.original}" style="max-width: 100%; max-height: 400px; object-fit: contain;" />
                 `;
               }
 
@@ -5280,7 +5280,7 @@ async function replaceDynamicContent(
             );
             templateContent = templateContent.replace(
               imgRegex,
-              `<img id="signature${i}-image" class="signature-image" src="http://localhost:3000/uploads/${signatureImage}" alt="Signature ${i}" style="display: block; max-width: 100%; max-height: 60px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background-color: white;">`
+              `<img id="signature${i}-image" class="signature-image" src="${process.env.BACKEND_URL}/uploads/${signatureImage}" alt="Signature ${i}" style="display: block; max-width: 100%; max-height: 60px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background-color: white;">`
             );
           }
 
@@ -5436,7 +5436,7 @@ app.get("/debug-signature-replacement", async (req, res) => {
         console.log(`Debug: Processing signature${i}:`, signatureImage);
         if (signatureImage) {
           const oldImg = `<img id="signature${i}-image" class="signature-image" style="display: none;" alt="Signature ${i}">`;
-          const newImg = `<img id="signature${i}-image" class="signature-image" src="http://localhost:3000/uploads/${signatureImage}" alt="Signature ${i}" style="display: block; max-width: 100%; max-height: 60px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background-color: white;">`;
+          const newImg = `<img id="signature${i}-image" class="signature-image" src="${process.env.BACKEND_URL}/uploads/${signatureImage}" alt="Signature ${i}" style="display: block; max-width: 100%; max-height: 60px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; background-color: white;">`;
           console.log(`Debug: Replacing image "${oldImg}" with "${newImg}"`);
           templateContent = templateContent.replace(oldImg, newImg);
         }

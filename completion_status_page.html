@@ -285,7 +285,7 @@
     // -----------------------------
     // Configuration - Dynamic from URL parameters
     // -----------------------------
-    const BASE_URL = 'http://localhost:3000';
+    const BASE_URL = process.env.BACKEND_URL;
     
     // Parse URL parameters
     function getUrlParams() {

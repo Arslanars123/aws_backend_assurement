@@ -286,7 +286,7 @@ function injectServerData(html, data) {
       if (data.company.picture.s3Location) {
         logoUrl = data.company.picture.s3Location;
       } else if (data.company.picture.filename) {
-        logoUrl = `http://localhost:3000/uploads/${data.company.picture.filename}`;
+        logoUrl = `${process.env.BACKEND_URL}/uploads/${data.company.picture.filename}`;
       }
 
       if (logoUrl) {
@@ -421,7 +421,7 @@ function injectServerData(html, data) {
   // Inject Assurement logo
   processedHTML = processedHTML.replace(
     /<img src="logo\.png"[^>]*>/gi,
-    `<img src="http://localhost:3000/final_static/logo.png" alt="Assurement Logo" style="width: 100%; height: 100%; object-fit: contain;" />`
+    `<img src="${process.env.BACKEND_URL}/final_static/logo.png" alt="Assurement Logo" style="width: 100%; height: 100%; object-fit: contain;" />`
   );
 
   return processedHTML;
@@ -472,7 +472,7 @@ router.post("/generate-combined-pdf", async (req, res) => {
       companyId,
       projectId,
       subjectMatterId = "KP13",
-      baseUrl = "http://localhost:3000",
+      baseUrl = `${process.env.BACKEND_URL}`,
       filename = "combined-quality-report.pdf",
     } = req.body;
 
@@ -573,7 +573,7 @@ router.post("/generate-combined-pdf-save", async (req, res) => {
       companyId,
       projectId,
       subjectMatterId = "KP13",
-      baseUrl = "http://localhost:3000",
+      baseUrl = `${process.env.BACKEND_URL}`,
       filename = "combined-quality-report.pdf",
       savePath = "./uploads",
     } = req.body;

@@ -23,19 +23,20 @@ if (typeof window.jspdf === "undefined") {
 // -----------------------------
 // Configuration - Dynamic from URL parameters
 // -----------------------------
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = "http://16.171.14.93";
+
+console.log("BASE_URL ===>", BASE_URL);
 
 // Parse URL parameters
 function getUrlParams() {
   const urlParams = new URLSearchParams(window.location.search);
   return {
-    companyId: urlParams.get("companyId") || "68f76ce994e7d41efe754dc4", // Default fallback
-    projectId: urlParams.get("projectId") || "68fa70ccee0ab59dfc5f591a", // Default fallback
+    companyId: urlParams.get("companyId"),
+    projectId: urlParams.get("projectId"),
     subjectMatterId:
-      urlParams.get("subjectMatterId") || urlParams.get("profession") || "KP13", // Default fallback
-    profession:
-      urlParams.get("profession") || urlParams.get("subjectMatterId") || "KP13", // Get profession parameter
-    startPage: parseInt(urlParams.get("startPage")) || 1, // Starting page number
+      urlParams.get("subjectMatterId") || urlParams.get("profession"), // Default fallback
+    profession: urlParams.get("profession") || urlParams.get("subjectMatterId"), // Get profession parameter
+    startPage: parseInt(urlParams.get("startPage")), // Starting page number
   };
 }
 

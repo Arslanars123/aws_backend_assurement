@@ -199,7 +199,7 @@
                 console.log('Loading drawings for:', { companyId, projectId });
 
                 // Fetch drawings from the existing API
-                const response = await fetch(`http://localhost:3000/get-draws?companyId=${companyId}&projectId=${projectId}`);
+                const response = await fetch(`${process.env.BACKEND_URL}/get-draws?companyId=${companyId}&projectId=${projectId}`);
                 const drawings = await response.json();
 
                 console.log('Fetched drawings:', drawings);
@@ -236,7 +236,7 @@
                             if (isPdf) {
                                 // For PDF files, create an embedded PDF viewer
                                 const pdfEmbed = document.createElement('embed');
-                                pdfEmbed.src = `http://localhost:3000/uploads/${mainDrawing.stored}`;
+                                pdfEmbed.src = `${process.env.BACKEND_URL}/uploads/${mainDrawing.stored}`;
                                 pdfEmbed.type = 'application/pdf';
                                 pdfEmbed.style.width = '100%';
                                 pdfEmbed.style.height = '400px';
@@ -251,7 +251,7 @@
                                         <div>PDF Drawing: ${mainDrawing.original}</div>
                                         <div style="margin-top: 10px; font-size: 12px;">File: ${mainDrawing.stored}</div>
                                         <div style="margin-top: 10px;">
-                                            <a href="http://localhost:3000/uploads/${mainDrawing.stored}" target="_blank" style="color: #1e3a8a; text-decoration: underline;">
+                                            <a href="${process.env.BACKEND_URL}/uploads/${mainDrawing.stored}" target="_blank" style="color: #1e3a8a; text-decoration: underline;">
                                                 Click to view PDF
                                             </a>
                                         </div>
@@ -263,7 +263,7 @@
                             } else {
                                 // For image files, create image element
                                 const img = document.createElement('img');
-                                img.src = `http://localhost:3000/uploads/${mainDrawing.stored}`;
+                                img.src = `${process.env.BACKEND_URL}/uploads/${mainDrawing.stored}`;
                                 img.alt = mainDrawing.original;
                                 img.onerror = function() {
                                     // If image fails to load, show placeholder text
