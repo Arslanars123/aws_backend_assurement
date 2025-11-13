@@ -1,9 +1,56 @@
 const express = require("express");
 const router = express.Router();
 const { ObjectId } = require("mongodb");
+const fs = require("fs");
+const path = require("path");
 const {
   generateStaticControlPlanPDFBuffer,
 } = require("./services/staticControlPlanPdf");
+
+const loadImageAsDataUri = (absolutePath) => {
+  try {
+    if (!fs.existsSync(absolutePath)) {
+      return "";
+    }
+    const ext = path.extname(absolutePath).toLowerCase();
+    let mime = "image/png";
+    if (ext === ".jpg" || ext === ".jpeg") {
+      mime = "image/jpeg";
+    } else if (ext === ".svg") {
+      mime = "image/svg+xml";
+    } else if (ext === ".gif") {
+      mime = "image/gif";
+    }
+    const buffer = fs.readFileSync(absolutePath);
+    return `data:${mime};base64,${buffer.toString("base64")}`;
+  } catch (error) {
+    console.error(`⚠️ Failed to load image at path ${absolutePath}:`, error);
+    return "";
+  }
+};
+
+const ASSUREMENT_LOGO_PATH = path.join(
+  __dirname,
+  "templates",
+  "assurement-logo.png"
+);
+const FRONTEND_LOGO_PATH = path.join(
+  __dirname,
+  "..",
+  "consfront-main",
+  "src",
+  "assets",
+  "images",
+  "jpo.jpg"
+);
+
+const ROOT_LOGO_PATH = path.join(__dirname, "logo.png");
+
+const ASSUREMENT_LOGO_DATA_URI = loadImageAsDataUri(ASSUREMENT_LOGO_PATH);
+const FRONTEND_LOGO_DATA_URI = loadImageAsDataUri(FRONTEND_LOGO_PATH);
+const ROOT_LOGO_DATA_URI = loadImageAsDataUri(ROOT_LOGO_PATH);
+const STATIC_CONTROL_BRAND_LOGO =
+  ROOT_LOGO_DATA_URI || ASSUREMENT_LOGO_DATA_URI || FRONTEND_LOGO_DATA_URI;
 
 module.exports = (db) => {
   const createHttpError = (status, message) => {
@@ -899,6 +946,10 @@ module.exports = (db) => {
         { label: "7.6 Final control", page: 18, indent: true },
       ];
 
+      const brandLogoMarkup = STATIC_CONTROL_BRAND_LOGO
+        ? `<img class="scp-logo-img" src="${STATIC_CONTROL_BRAND_LOGO}" alt="Assurement Logo" />`
+        : `<span class="scp-logo-placeholder">A</span>`;
+
       const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -929,21 +980,74 @@ module.exports = (db) => {
         background: #ffffff;
         border-bottom: 1px solid #dfe3eb;
         padding: 16px 24px;
-      }
-      .scp-toolbar h1 {
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 600;
-      }
-      .scp-toolbar .scp-meta-light {
-        display: block;
-        margin-top: 4px;
-      }
-      .scp-toolbar-actions {
         display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .scp-toolbar-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
         flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 12px;
+      }
+      .scp-brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .scp-logo-circle {
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        border: 1px solid #dfe3eb;
+        background: #edf2f7;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+      .scp-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .scp-logo-placeholder {
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: #0f172a;
+      }
+      .scp-logo-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .scp-logo-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .scp-logo-subtitle {
+        font-size: 0.85rem;
+        color: #475569;
+      }
+      .scp-logo-muted {
+        font-size: 0.75rem;
+        color: #94a3b8;
+      }
+      .scp-toolbar-heading {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+      .scp-toolbar-heading h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .scp-toolbar-heading .scp-meta-light {
+        margin-top: 0;
       }
       .scp-container {
         max-width: 960px;
@@ -1242,9 +1346,21 @@ module.exports = (db) => {
   </head>
   <body>
     <div class="scp-toolbar">
-      <div>
-        <h1>${safeReportTitle}</h1>
-        <p class="scp-meta-light">${safeCompanyName}</p>
+      <div class="scp-toolbar-content">
+        <div class="scp-brand">
+          <div class="scp-logo-circle">
+            ${brandLogoMarkup}
+          </div>
+          <div class="scp-logo-text">
+            <span class="scp-logo-title">Assurement</span>
+            <span class="scp-logo-subtitle">Report · system</span>
+            <span class="scp-logo-muted">Part of Quality Assurance Denmark</span>
+          </div>
+        </div>
+        <div class="scp-toolbar-heading">
+          <h1>${safeReportTitle}</h1>
+          <p class="scp-meta-light">${safeCompanyName}</p>
+        </div>
       </div>
       <!-- Toolbar actions hidden per request -->
     </div>
