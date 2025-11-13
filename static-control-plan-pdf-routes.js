@@ -1,9 +1,56 @@
 const express = require("express");
 const router = express.Router();
 const { ObjectId } = require("mongodb");
+const fs = require("fs");
+const path = require("path");
 const {
   generateStaticControlPlanPDFBuffer,
 } = require("./services/staticControlPlanPdf");
+
+const loadImageAsDataUri = (absolutePath) => {
+  try {
+    if (!fs.existsSync(absolutePath)) {
+      return "";
+    }
+    const ext = path.extname(absolutePath).toLowerCase();
+    let mime = "image/png";
+    if (ext === ".jpg" || ext === ".jpeg") {
+      mime = "image/jpeg";
+    } else if (ext === ".svg") {
+      mime = "image/svg+xml";
+    } else if (ext === ".gif") {
+      mime = "image/gif";
+    }
+    const buffer = fs.readFileSync(absolutePath);
+    return `data:${mime};base64,${buffer.toString("base64")}`;
+  } catch (error) {
+    console.error(`⚠️ Failed to load image at path ${absolutePath}:`, error);
+    return "";
+  }
+};
+
+const ASSUREMENT_LOGO_PATH = path.join(
+  __dirname,
+  "templates",
+  "assurement-logo.png"
+);
+const FRONTEND_LOGO_PATH = path.join(
+  __dirname,
+  "..",
+  "consfront-main",
+  "src",
+  "assets",
+  "images",
+  "jpo.jpg"
+);
+
+const ROOT_LOGO_PATH = path.join(__dirname, "logo.png");
+
+const ASSUREMENT_LOGO_DATA_URI = loadImageAsDataUri(ASSUREMENT_LOGO_PATH);
+const FRONTEND_LOGO_DATA_URI = loadImageAsDataUri(FRONTEND_LOGO_PATH);
+const ROOT_LOGO_DATA_URI = loadImageAsDataUri(ROOT_LOGO_PATH);
+const STATIC_CONTROL_BRAND_LOGO =
+  ROOT_LOGO_DATA_URI || ASSUREMENT_LOGO_DATA_URI || FRONTEND_LOGO_DATA_URI;
 
 module.exports = (db) => {
   const createHttpError = (status, message) => {
@@ -617,13 +664,6 @@ module.exports = (db) => {
         subjectMatterId
       );
 
-      const params = new URLSearchParams({
-        companyId,
-        projectId,
-        subjectMatterId,
-      }).toString();
-      const pdfUrl = `/static-control-plan.pdf?${params}`;
-
       const companyName = pdfData?.company?.name || "Static Control Plan";
       const reportTitle =
         pdfData?.gamma?.profession ||
@@ -649,7 +689,7 @@ module.exports = (db) => {
         .map((code) => `<li>${escapeHtml(getEuroCodeName(code))}</li>`)
         .join("");
 
-      const drawingsMarkup =
+      const drawingItemsMarkup =
         pdfData.drawings && pdfData.drawings.length
           ? pdfData.drawings
               .map((drawing, index) => {
@@ -662,28 +702,50 @@ module.exports = (db) => {
                 const drawingDate = formatDate(
                   drawing.uploadedAt || drawing.createdAt
                 );
-                const drawingUrl =
-                  drawing.s3Location || drawing.path || drawing.url;
-                return `<div class="scp-drawing-item">
-                  <span>${escapeHtml(drawingName)}</span>
-                  ${
-                    drawingDate
-                      ? `<span class="scp-meta-light">${escapeHtml(
-                          drawingDate
-                        )}</span>`
-                      : ""
-                  }
-                  ${
-                    drawingUrl
-                      ? `<a href="${escapeHtml(
-                          drawingUrl
-                        )}" target="_blank" rel="noopener">Open file</a>`
-                      : ""
-                  }
-                </div>`;
+                const drawingUrlRaw =
+                  drawing.s3Location || drawing.path || drawing.url || "";
+                const drawingUrl = drawingUrlRaw ? escapeHtml(drawingUrlRaw) : "";
+                const lowerUrl = drawingUrlRaw.toLowerCase();
+                let previewMarkup = "";
+                if (lowerUrl && /\.(png|jpe?g|gif|webp|svg)$/.test(lowerUrl)) {
+                  previewMarkup = `<div class="scp-drawing-preview"><img src="${drawingUrl}" alt="${escapeHtml(
+                    drawingName
+                  )}" /></div>`;
+                } else if (lowerUrl && /\.pdf$/.test(lowerUrl)) {
+                  previewMarkup = `<div class="scp-drawing-preview"><iframe src="${drawingUrl}" title="${escapeHtml(
+                    drawingName
+                  )}"></iframe></div>`;
+                }
+                const previewContent =
+                  previewMarkup ||
+                  `<div class="scp-drawing-preview-placeholder scp-muted">Preview not available.</div>`;
+                const linkMarkup = drawingUrl
+                  ? `<a href="${drawingUrl}" target="_blank" rel="noopener">Open file</a>`
+                  : `<span class="scp-muted">File link unavailable</span>`;
+
+                return `<article class="scp-drawing-item">
+                  <header class="scp-drawing-header">
+                    <span class="scp-drawing-name">${escapeHtml(drawingName)}</span>
+                    ${
+                      drawingDate
+                        ? `<span class="scp-meta-light">${escapeHtml(
+                            drawingDate
+                          )}</span>`
+                        : ""
+                    }
+                  </header>
+                  ${previewContent}
+                  <div class="scp-drawing-actions">
+                    ${linkMarkup}
+                  </div>
+                </article>`;
               })
               .join("")
-          : `<p class="scp-muted">No drawings uploaded.</p>`;
+          : "";
+
+      const drawingsSectionMarkup = drawingItemsMarkup
+        ? `<div class="scp-drawing-list">${drawingItemsMarkup}</div>`
+        : `<p class="scp-muted">No drawings uploaded.</p>`;
 
       const sanitizeCell = (value, fallback = "—") => {
         if (value === undefined || value === null) {
@@ -906,6 +968,10 @@ module.exports = (db) => {
         { label: "7.6 Final control", page: 18, indent: true },
       ];
 
+      const brandLogoMarkup = STATIC_CONTROL_BRAND_LOGO
+        ? `<img class="scp-logo-img" src="${STATIC_CONTROL_BRAND_LOGO}" alt="Assurement Logo" />`
+        : `<span class="scp-logo-placeholder">A</span>`;
+
       const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -917,341 +983,477 @@ module.exports = (db) => {
       :root {
         color-scheme: light;
       }
-      * {
+      *,
+      *::before,
+      *::after {
         box-sizing: border-box;
       }
       body {
         margin: 0;
         font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
-        background: #f1f5f9;
-        color: #0f172a;
-        line-height: 1.65;
+        background: #f7f9fc;
+        color: #1f2933;
+        line-height: 1.5;
       }
       a {
         color: inherit;
       }
-      .scp-container {
-        max-width: 1024px;
-        margin: 0 auto;
-        padding: 32px 20px 64px;
+      .scp-toolbar {
+        background: #ffffff;
+        border-bottom: 1px solid #dfe3eb;
+        padding: 16px 24px;
         display: flex;
         flex-direction: column;
-        gap: 32px;
-      }
-      .scp-toolbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         gap: 16px;
-        background: linear-gradient(135deg, #0369a1, #0ea5e9);
-        color: #fff;
-        border-radius: 20px;
-        padding: 20px 28px;
-        box-shadow: 0 18px 45px rgba(14, 165, 233, 0.28);
-        position: sticky;
-        top: 16px;
-        z-index: 10;
       }
-      .scp-toolbar h1 {
-        margin: 0;
-        font-size: clamp(1.35rem, 3vw, 1.8rem);
-      }
-      .scp-toolbar-actions {
+      .scp-toolbar-content {
         display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
-      .scp-button {
-        display: inline-flex;
         align-items: center;
-        justify-content: center;
-        padding: 0.6rem 1rem;
-        border-radius: 999px;
-        border: none;
+        justify-content: space-between;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .scp-brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .scp-logo-circle {
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        border: 1px solid #dfe3eb;
+        background: #edf2f7;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+      .scp-logo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .scp-logo-placeholder {
         font-weight: 600;
-        cursor: pointer;
-        text-decoration: none;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      .scp-button.primary {
-        background: #f8fafc;
+        font-size: 1.1rem;
         color: #0f172a;
-        box-shadow: 0 16px 35px rgba(15, 23, 42, 0.18);
       }
-      .scp-button.ghost {
-        background: transparent;
-        border: 1px solid rgba(248, 250, 252, 0.6);
-        color: #f8fafc;
+      .scp-logo-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
-      .scp-button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+      .scp-logo-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #0f172a;
       }
-      .scp-page {
-        background: #fff;
-        border-radius: 28px;
-        padding: clamp(24px, 4vw, 48px);
-        box-shadow: 0 24px 45px rgba(15, 23, 42, 0.12);
-        border: 1px solid rgba(148, 163, 184, 0.18);
+      .scp-logo-subtitle {
+        font-size: 0.85rem;
+        color: #475569;
       }
-      .scp-page h2 {
+      .scp-logo-muted {
+        font-size: 0.75rem;
+        color: #94a3b8;
+      }
+      .scp-toolbar-heading {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+      .scp-toolbar-heading h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .scp-toolbar-heading .scp-meta-light {
         margin-top: 0;
-        font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+      }
+      .scp-container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 24px 16px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .scp-page,
+      .scp-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+      }
+      .scp-card {
+        padding: 20px;
+      }
+      .scp-page h2,
+      .scp-section-title {
+        margin-top: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
         color: #0f172a;
       }
       .scp-page h3 {
-        margin-top: 2rem;
-        font-size: 1.05rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: #475569;
-      }
-      .scp-meta-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        background: rgba(15, 23, 42, 0.06);
-        border-radius: 999px;
-        font-size: 0.85rem;
+        margin-top: 24px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1f2937;
       }
       .scp-meta-bar {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
-        margin: 16px 0 0;
+        margin-top: 16px;
       }
-      .scp-highlight-box {
-        border: 1px dashed rgba(15, 23, 42, 0.25);
-        border-radius: 24px;
-        padding: 20px;
-        background: rgba(148, 163, 184, 0.08);
+      .scp-meta-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: #e5e7eb;
+        color: #334155;
+        font-size: 0.85rem;
+      }
+      .scp-highlight-box,
+      .scp-note {
         margin-top: 20px;
+        border: 1px solid #dfe3eb;
+        border-radius: 12px;
+        background: #f8fafc;
+        padding: 16px;
       }
       .scp-duo {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 24px;
-        margin-top: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        margin-top: 24px;
       }
       .scp-list {
         margin: 0;
-        padding-left: 1.1rem;
+        padding-left: 20px;
       }
       .scp-list li {
-        margin-bottom: 0.55rem;
+        margin-bottom: 8px;
       }
       .scp-muted {
         color: #64748b;
         font-size: 0.95rem;
       }
       .scp-meta-light {
-        font-size: 0.8rem;
-        color: #64748b;
+        font-size: 0.85rem;
+        color: #94a3b8;
       }
-      .scp-drawing-item {
+      .scp-section-block {
         display: flex;
         flex-direction: column;
-        gap: 4px;
-        padding: 12px;
-        border-radius: 16px;
-        background: rgba(148, 163, 184, 0.12);
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        margin-bottom: 10px;
+        gap: 12px;
+        margin-top: 24px;
+      }
+      .scp-drawing-list {
+        display: grid;
+        gap: 16px;
+      }
+      .scp-drawing-item {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 16px;
+        background: #f8fafc;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .scp-drawing-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .scp-drawing-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #0f172a;
       }
       .scp-info-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 18px;
-        margin-top: 16px;
+        gap: 16px;
+        margin-top: 20px;
       }
       .scp-info-card {
-        padding: 16px 18px;
-        border-radius: 18px;
-        background: rgba(148, 163, 184, 0.12);
-        border: 1px solid rgba(148, 163, 184, 0.2);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 16px;
       }
       .scp-info-card h4 {
         margin: 0 0 6px;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
+        font-size: 0.8rem;
+        font-weight: 600;
         color: #475569;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
       }
       .scp-info-card p {
         margin: 0;
         font-weight: 600;
         color: #0f172a;
       }
-      .scp-note {
-        margin-top: 20px;
-        padding: 16px 18px;
-        background: rgba(59, 130, 246, 0.08);
-        border: 1px solid rgba(59, 130, 246, 0.22);
-        border-radius: 18px;
+      .scp-drawing-preview {
+        border: 1px solid #dfe3eb;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
       }
-      .scp-pill-list {
+      .scp-drawing-preview img {
+        width: 100%;
+        height: auto;
+        max-height: 260px;
+        object-fit: contain;
+        display: block;
+        background: #fff;
+      }
+      .scp-drawing-preview iframe {
+        width: 100%;
+        height: 280px;
+        border: none;
+        background: #ffffff;
+      }
+      .scp-drawing-preview-placeholder {
+        padding: 12px;
+        border: 1px dashed #dfe3eb;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+      .scp-drawing-actions {
         display: flex;
+        align-items: center;
+        gap: 12px;
         flex-wrap: wrap;
-        gap: 10px;
-        margin: 16px 0 0;
-        padding: 0;
-        list-style: none;
       }
-      .scp-pill {
+      .scp-drawing-actions a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         padding: 6px 12px;
-        border-radius: 999px;
-        background: rgba(13, 148, 136, 0.12);
-        border: 1px solid rgba(13, 148, 136, 0.22);
-        font-size: 0.85rem;
-        color: #0f766e;
+        border-radius: 8px;
+        border: 1px solid #0f172a;
+        color: #0f172a;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .scp-drawing-actions a:hover {
+        background: #0f172a;
+        color: #ffffff;
       }
       .scp-table-wrapper {
-        margin-top: 20px;
-        border: 1px solid rgba(148, 163, 184, 0.24);
-        border-radius: 18px;
-        overflow: hidden;
+        margin-top: 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        overflow-x: auto;
       }
       table {
         width: 100%;
         border-collapse: collapse;
-      }
-      thead {
-        background: rgba(15, 23, 42, 0.75);
-        color: #f8fafc;
+        min-width: 640px;
       }
       th,
       td {
-        padding: 12px 14px;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 10px 12px;
         text-align: left;
         font-size: 0.9rem;
       }
-      tbody tr:nth-child(odd) {
-        background: rgba(148, 163, 184, 0.08);
-      }
-      tbody tr:hover {
-        background: rgba(59, 130, 246, 0.08);
-      }
-      .highlight {
-        background: rgba(253, 224, 71, 0.22);
+      thead th {
+        background: #f8fafc;
         font-weight: 600;
+        color: #1f2937;
+      }
+      tbody tr:nth-child(even) td {
+        background: #f9fbfc;
+      }
+      .scp-table-simple {
+        margin-top: 16px;
+      }
+      .scp-table-simple th,
+      .scp-table-simple td {
+        border: 1px solid #e2e8f0;
+        background: transparent;
       }
       .scp-empty-row {
         text-align: center;
-        color: #64748b;
+        color: #94a3b8;
       }
-      .scp-signature-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 18px;
+      .highlight {
+        background: #fef9c3;
+      }
+      .scp-signature-table {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
         margin-top: 20px;
       }
-      .scp-signature-card {
-        border: 1px dashed rgba(15, 23, 42, 0.25);
-        border-radius: 20px;
-        padding: 16px 18px;
-        background: rgba(148, 163, 184, 0.08);
+      .scp-signature-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 16px;
+        background: #f8fafc;
       }
-      .scp-signature-card h4 {
-        margin: 0 0 8px;
-        font-size: 0.9rem;
+      .scp-signature-header {
+        margin: 0 0 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: #0369a1;
+        color: #475569;
+        letter-spacing: 0.06em;
       }
-      .scp-signature-card p {
-        margin: 4px 0;
+      .scp-signature-date {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .scp-signature-meta {
+        margin: 4px 0 0;
+        font-size: 0.85rem;
+        color: #475569;
+      }
+      .scp-signature-placeholder {
+        font-size: 0.85rem;
+        color: #94a3b8;
+      }
+      .scp-signature-image {
+        max-width: 140px;
+        max-height: 60px;
+        object-fit: contain;
+        border: 1px solid #d9e2ec;
+        border-radius: 4px;
+        background: #ffffff;
+        padding: 4px;
+        margin-top: 8px;
       }
       .scp-step-list {
-        display: grid;
+        display: flex;
+        flex-direction: column;
         gap: 12px;
         margin-top: 16px;
       }
       .scp-step {
-        padding: 12px 16px;
-        border-radius: 16px;
-        background: rgba(148, 163, 184, 0.12);
-        border: 1px solid rgba(148, 163, 184, 0.18);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
       }
-      .scp-table-simple {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-        border: 1px solid rgba(148, 163, 184, 0.24);
-      }
-      .scp-table-simple th,
-      .scp-table-simple td {
-        padding: 10px 12px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-      }
-      .scp-table-simple thead {
-        background: rgba(15, 23, 42, 0.06);
-        color: #0f172a;
-      }
-      .scp-signature-table {
-        margin-top: 24px;
+      .scp-pill-list {
         display: flex;
-        flex-direction: column;
-        gap: 14px;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 16px 0 0;
+        list-style: none;
+        padding: 0;
       }
-      .scp-signature-row {
-        border: 1px dashed rgba(15, 23, 42, 0.25);
-        border-radius: 20px;
-        padding: 16px 18px;
-        background: rgba(148, 163, 184, 0.08);
-        display: grid;
-        grid-template-columns: minmax(120px, 160px) minmax(200px, 1fr) minmax(140px, 180px);
-        gap: 18px;
-      }
-      .scp-signature-header {
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
+      .scp-pill {
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: #e0f2fe;
         color: #0369a1;
-        margin: 0 0 0.35rem;
-      }
-      .scp-signature-date {
         font-size: 0.85rem;
-        color: #0f172a;
-        font-weight: 600;
+        font-weight: 500;
       }
-      .scp-signature-placeholder {
-        font-size: 0.82rem;
-        color: #64748b;
+      .scp-signature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
       }
-      .scp-signature-meta {
-        font-size: 0.82rem;
+      .scp-signature-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 16px;
+      }
+      .scp-signature-card h4 {
+        margin: 0 0 6px;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
         color: #475569;
-        margin: 0.15rem 0 0;
       }
-      .scp-signature-image {
-        max-width: 150px;
-        max-height: 60px;
-        object-fit: contain;
-        border-radius: 6px;
-        background: #fff;
-        padding: 4px;
-        border: 1px solid rgba(148, 163, 184, 0.3);
+      .scp-signature-card p {
+        margin: 4px 0;
+        font-size: 0.9rem;
       }
-      @media (max-width: 680px) {
-        .scp-signature-row {
-          grid-template-columns: 1fr;
+      .scp-toc-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 0.9rem;
+      }
+      .scp-toc-row span:last-child {
+        margin-left: 16px;
+        color: #475569;
+        font-weight: 500;
+      }
+      .scp-toc-row.scp-toc-indent {
+        padding-left: 18px;
+        font-size: 0.85rem;
+      }
+      .scp-toc-row.scp-toc-section {
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .scp-toc-row.scp-toc-highlight {
+        color: #0369a1;
+      }
+      @media (max-width: 720px) {
+        body {
+          background: #ffffff;
+        }
+        .scp-toolbar {
+          padding: 16px;
+        }
+        .scp-container {
+          padding: 16px;
+          gap: 16px;
+        }
+        table {
+          min-width: 0;
+        }
+        th,
+        td {
+          font-size: 0.85rem;
+          padding: 8px 10px;
         }
       }
     </style>
   </head>
   <body>
     <div class="scp-toolbar">
-      <div>
-        <h1>${safeReportTitle}</h1>
-        <p class="scp-meta-light">${safeCompanyName}</p>
+      <div class="scp-toolbar-content">
+        <div class="scp-brand">
+          <div class="scp-logo-circle">
+            ${brandLogoMarkup}
+          </div>
+          <div class="scp-logo-text">
+            <span class="scp-logo-title">Assurement</span>
+            <span class="scp-logo-subtitle">Report · system</span>
+            <span class="scp-logo-muted">Part of Quality Assurance Denmark</span>
+          </div>
+        </div>
+        <div class="scp-toolbar-heading">
+          <h1>${safeReportTitle}</h1>
+          <p class="scp-meta-light">${safeCompanyName}</p>
+        </div>
       </div>
-      <div class="scp-toolbar-actions">
-        <a class="scp-button primary" href="${escapeHtml(
-          pdfUrl
-        )}" target="_blank" rel="noopener">Open PDF</a>
-        <button class="scp-button ghost" type="button" onclick="window.print()">Print</button>
-      </div>
+      <!-- Toolbar actions hidden per request -->
     </div>
     <div class="scp-container">
       <section class="scp-page">
@@ -1284,17 +1486,15 @@ module.exports = (db) => {
           <p>For load-bearing structures according to DS1140 applicable for:</p>
           <p><strong>Eurocode:</strong> ${escapeHtml(specialText)}</p>
         </div>
-        <div class="scp-duo">
-          <div>
-            <h3>Applicable EU standards 2024</h3>
-            <ul class="scp-list">
-              ${euroCodeMarkup}
-            </ul>
-          </div>
-          <div>
-            <h3>Uploaded Drawings</h3>
-            ${drawingsMarkup}
-          </div>
+        <div class="scp-section-block">
+          <h3>Applicable EU standards 2024</h3>
+          <ul class="scp-list">
+            ${euroCodeMarkup}
+          </ul>
+        </div>
+        <div class="scp-section-block">
+          <h3>Uploaded Drawings</h3>
+          ${drawingsSectionMarkup}
         </div>
         <p class="scp-meta-light">Static Control Plan - Version ${escapeHtml(
           pdfData.gamma?.currentVersion || 1

@@ -1964,12 +1964,18 @@ app.get("/get-tasks-by-subject-matter", async (req, res) => {
         ControlId: task.ControlId,
         Type: task.Type,
         Activity: task.Activity,
-        AcceptanceCriteria: task.AcceptanceCriteria,
-        Time: task.Time,
-        Method: task.Method,
-        DocumentationRequirements: task.DocumentationRequirements,
-        Scope: task.Scope,
-        Language: task.Language,
+        AcceptanceCriteria: sanitizeTaskString(
+          task["Acceptance Criteria"] ?? task.AcceptanceCriteria ?? ""
+        ),
+        Time: sanitizeTaskString(task.Time),
+        Method: sanitizeTaskString(task.Method),
+        DocumentationRequirements: sanitizeTaskString(
+          task["Documentation Requirements"] ??
+            task.DocumentationRequirements ??
+            ""
+        ),
+        Scope: sanitizeTaskString(task.Scope),
+        Language: sanitizeTaskString(task.Language),
       };
 
       // Categorize by Type (case-insensitive)
@@ -9757,6 +9763,12 @@ const parseControlIdNumber = (value) => {
 
 const normalizeSubjectId = (value) => (value ? String(value) : "");
 
+const sanitizeTaskString = (value, fallback = "") => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "string") return value.trim();
+  return String(value).trim();
+};
+
 const sortSubjectTasksForSequencing = (tasks = []) => {
   return [...tasks].sort((a, b) => {
     const aNumber =
@@ -9859,11 +9871,7 @@ const insertTaskAndResequence = (
     task.controlId = assignedId;
   });
 
-  return rebuildTasksWithSubject(
-    allTasks,
-    subjectIdStr,
-    sequencedSubjectTasks
-  );
+  return rebuildTasksWithSubject(allTasks, subjectIdStr, sequencedSubjectTasks);
 };
 
 app.post(
@@ -9878,16 +9886,16 @@ app.post(
         type,
         index,
         controlId,
+        acceptanceCriteria,
         criteria,
+        documentationRequirements,
+        comment,
         time,
         method,
-        comment,
-        professionGroup,
-        professionGroupId,
-        buildingPart,
-        buildingPartId,
-        drawing,
-        drawingId,
+        scope,
+        language,
+        entryCount,
+        isSubmitted,
       } = req.body;
 
       if (!projectId || !ObjectId.isValid(projectId)) {
@@ -9923,50 +9931,34 @@ app.post(
         return res.status(404).json({ error: "Project not found" });
       }
 
-      const now = new Date();
-      let professionData =
-        project?.professionAssociatedData?.[subjectMatterId]?.profession ||
-        project?.professionAssociatedData?.[subjectMatterId];
-
-      if (!professionData) {
-        professionData = await db.collection("professions").findOne({
-          SubjectMatterId: subjectMatterId,
-        });
-      }
-
       const newTaskId = new ObjectId();
       const desiredControlIdNumber = parseControlIdNumber(controlId);
+      const normalizedControlId =
+        desiredControlIdNumber ?? normalizeControlId(controlId);
+
       const newTask = {
         _id: newTaskId,
+        Index: sanitizeTaskString(index),
         SubjectMatterId: subjectMatterId,
-        Activity: activity,
+        ControlId: normalizedControlId,
         Type: type,
-        Index: index || "",
-        ControlId: desiredControlIdNumber ?? normalizeControlId(controlId),
-        criteria: criteria || "",
-        time: time || "",
-        method: method || "",
-        comment: comment || "",
-        professionGroup: professionGroup || null,
-        professionGroupId: professionGroupId || null,
-        buildingPart: buildingPart || null,
-        buildingPartId: buildingPartId || null,
-        drawing: drawing || null,
-        drawingId: drawingId || null,
-        isActive: false,
-        isClosed: false,
-        taskEntries: [],
-        createdAt: now.toISOString(),
-        updatedAt: now.toISOString(),
+        Activity: sanitizeTaskString(activity),
+        "Acceptance Criteria": sanitizeTaskString(
+          acceptanceCriteria ?? criteria
+        ),
+        "Documentation Requirements": sanitizeTaskString(
+          documentationRequirements ?? comment
+        ),
+        Time: sanitizeTaskString(time),
+        Method: sanitizeTaskString(method),
+        Scope: sanitizeTaskString(scope),
+        Language: sanitizeTaskString(language || "EN"),
+        controlId: normalizedControlId,
+        entryCount: Number.isFinite(Number(entryCount))
+          ? Number(entryCount)
+          : 0,
+        isSubmitted: !!isSubmitted,
       };
-
-      const professionSnapshot = buildProfessionSnapshot(
-        professionData,
-        subjectMatterId
-      );
-      if (professionSnapshot) {
-        newTask.profession = professionSnapshot;
-      }
 
       const currentTasks = Array.isArray(project.tasks) ? project.tasks : [];
       const tasksWithInsertion = insertTaskAndResequence(
@@ -9981,7 +9973,7 @@ app.post(
         {
           $set: {
             tasks: tasksWithInsertion,
-            updatedAt: now.toISOString(),
+            updatedAt: new Date().toISOString(),
           },
         }
       );
@@ -10029,18 +10021,16 @@ app.put(
         type,
         index,
         controlId,
+        acceptanceCriteria,
         criteria,
+        documentationRequirements,
+        comment,
         time,
         method,
-        comment,
-        professionGroup,
-        professionGroupId,
-        buildingPart,
-        buildingPartId,
-        drawing,
-        drawingId,
-        isActive,
-        isClosed,
+        scope,
+        language,
+        entryCount,
+        isSubmitted,
       } = req.body;
 
       const projectObjectId = new ObjectId(projectId);
@@ -10068,29 +10058,70 @@ app.put(
           .json({ error: "Project or control plan entry not found" });
       }
 
-      const updatedTask = {
-        ...existingTask,
+      const baseTask = {
+        _id: existingTask._id,
+        Index: sanitizeTaskString(existingTask.Index),
+        SubjectMatterId: existingTask.SubjectMatterId,
+        ControlId: existingTask.ControlId,
+        Type: existingTask.Type,
+        Activity: sanitizeTaskString(existingTask.Activity),
+        "Acceptance Criteria": sanitizeTaskString(
+          existingTask["Acceptance Criteria"] ??
+            existingTask.acceptanceCriteria ??
+            existingTask.criteria
+        ),
+        "Documentation Requirements": sanitizeTaskString(
+          existingTask["Documentation Requirements"] ??
+            existingTask.documentationRequirements ??
+            existingTask.comment
+        ),
+        Time: sanitizeTaskString(existingTask.Time ?? existingTask.time),
+        Method: sanitizeTaskString(existingTask.Method ?? existingTask.method),
+        Scope: sanitizeTaskString(existingTask.Scope ?? existingTask.scope),
+        Language: sanitizeTaskString(
+          existingTask.Language ?? existingTask.language ?? "EN"
+        ),
+        controlId:
+          existingTask.controlId ??
+          existingTask.ControlId ??
+          existingTask.controlID ??
+          null,
+        entryCount: Number.isFinite(Number(existingTask.entryCount))
+          ? Number(existingTask.entryCount)
+          : 0,
+        isSubmitted: !!existingTask.isSubmitted,
       };
 
-      if (activity !== undefined) updatedTask.Activity = activity;
+      const updatedTask = { ...baseTask };
+
+      if (activity !== undefined)
+        updatedTask.Activity = sanitizeTaskString(activity);
       if (type !== undefined) updatedTask.Type = type;
-      if (index !== undefined) updatedTask.Index = index;
-      if (criteria !== undefined) updatedTask.criteria = criteria;
-      if (time !== undefined) updatedTask.time = time;
-      if (method !== undefined) updatedTask.method = method;
-      if (comment !== undefined) updatedTask.comment = comment;
-      if (professionGroup !== undefined)
-        updatedTask.professionGroup = professionGroup;
-      if (professionGroupId !== undefined)
-        updatedTask.professionGroupId = professionGroupId;
-      if (buildingPart !== undefined)
-        updatedTask.buildingPart = buildingPart;
-      if (buildingPartId !== undefined)
-        updatedTask.buildingPartId = buildingPartId;
-      if (drawing !== undefined) updatedTask.drawing = drawing;
-      if (drawingId !== undefined) updatedTask.drawingId = drawingId;
-      if (isActive !== undefined) updatedTask.isActive = !!isActive;
-      if (isClosed !== undefined) updatedTask.isClosed = !!isClosed;
+      if (index !== undefined) updatedTask.Index = sanitizeTaskString(index);
+      if (acceptanceCriteria !== undefined || criteria !== undefined) {
+        updatedTask["Acceptance Criteria"] = sanitizeTaskString(
+          acceptanceCriteria ?? criteria
+        );
+      }
+      if (documentationRequirements !== undefined || comment !== undefined) {
+        updatedTask["Documentation Requirements"] = sanitizeTaskString(
+          documentationRequirements ?? comment
+        );
+      }
+      if (time !== undefined) updatedTask.Time = sanitizeTaskString(time);
+      if (method !== undefined) updatedTask.Method = sanitizeTaskString(method);
+      if (scope !== undefined) updatedTask.Scope = sanitizeTaskString(scope);
+      if (language !== undefined)
+        updatedTask.Language = sanitizeTaskString(language);
+      if (entryCount !== undefined) {
+        const parsedEntryCount = Number(entryCount);
+        if (Number.isFinite(parsedEntryCount)) {
+          updatedTask.entryCount = parsedEntryCount;
+        }
+      }
+      if (isSubmitted !== undefined) {
+        updatedTask.isSubmitted = !!isSubmitted;
+      }
 
       const originalSubjectId = normalizeSubjectId(
         existingTask.SubjectMatterId || existingTask.subjectMatterId
@@ -10103,32 +10134,18 @@ app.put(
       );
 
       updatedTask.SubjectMatterId = updatedSubjectId;
-      updatedTask.subjectMatterId = updatedSubjectId;
-
-      let professionData =
-        project?.professionAssociatedData?.[updatedSubjectId]?.profession ||
-        project?.professionAssociatedData?.[updatedSubjectId];
-
-      if (!professionData && updatedSubjectId) {
-        professionData = await db.collection("professions").findOne({
-          SubjectMatterId: updatedSubjectId,
-        });
-      }
-
-      const professionSnapshot = buildProfessionSnapshot(
-        professionData,
-        updatedSubjectId
-      );
-      if (professionSnapshot) {
-        updatedTask.profession = professionSnapshot;
-      }
 
       const desiredControlIdNumber = parseControlIdNumber(
         controlId !== undefined ? controlId : existingTask.ControlId
       );
 
-      updatedTask.updatedAt = new Date().toISOString();
-      updatedTask.isActive = true;
+      const normalizedControlId =
+        desiredControlIdNumber ??
+        normalizeControlId(
+          controlId !== undefined ? controlId : updatedTask.ControlId
+        );
+      updatedTask.ControlId = normalizedControlId;
+      updatedTask.controlId = normalizedControlId;
 
       const tasksWithoutTarget = currentTasks.filter(
         (task) => task._id.toString() !== taskId
@@ -10151,7 +10168,7 @@ app.put(
         {
           $set: {
             tasks: tasksWithUpdatedEntry,
-            updatedAt: updatedTask.updatedAt,
+            updatedAt: new Date().toISOString(),
           },
         }
       );
