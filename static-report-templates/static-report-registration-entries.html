@@ -475,14 +475,14 @@
         async function populateTableData() {
             try {
                 // Get parameters from URL
-                const companyId = getUrlParameter('companyId') || '68adb95ea8c5323f1b948c6c';
-                const projectId = getUrlParameter('projectId') || '68adb9b3a8c5323f1b948c6e';
-                const subjectMatterId = getUrlParameter('subjectMatterId') || 'KP13';
+                const companyId = getUrlParameter('companyId') ;
+                const projectId = getUrlParameter('projectId') ;
+                const subjectMatterId = getUrlParameter('subjectMatterId') ;
 
                 console.log('Fetching data with params:', { companyId, projectId, subjectMatterId });
 
                 // Fetch static report registration entries data
-                const response = await fetch(`http://localhost:3000/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${subjectMatterId}`);
+                const response = await fetch(`${process.env.BACKEND_URL}/get-static-report-registration-entries?companyId=${companyId}&projectId=${projectId}&subjectMatterId=${subjectMatterId}`);
                 const data = await response.json();
 
                 console.log('API Response:', data);
