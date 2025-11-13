@@ -25,6 +25,11 @@ app.use(
 );
 app.use(express.static(path.join(__dirname, "public")));
 
+// Shared assets used by multiple static HTML reports
+app.get("/logo.png", (req, res) => {
+  res.sendFile(path.join(__dirname, "logo.png"));
+});
+
 // NOTE: Removed serving static files from root directory to prevent 
 // conflicts with React Router. HTML files from root should be accessed via API routes.
 
