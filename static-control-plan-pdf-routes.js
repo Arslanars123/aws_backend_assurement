@@ -689,7 +689,7 @@ module.exports = (db) => {
         .map((code) => `<li>${escapeHtml(getEuroCodeName(code))}</li>`)
         .join("");
 
-      const drawingsMarkup =
+      const drawingItemsMarkup =
         pdfData.drawings && pdfData.drawings.length
           ? pdfData.drawings
               .map((drawing, index) => {
@@ -702,28 +702,50 @@ module.exports = (db) => {
                 const drawingDate = formatDate(
                   drawing.uploadedAt || drawing.createdAt
                 );
-                const drawingUrl =
-                  drawing.s3Location || drawing.path || drawing.url;
-                return `<div class="scp-drawing-item">
-                  <span>${escapeHtml(drawingName)}</span>
-                  ${
-                    drawingDate
-                      ? `<span class="scp-meta-light">${escapeHtml(
-                          drawingDate
-                        )}</span>`
-                      : ""
-                  }
-                  ${
-                    drawingUrl
-                      ? `<a href="${escapeHtml(
-                          drawingUrl
-                        )}" target="_blank" rel="noopener">Open file</a>`
-                      : ""
-                  }
-                </div>`;
+                const drawingUrlRaw =
+                  drawing.s3Location || drawing.path || drawing.url || "";
+                const drawingUrl = drawingUrlRaw ? escapeHtml(drawingUrlRaw) : "";
+                const lowerUrl = drawingUrlRaw.toLowerCase();
+                let previewMarkup = "";
+                if (lowerUrl && /\.(png|jpe?g|gif|webp|svg)$/.test(lowerUrl)) {
+                  previewMarkup = `<div class="scp-drawing-preview"><img src="${drawingUrl}" alt="${escapeHtml(
+                    drawingName
+                  )}" /></div>`;
+                } else if (lowerUrl && /\.pdf$/.test(lowerUrl)) {
+                  previewMarkup = `<div class="scp-drawing-preview"><iframe src="${drawingUrl}" title="${escapeHtml(
+                    drawingName
+                  )}"></iframe></div>`;
+                }
+                const previewContent =
+                  previewMarkup ||
+                  `<div class="scp-drawing-preview-placeholder scp-muted">Preview not available.</div>`;
+                const linkMarkup = drawingUrl
+                  ? `<a href="${drawingUrl}" target="_blank" rel="noopener">Open file</a>`
+                  : `<span class="scp-muted">File link unavailable</span>`;
+
+                return `<article class="scp-drawing-item">
+                  <header class="scp-drawing-header">
+                    <span class="scp-drawing-name">${escapeHtml(drawingName)}</span>
+                    ${
+                      drawingDate
+                        ? `<span class="scp-meta-light">${escapeHtml(
+                            drawingDate
+                          )}</span>`
+                        : ""
+                    }
+                  </header>
+                  ${previewContent}
+                  <div class="scp-drawing-actions">
+                    ${linkMarkup}
+                  </div>
+                </article>`;
               })
               .join("")
-          : `<p class="scp-muted">No drawings uploaded.</p>`;
+          : "";
+
+      const drawingsSectionMarkup = drawingItemsMarkup
+        ? `<div class="scp-drawing-list">${drawingItemsMarkup}</div>`
+        : `<p class="scp-muted">No drawings uploaded.</p>`;
 
       const sanitizeCell = (value, fallback = "—") => {
         if (value === undefined || value === null) {
@@ -1125,14 +1147,36 @@ module.exports = (db) => {
         font-size: 0.85rem;
         color: #94a3b8;
       }
+      .scp-section-block {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 24px;
+      }
+      .scp-drawing-list {
+        display: grid;
+        gap: 16px;
+      }
       .scp-drawing-item {
         border: 1px solid #e2e8f0;
         border-radius: 10px;
-        padding: 12px;
+        padding: 16px;
         background: #f8fafc;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 10px;
+      }
+      .scp-drawing-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .scp-drawing-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #0f172a;
       }
       .scp-info-grid {
         display: grid;
@@ -1158,6 +1202,53 @@ module.exports = (db) => {
         margin: 0;
         font-weight: 600;
         color: #0f172a;
+      }
+      .scp-drawing-preview {
+        border: 1px solid #dfe3eb;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+      }
+      .scp-drawing-preview img {
+        width: 100%;
+        height: auto;
+        max-height: 260px;
+        object-fit: contain;
+        display: block;
+        background: #fff;
+      }
+      .scp-drawing-preview iframe {
+        width: 100%;
+        height: 280px;
+        border: none;
+        background: #ffffff;
+      }
+      .scp-drawing-preview-placeholder {
+        padding: 12px;
+        border: 1px dashed #dfe3eb;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+      .scp-drawing-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .scp-drawing-actions a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid #0f172a;
+        color: #0f172a;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .scp-drawing-actions a:hover {
+        background: #0f172a;
+        color: #ffffff;
       }
       .scp-table-wrapper {
         margin-top: 16px;
@@ -1395,17 +1486,15 @@ module.exports = (db) => {
           <p>For load-bearing structures according to DS1140 applicable for:</p>
           <p><strong>Eurocode:</strong> ${escapeHtml(specialText)}</p>
         </div>
-        <div class="scp-duo">
-          <div>
-            <h3>Applicable EU standards 2024</h3>
-            <ul class="scp-list">
-              ${euroCodeMarkup}
-            </ul>
-          </div>
-          <div>
-            <h3>Uploaded Drawings</h3>
-            ${drawingsMarkup}
-          </div>
+        <div class="scp-section-block">
+          <h3>Applicable EU standards 2024</h3>
+          <ul class="scp-list">
+            ${euroCodeMarkup}
+          </ul>
+        </div>
+        <div class="scp-section-block">
+          <h3>Uploaded Drawings</h3>
+          ${drawingsSectionMarkup}
         </div>
         <p class="scp-meta-light">Static Control Plan - Version ${escapeHtml(
           pdfData.gamma?.currentVersion || 1
