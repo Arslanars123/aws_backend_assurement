@@ -13970,8 +13970,6 @@ app.post(
         drawing,
         type,
         projectManager,
-        independentController,
-        worker,
         selectedType,
         createdAt,
         markPictures,
@@ -13992,10 +13990,6 @@ app.post(
       const parsedProjectManager = projectManager
         ? JSON.parse(projectManager)
         : null;
-      const parsedIndependentController = independentController
-        ? JSON.parse(independentController)
-        : null;
-      const parsedWorker = worker ? JSON.parse(worker) : null;
       const parsedMarkPictures = markPictures ? JSON.parse(markPictures) : [];
       const parsedMarkDescriptions = markDescriptions
         ? JSON.parse(markDescriptions)
@@ -14052,8 +14046,6 @@ app.post(
         drawing: parsedDrawing,
         pictures,
         projectManager: parsedProjectManager,
-        independentController: parsedIndependentController,
-        worker: parsedWorker,
         selectedType: selectedType || null,
         createdAt: createdAt || new Date().toISOString(),
         markPictures: parsedMarkPictures,
