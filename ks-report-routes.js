@@ -1859,7 +1859,7 @@ function createKsReportRoutes(db) {
             <td>${note.address || "-"}</td>
             <td>
               <a 
-                href="${process.env.FRONTEND_URL}/supervision-note/${
+                href="${process.env.BACKEND_URL}/supervision-note/${
           note._id
         }?companyId=${companyId}&projectId=${projectId}" 
                 target="_blank"
@@ -1943,7 +1943,7 @@ function createKsReportRoutes(db) {
                 : "-"
             }</td>
             <td>
-              <a href="${process.env.FRONTEND_URL}/supervision-note/${
+              <a href="${process.env.BACKEND_URL}/supervision-note/${
             agreement._id
           }?companyId=${companyId}&projectId=${projectId}&source=NewAgreementTable" target="_blank" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">
                 Show Agreement
@@ -1996,7 +1996,7 @@ function createKsReportRoutes(db) {
                 : "-"
             }</td>
             <td>
-              <a href="${process.env.FRONTEND_URL}/supervision-note/${
+              <a href="${process.env.BACKEND_URL}/supervision-note/${
             mention._id
           }?companyId=${companyId}&projectId=${projectId}&source=SafetyMentionTable" target="_blank" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">
                 Show Safety Mention
@@ -2049,7 +2049,7 @@ function createKsReportRoutes(db) {
                 : "-"
             }</td>
             <td>
-              <a href="${process.env.FRONTEND_URL}/supervision-note/${
+              <a href="${process.env.BACKEND_URL}/supervision-note/${
             request._id
           }?companyId=${companyId}&projectId=${projectId}&source=TechnicalRequestTable" target="_blank" style="background-color: #1e3a8a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block;">
                 Show Technical Request
