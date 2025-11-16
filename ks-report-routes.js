@@ -2616,6 +2616,7 @@ function createKsReportRoutes(db) {
         source === "NewAgreementTable" || source === "agreement";
       const isSafetyMention = source === "SafetyMentionTable";
       const isTechnicalRequest = source === "TechnicalRequestTable";
+      const isSupervisionIntern = source === "supervision-interns";
 
       let collectionName = "notes"; // default
       if (isAgreement) {
@@ -2624,6 +2625,8 @@ function createKsReportRoutes(db) {
         collectionName = "mentions";
       } else if (isTechnicalRequest) {
         collectionName = "requests";
+      } else if (isSupervisionIntern) {
+        collectionName = "supervision-interns";
       }
       let note = await db
         .collection(collectionName)
@@ -2633,13 +2636,24 @@ function createKsReportRoutes(db) {
         return res.status(404).send(`
           <html>
             <body style="font-family: Arial; padding: 40px; text-align: center;">
-              <h2>${isAgreement ? "Agreement" : "Note"} Not Found</h2>
+              <h2>${
+                isAgreement
+                  ? "Agreement"
+                  : isSupervisionIntern
+                  ? "Supervision Intern"
+                  : "Note"
+              } Not Found</h2>
               <p>No ${
-                isAgreement ? "agreement" : "supervision note"
+                isAgreement
+                  ? "agreement"
+                  : isSupervisionIntern
+                  ? "supervision intern"
+                  : "supervision note"
               } found with the given ID: ${noteId}</p>
               <p>Source parameter: ${source || "not provided"}</p>
               <p>Collection checked: ${collectionName}</p>
               <p>Is Agreement: ${isAgreement}</p>
+              <p>Is Supervision Intern: ${isSupervisionIntern}</p>
             </body>
           </html>
         `);
@@ -2679,6 +2693,8 @@ function createKsReportRoutes(db) {
         mainTitle = "SAFETY MENTION";
       } else if (isTechnicalRequest) {
         mainTitle = "TECHNICAL REQUEST";
+      } else if (isSupervisionIntern) {
+        mainTitle = "SUPERVISION INTERN";
       }
 
       // Update the main title in the HTML
@@ -2692,7 +2708,7 @@ function createKsReportRoutes(db) {
 
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="subjectField"></div>',
-        `id="subjectField">${note.item || ""}</div>`
+        `id="subjectField">${note.item || note.comment || ""}</div>`
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="mailSentDateField"></div>',
@@ -2711,7 +2727,7 @@ function createKsReportRoutes(db) {
         `id="addressField">${data.companyDetails?.address || ""}</div>`
       );
 
-      // Handle user info - for agreements, there might not be users field
+      // Handle user info - for agreements and supervision-interns, there might not be users field
       if (isAgreement) {
         // For agreements, try to get user info from the note if available
         supervisionNoteHtml = supervisionNoteHtml.replace(
@@ -2729,6 +2745,26 @@ function createKsReportRoutes(db) {
         supervisionNoteHtml = supervisionNoteHtml.replace(
           'id="userRoleField"></div>',
           `id="userRoleField">${note.users?.userRole || ""}</div>`
+        );
+      } else if (isSupervisionIntern) {
+        // For supervision-interns, use selectedProjectManager
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="recipientNameField"></div>',
+          `id="recipientNameField">${
+            note.selectedProjectManager?.name || note.users?.name || ""
+          }</div>`
+        );
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="recipientEmailField"></div>',
+          `id="recipientEmailField">${
+            note.selectedProjectManager?.username || note.users?.username || ""
+          }</div>`
+        );
+        supervisionNoteHtml = supervisionNoteHtml.replace(
+          'id="userRoleField"></div>',
+          `id="userRoleField">${
+            note.selectedProjectManager?.role || note.users?.userRole || ""
+          }</div>`
         );
       } else {
         supervisionNoteHtml = supervisionNoteHtml.replace(
@@ -2778,7 +2814,9 @@ function createKsReportRoutes(db) {
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="buildingPartField"></div>',
         `id="buildingPartField">${
-          note.buildingPart?.buildingPartDetail?.name || ""
+          note.buildingPart?.buildingPartDetail?.name ||
+          note.buildingParts?.name ||
+          ""
         }</div>`
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
@@ -2787,7 +2825,9 @@ function createKsReportRoutes(db) {
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="projectManagerField"></div>',
-        `id="projectManagerField">${note.projectManager?.name || ""}</div>`
+        `id="projectManagerField">${
+          note.projectManager?.name || note.selectedProjectManager?.name || ""
+        }</div>`
       );
       supervisionNoteHtml = supervisionNoteHtml.replace(
         'id="noteIdField"></div>',
@@ -2826,15 +2866,23 @@ function createKsReportRoutes(db) {
       }
 
       // Building Part Image
-      if (note.buildingPart?.buildingPartDetail?.image?.s3Location) {
+      const buildingPartImage =
+        note.buildingPart?.buildingPartDetail?.image?.s3Location ||
+        note.buildingParts?.image?.s3Location ||
+        note.buildingParts?.buildingPartDetail?.image?.s3Location;
+      const buildingPartName =
+        note.buildingPart?.buildingPartDetail?.name ||
+        note.buildingParts?.name ||
+        "";
+      if (buildingPartImage) {
         documentationHtml += `
           <div class="supervision-note-content-box">
             <div style="padding: 15px;">
               <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">
-                Building Part: ${note.buildingPart.buildingPartDetail.name}
+                Building Part: ${buildingPartName}
               </h4>
               <img
-                src="${note.buildingPart.buildingPartDetail.image.s3Location}"
+                src="${buildingPartImage}"
                 alt="Building Part"
                 style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
               />
@@ -2843,22 +2891,28 @@ function createKsReportRoutes(db) {
         `;
       }
 
-      // Annotated PDFs
-      if (note.annotatedPdfs && note.annotatedPdfs.length > 0) {
+      // Annotated PDFs - handle both annotatedPdfs (array) and annotatedPdf (single)
+      const annotatedPdfsArray =
+        note.annotatedPdfs || (note.annotatedPdf ? [note.annotatedPdf] : []);
+      if (annotatedPdfsArray.length > 0) {
         documentationHtml += `
           <div class="supervision-note-content-box">
             <div style="padding: 15px;">
               <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">Annotated Drawings</h4>
-              ${note.annotatedPdfs
+              ${annotatedPdfsArray
                 .map(
                   (pdf) => `
                 <div style="margin-bottom: 15px;">
                   <img
-                    src="${pdf.s3Location}"
+                    src="${
+                      pdf.s3Location || pdf.s3location || pdf.location || ""
+                    }"
                     alt="Annotated"
                     style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px;"
                   />
-                  <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pdf.originalname}</p>
+                  <p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${
+                    pdf.originalname || pdf.original || pdf.filename || ""
+                  }</p>
                 </div>
               `
                 )
@@ -2868,24 +2922,36 @@ function createKsReportRoutes(db) {
         `;
       }
 
-      // Mark Pictures
-      if (note.markPictureObjects && note.markPictureObjects.length > 0) {
+      // Mark Pictures - handle both markPictureObjects and markPictures
+      const markPictures = note.markPictureObjects || note.markPictures || [];
+      const markPictureDescriptions = note.markPictureDescriptions || [];
+      if (markPictures.length > 0) {
         documentationHtml += `
           <div class="supervision-note-content-box">
             <div style="padding: 15px;">
               <h4 style="margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #374151;">Mark Pictures</h4>
-              ${note.markPictureObjects
+              ${markPictures
                 .map(
-                  (pic) => `
+                  (pic, index) => `
                 <div style="margin-bottom: 15px;">
                   <img
-                    src="${pic.s3Location}"
-                    alt="Mark"
+                    src="${
+                      pic.s3Location || pic.s3location || pic.location || ""
+                    }"
+                    alt="Mark ${index + 1}"
                     style="width: 100%; height: auto; object-fit: contain; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 5px;"
                   />
                   ${
-                    pic.description
-                      ? `<p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${pic.description}</p>`
+                    pic.description ||
+                    (markPictureDescriptions[index] &&
+                    markPictureDescriptions[index] !== "null"
+                      ? markPictureDescriptions[index]
+                      : "")
+                      ? `<p style="font-size: 12px; color: #6b7280; margin: 5px 0 0 0;">${
+                          pic.description ||
+                          markPictureDescriptions[index] ||
+                          ""
+                        }</p>`
                       : ""
                   }
                 </div>
