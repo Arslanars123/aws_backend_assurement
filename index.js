@@ -14012,23 +14012,36 @@ app.post(
       if (req.files && req.files.length > 0) {
         req.files.forEach((file) => {
           if (file.fieldname === "pictures") {
-            pictures.push(file.filename);
+            pictures.push({
+              ...file, // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "general-picture",
+            });
           } else if (file.fieldname === "annotatedImage") {
-            annotatedImage = file.filename;
+            annotatedImage = {
+              ...file, // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "annotated-image",
+            };
           } else if (file.fieldname.startsWith("markPictures_")) {
-            markPicturesFiles.push(file.filename);
+            // Use spread operator to capture ALL file information including S3 details
+            markPicturesFiles.push({
+              ...file, // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "mark-picture",
+            });
           } else if (file.fieldname === "annotatedPdfs") {
             annotatedPdfs.push({
               ...file, // Captures ALL file information including S3 details
               uploadedAt: new Date(),
-              fileType: "file",
+              fileType: "annotated-pdf",
               originalName: file.originalname,
             });
           } else if (file.fieldname === "annotatedPdfImages") {
             annotatedPdfImages.push({
               ...file, // Captures ALL file information including S3 details
               uploadedAt: new Date(),
-              fileType: "file",
+              fileType: "annotated-pdf-image",
               originalName: file.originalname,
             });
           }
@@ -14048,10 +14061,10 @@ app.post(
         projectManager: parsedProjectManager,
         selectedType: selectedType || null,
         createdAt: createdAt || new Date().toISOString(),
-        markPictures: parsedMarkPictures,
+        markPictures: markPicturesFiles, // Store file objects with S3 details using spread operator
         markDescriptions: parsedMarkDescriptions,
         markers: parsedMarkers,
-        markPicturesFiles: markPicturesFiles,
+        annotatedImage: annotatedImage,
         annotatedPdfs: annotatedPdfs,
         annotatedPdfImages: annotatedPdfImages,
         annotatedImages: parsedAnnotatedImages,
