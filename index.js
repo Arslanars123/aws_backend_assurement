@@ -276,6 +276,10 @@ async function startServer() {
     const createBuildingPartDetailRoutes = require("./building-part-detail-routes");
     app.use("/", createBuildingPartDetailRoutes(db));
 
+    // Register standards routes after database connection is established
+    const createStandardsRoutes = require("./standards-routes");
+    app.use("/", createStandardsRoutes(db));
+
     const createProjectManagementRoutes = require("./project-management-routes");
     app.use("/", createProjectManagementRoutes(db));
 
