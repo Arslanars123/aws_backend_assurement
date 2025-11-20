@@ -36,10 +36,25 @@ function createProjectManagementRoutes(db) {
 
     for (const profession of professions) {
       delete profession?._id;
+
       const { professionID, companyId, ...professionDetails } = profession;
+
       SubjectMatterIdArray.push(profession.SubjectMatterId);
 
       if (projectsId) {
+        if (
+          profession.projectEuroCodes &&
+          profession.projectEuroCodes.length > 0
+        ) {
+          await db.collection("projectprofessioneurocodes").insertOne({
+            projectId: projectsId,
+            subjectMatterId: profession.SubjectMatterId,
+            euroCodes: profession.projectEuroCodes,
+            companyId: companyId,
+            createdAt: new Date(),
+          });
+        }
+
         for (const euroCode of profession.projectEuroCodes) {
           const docs = await db
             .collection("controls of static report")
@@ -134,59 +149,14 @@ function createProjectManagementRoutes(db) {
         {
           $push: { tasks: { $each: allTasks } },
           $set: { professionAssociatedData: mergedProfessionData },
-        }
+        },
+
+        { upsert: true }
       );
     }
+
+    return true;
   }
-
-  // Simple test endpoint
-  router.post("/test-add-project", async (req, res) => {
-    try {
-      console.log("=== TEST ENDPOINT REACHED ===");
-      console.log("Request body:", req.body);
-      
-      const { basicDetails, companyId } = req.body;
-      
-      if (!basicDetails?.name) {
-        return res.status(400).json({ error: "Name is required" });
-      }
-      
-      if (!companyId) {
-        return res.status(400).json({ error: "Company ID is required" });
-      }
-      
-      // Test ObjectId conversion
-      try {
-        const testObjectId = new ObjectId(companyId);
-        console.log("ObjectId conversion successful:", testObjectId);
-      } catch (objectIdError) {
-        console.log("ObjectId conversion failed:", objectIdError);
-        return res.status(400).json({ error: "Invalid company ID format" });
-      }
-      
-      // Test database insertion
-      const testResult = await db.collection("projects").insertOne({
-        name: basicDetails.name,
-        companyId: new ObjectId(companyId),
-        createdAt: new Date(),
-        test: true
-      });
-      
-      console.log("Test insert result:", testResult);
-      
-      res.status(201).json({ 
-        success: true, 
-        message: "Test project created successfully",
-        projectId: testResult.insertedId
-      });
-      
-    } catch (error) {
-      console.log("=== TEST ENDPOINT ERROR ===");
-      console.log("Error details:", error);
-      res.status(500).json({ error: "Test failed", details: error.message });
-    }
-  });
-
   router.post(
     "/add-project",
     upload.fields([
@@ -199,7 +169,7 @@ function createProjectManagementRoutes(db) {
       try {
         console.log("=== ADD PROJECT ENDPOINT REACHED ===");
         console.log("Request body:", JSON.stringify(req.body, null, 2));
-        
+
         const {
           basicDetails,
           professions,
@@ -253,15 +223,18 @@ function createProjectManagementRoutes(db) {
         console.log("Company ID type:", typeof companyId);
         console.log("Parsed Basic Details:", parsedBasicDetails);
         console.log("Checks with Created At:", checksWithCreatedAt.length);
-        
+
         const projectData = {
           ...parsedBasicDetails,
           companyId: companyId, // Store as string, not ObjectId
           checks: checksWithCreatedAt,
           createdAt: new Date(),
         };
-        
-        console.log("Project data to insert:", JSON.stringify(projectData, null, 2));
+
+        console.log(
+          "Project data to insert:",
+          JSON.stringify(projectData, null, 2)
+        );
 
         const result = await db.collection("projects").insertOne(projectData);
 
@@ -272,9 +245,11 @@ function createProjectManagementRoutes(db) {
 
         if (!newProjectId) {
           console.log("ERROR: No project ID returned from insert");
-          return res.status(500).json({ error: "Failed to create project - no ID returned" });
+          return res
+            .status(500)
+            .json({ error: "Failed to create project - no ID returned" });
         }
-        
+
         console.log("Project created successfully with ID:", newProjectId);
 
         const supervisionchecklist = await db
@@ -323,12 +298,17 @@ function createProjectManagementRoutes(db) {
             const objectIds = allUserIds.map((id) => new ObjectId(id));
 
             // Get all users first to check their existing roles
-            const users = await db.collection("users").find({
-              _id: { $in: objectIds }
-            }).toArray();
+            const users = await db
+              .collection("users")
+              .find({
+                _id: { $in: objectIds },
+              })
+              .toArray();
 
             const bulkOps = objectIds.map((userId) => {
-              const user = users.find(u => u._id.toString() === userId.toString());
+              const user = users.find(
+                (u) => u._id.toString() === userId.toString()
+              );
               const updateQuery = {
                 $addToSet: {
                   projectsId: newProjectId,
@@ -339,7 +319,11 @@ function createProjectManagementRoutes(db) {
               // This prevents auto-assignment as project manager when adding to new projects
               if (user) {
                 updateQuery.$set = { userRole: user.role || "Worker" };
-                console.log(`🔄 Adding user ${user.username} to project ${newProjectId} as ${user.role || "Worker"}`);
+                console.log(
+                  `🔄 Adding user ${
+                    user.username
+                  } to project ${newProjectId} as ${user.role || "Worker"}`
+                );
               }
 
               return {
@@ -479,53 +463,6 @@ function createProjectManagementRoutes(db) {
       }
     }
   );
-
-  // POST /store-project - Simple project creation
-  router.post(
-    "/store-project",
-    upload.fields([
-      { name: "picture", maxCount: 1 },
-      { name: "pictures", maxCount: 10 },
-    ]),
-    async (req, res) => {
-      try {
-        const { name, address, postCode, city, startDate, companyId } =
-          req.body;
-        console.log(req.files);
-
-        let picture = null;
-        let pictures = [];
-
-        // Handle single picture upload
-        if (req.files["picture"] && req.files["picture"].length > 0) {
-          picture = req.files["picture"][0].filename;
-        }
-
-        // Handle multiple pictures upload
-        if (req.files["pictures"] && req.files["pictures"].length > 0) {
-          pictures = req.files["pictures"].map((file) => file.filename);
-        }
-
-        // Insert the data into the database
-        const result = await db.collection("projects").insertOne({
-          name,
-          address,
-          postCode,
-          city,
-          startDate,
-          picture,
-          pictures,
-          companyId,
-        });
-
-        res.status(201).json(result);
-      } catch (error) {
-        console.error("Error:", error);
-        res.status(500).json({ error: "Failed to create project" });
-      }
-    }
-  );
-
   // POST /update-project/:id - Update existing project
   router.post(
     "/update-project/:id",
