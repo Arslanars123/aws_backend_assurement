@@ -266,11 +266,10 @@ function createStaticReportControlsRoutes(db) {
             },
           }
         );
-      } else {
-        console.log(
-          `⚠️ No gamma document found for projectId: ${projectId}, subjectMatterId: ${finalSubjectMatterId}. Using version 1.`
-        );
       }
+
+      // Decide version safely (default 1 if no gammaDoc or version missing)
+      const version = gammaDoc?.currentVersion ?? 1;
 
       // Check if an editcontrol document already exists for this projectId + subjectMatterId + pos
       const existingEditControl = await db.collection("editcontrols").findOne({
@@ -332,7 +331,7 @@ function createStaticReportControlsRoutes(db) {
             ? "Edited control updated successfully"
             : "Edited control created successfully",
           editedControlId: editedControlId,
-          version: gammaDoc.currentVersion || result?.values?.currentVersion,
+          version: version, // ✅ safe version
           action: existingEditControl ? "updated" : "created",
         });
       } else {
