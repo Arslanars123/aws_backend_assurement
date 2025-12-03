@@ -152,7 +152,7 @@ app.get("/convert-pdf-to-png", async (req, res) => {
 const cloudUri =
   process.env.MONGODB_BASE_URI ||
   "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
-const localUri = "mongodb://localhost:27017/mughees";
+const localUri = "mongodb://localhost:27017/construction_db";
 let uri = cloudUri;
 let client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 60000, // Increased timeout
@@ -167,7 +167,7 @@ let client = new MongoClient(uri, {
   // Add heartbeat options
   heartbeatFrequencyMS: 10000,
 });
-const dbName = "mughees";
+const dbName = "construction_db";
 let db;
 
 // JWT Secret Key
