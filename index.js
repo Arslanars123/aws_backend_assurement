@@ -3444,6 +3444,51 @@ async function addOrUpdateProfessions({ professions, projectsId }) {
     throw new Error("No professions provided in the request!");
   }
 
+  // Check for euro code conflicts if adding to a project
+  if (projectsId) {
+    // Get all existing professions in the project
+    const existingProfessions = await db
+      .collection("professions")
+      .find({ projectId: projectsId })
+      .toArray();
+
+    // Extract and flatten all euro codes from existing professions
+    const existingEuroCodes = new Set();
+    existingProfessions.forEach((existingProf) => {
+      if (existingProf.EuroCode && Array.isArray(existingProf.EuroCode)) {
+        existingProf.EuroCode.forEach((code) => {
+          // Normalize euro codes to strings for comparison
+          existingEuroCodes.add(String(code));
+        });
+      } else if (existingProf.EuroCode) {
+        // Handle single euro code (not array)
+        existingEuroCodes.add(String(existingProf.EuroCode));
+      }
+    });
+
+    // Check each new profession's euro codes against existing ones
+    for (const profession of professions) {
+      if (profession.EuroCode && Array.isArray(profession.EuroCode)) {
+        for (const euroCode of profession.EuroCode) {
+          const normalizedCode = String(euroCode);
+          if (existingEuroCodes.has(normalizedCode)) {
+            throw new Error(
+              "you cannot add profession because same euro code profession exist"
+            );
+          }
+        }
+      } else if (profession.EuroCode) {
+        // Handle single euro code (not array)
+        const normalizedCode = String(profession.EuroCode);
+        if (existingEuroCodes.has(normalizedCode)) {
+          throw new Error(
+            "you cannot add profession because same euro code profession exist"
+          );
+        }
+      }
+    }
+  }
+
   let SubjectMatterIdArray = [];
 
   const staticDocumentCheckList = await db
