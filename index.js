@@ -17,7 +17,7 @@ const staticReportAPI = require("./static-report-api");
 
 // PDF to PNG conversion function
 async function convertPdfToPng(pdfPath, outputDir) {
-  console.log("nano test");
+  console.log("nano testing");
   try {
     const { fromPath } = require("pdf2pic");
     const options = {
