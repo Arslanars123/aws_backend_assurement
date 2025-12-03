@@ -2,6 +2,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.901.0",
     "aws-sdk": "^2.1692.0",
+    "axios": "^1.13.2",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.3",
@@ -19,6 +20,7 @@
     "nodemailer": "^7.0.3",
     "pdf-poppler": "^0.2.1",
     "pdf2pic": "^3.2.0",
+    "pdfkit": "^0.17.2",
     "playwright": "^1.56.1",
     "puppeteer": "^21.11.0",
     "xlsx": "^0.18.5"

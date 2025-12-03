@@ -9,6 +9,9 @@ require("dotenv").config();
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
+const PDFDocument = require("pdfkit");
+const axios = require("axios");
+
 // Import static report API
 const staticReportAPI = require("./static-report-api");
 
@@ -149,7 +152,7 @@ app.get("/convert-pdf-to-png", async (req, res) => {
 const cloudUri =
   process.env.MONGODB_BASE_URI ||
   "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
-const localUri = "mongodb://localhost:27017/construction_db";
+const localUri = "mongodb://localhost:27017/mughees";
 let uri = cloudUri;
 let client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 60000, // Increased timeout
@@ -164,7 +167,7 @@ let client = new MongoClient(uri, {
   // Add heartbeat options
   heartbeatFrequencyMS: 10000,
 });
-const dbName = "construction_db";
+const dbName = "mughees";
 let db;
 
 // JWT Secret Key
@@ -19856,6 +19859,129 @@ app.get("/debug-signatures", async (req, res) => {
       message: "Internal server error",
       error: error.message,
     });
+  }
+});
+
+async function generateNotesPdf(notes, res) {
+  const doc = new PDFDocument({ size: "A4", margin: 40 });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", 'attachment; filename="notes.pdf"');
+
+  doc.pipe(res);
+
+  // ===== Title =====
+  doc.fontSize(18).text("Notes Report", { align: "center" }).moveDown(2);
+
+  // ===== Table layout settings =====
+  const tableLeft = 40;
+  const tableRight = 560;
+  const tableWidth = tableRight - tableLeft;
+
+  const tableTop = 120;
+  const headerHeight = 22;
+
+  const col1X = tableLeft + 5; // Item
+  const col2X = 200; // Comment
+  const col3X = 400; // Image
+
+  // ===== Header background (blue) =====
+  doc
+    .save()
+    .rect(tableLeft, tableTop - 5, tableWidth, headerHeight)
+    .fill("#1E88E5"); // blue
+
+  // Header text (white)
+  doc.fillColor("white").fontSize(12);
+  doc.text("Item", col1X, tableTop - 2);
+  doc.text("Comment", col2X, tableTop - 2);
+  doc.text("Image", col3X, tableTop - 2);
+
+  // Restore & set back to black for rows
+  doc.restore();
+  doc.fillColor("black");
+
+  // Header border (box around header)
+  doc.rect(tableLeft, tableTop - 5, tableWidth, headerHeight).stroke();
+
+  // ===== Rows =====
+  let y = tableTop + headerHeight + 5;
+  const rowHeight = 70;
+
+  for (const note of notes) {
+    // Page break if needed
+    if (y > doc.page.height - 80) {
+      doc.addPage();
+
+      // Optional: redraw header on new page
+      const newTableTop = 60;
+
+      doc
+        .save()
+        .rect(tableLeft, newTableTop - 5, tableWidth, headerHeight)
+        .fill("#1E88E5");
+
+      doc.fillColor("white").fontSize(12);
+      doc.text("Item", col1X, newTableTop - 2);
+      doc.text("Comment", col2X, newTableTop - 2);
+      doc.text("Image", col3X, newTableTop - 2);
+
+      doc.restore();
+      doc.fillColor("black");
+
+      doc.rect(tableLeft, newTableTop - 5, tableWidth, headerHeight).stroke();
+
+      y = newTableTop + headerHeight + 5;
+    }
+
+    const item = note.item || "";
+    const comment = note.comment || "";
+    const imageUrl = note.buildingPart?.buildingPartImage?.s3Location || "";
+
+    // === Row border (box) ===
+    doc.rect(tableLeft, y - 5, tableWidth, rowHeight).stroke();
+
+    // Row text
+    doc.fontSize(10);
+    doc.text(item, col1X, y, { width: 150 });
+    doc.text(comment, col2X, y, { width: 180 });
+
+    // Row image (S3 thumbnail)
+    if (imageUrl) {
+      try {
+        const imgBuffer = await fetchImageBuffer(imageUrl);
+        doc.image(imgBuffer, col3X, y - 3, {
+          fit: [120, 60],
+        });
+      } catch (e) {
+        console.log("Image error:", imageUrl, e.message);
+        doc.text("(image error)", col3X, y, { width: 120 });
+      }
+    } else {
+      doc.text("(no image)", col3X, y, { width: 120 });
+    }
+
+    y += rowHeight;
+  }
+
+  doc.end();
+}
+
+async function fetchImageBuffer(url) {
+  const response = await axios.get(url, { responseType: "arraybuffer" });
+  return Buffer.from(response.data, "binary");
+}
+
+// --- Route that uses notes collection and calls the method ---
+app.get("/notes/pdf", async (req, res) => {
+  try {
+    const notesCollection = await db.collection("notes"); // ⬅️ your notes collection
+    const notes = await notesCollection.find().toArray();
+
+    await generateNotesPdf(notes, res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error generating PDF");
   }
 });
 
