@@ -15,6 +15,10 @@ function createStaticReportControlsRoutes(db) {
           .json({ error: "projectEuroCodes array is required" });
       }
 
+      if (!subjectMatterId) {
+        return res.status(400).json({ error: "subjectMatterId is required" });
+      }
+
       // Normalize to strings so 5 and "5" match the same docs
       const euroCodesStr = projectEuroCodes
         .map((v) => String(v).trim())
@@ -24,12 +28,18 @@ function createStaticReportControlsRoutes(db) {
       console.log("🔍 Pipeline debug - euroCodesStr:", euroCodesStr);
       console.log("🔍 Pipeline debug - projectId:", projectId);
 
+      // Build match conditions - subjectMatterId is mandatory
+      const matchConditions = {
+        euroCodeStr: { $in: euroCodesStr },
+        subjectMatterId: subjectMatterId,
+      };
+
       const pipeline = [
         // coerce stored euroCode (number or string) to string
         { $addFields: { euroCodeStr: { $toString: "$euroCode" } } },
 
-        // match any requested euro code (ignore subjectMatterId - filter only by EuroCode)
-        { $match: { euroCodeStr: { $in: euroCodesStr } } },
+        // match by euro code and subjectMatterId (if provided)
+        { $match: matchConditions },
 
         // return each entry flattened with doc metadata
         { $unwind: { path: "$entries", includeArrayIndex: "entryIndex" } },
@@ -51,7 +61,7 @@ function createStaticReportControlsRoutes(db) {
       // Debug: Check what documents match the first few stages
       const debugPipeline = [
         { $addFields: { euroCodeStr: { $toString: "$euroCode" } } },
-        { $match: { euroCodeStr: { $in: euroCodesStr } } },
+        { $match: matchConditions },
         { $limit: 5 },
       ];
 
