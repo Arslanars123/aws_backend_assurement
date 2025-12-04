@@ -14641,6 +14641,7 @@ app.post(
         b322x,
         a5x,
         specialText,
+        special,
         exc,
         cc,
         controllerT,
@@ -14684,6 +14685,7 @@ app.post(
         b322x, // Add the b322x field
         a5x, // Add the a5x field
         specialText, // Add the specialText field
+        special, // Add the special field
         exc, // Add the exc field
         cc, // Add the cc field
         controllerT, // Add the controllerT field
@@ -14719,6 +14721,7 @@ app.post(
         b322x,
         a5x,
         specialText,
+        special,
         exc,
         cc,
         controllerT,
@@ -14739,6 +14742,7 @@ app.post(
       if (b322x) updateData.b322x = b322x;
       if (a5x) updateData.a5x = a5x;
       if (specialText) updateData.specialText = specialText;
+      if (special !== undefined) updateData.special = special;
       if (exc) updateData.exc = exc;
       if (cc) updateData.cc = cc;
       if (controllerT) updateData.controllerT = controllerT;
@@ -15205,6 +15209,7 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
       cc,
       name,
       email,
+      special,
       projectsId,
       companyId,
       createdAt,
@@ -15261,6 +15266,9 @@ app.post("/store-gamma", upload.single("picture"), async (req, res) => {
     if (email && email.trim() !== "") {
       documentToInsert.email = email;
     }
+    if (special !== undefined && special !== null) {
+      documentToInsert.special = special;
+    }
 
     console.log(
       `✅ Creating gamma with currentVersion: ${documentToInsert.currentVersion}`
@@ -15291,6 +15299,7 @@ app.post(
         cc,
         name,
         email,
+        special,
         picture2,
       } = req.body;
 
@@ -15306,6 +15315,7 @@ app.post(
       if (cc) updateData.cc = cc;
       if (cc) updateData.name = name;
       if (cc) updateData.email = email;
+      if (special !== undefined) updateData.special = special;
 
       updateData.picture = picture2;
       // If an image is uploaded, include its path in the update
