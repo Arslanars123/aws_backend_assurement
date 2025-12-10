@@ -152,7 +152,7 @@ app.get("/convert-pdf-to-png", async (req, res) => {
 const cloudUri =
   process.env.MONGODB_BASE_URI ||
   "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
-const localUri = "mongodb://localhost:27017/construction_db";
+const localUri = "mongodb://localhost:27017/mughees";
 let uri = cloudUri;
 let client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 60000, // Increased timeout
@@ -167,7 +167,7 @@ let client = new MongoClient(uri, {
   // Add heartbeat options
   heartbeatFrequencyMS: 10000,
 });
-const dbName = "construction_db";
+const dbName = "mughees";
 let db;
 
 // JWT Secret Key
@@ -10244,6 +10244,155 @@ app.put(
     }
   }
 );
+
+const DEEPL_API_KEY = "4fc248a3-0eb3-49d3-9495-b758dde2b87f";
+const DEEPL_API_URL = "https://api.deepl.com/v2/translate";
+
+// Translation endpoint old
+/*app.post("/translate", async (req, res) => {
+  try {
+    const { texts, target_lang, source_lang = "EN" } = req.body;
+
+    if (!texts || !Array.isArray(texts) || texts.length === 0) {
+      return res.status(400).json({ error: "Texts array is required" });
+    }
+
+    if (!target_lang) {
+      return res.status(400).json({ error: "target_lang is required" });
+    }
+
+    // Prepare form data for DeepL API
+    const formData = new URLSearchParams();
+    formData.append("auth_key", DEEPL_API_KEY);
+    formData.append("target_lang", target_lang);
+    formData.append("source_lang", source_lang);
+
+    // Add each text as a separate 'text' parameter
+    texts.forEach((text) => {
+      formData.append("text", text);
+    });
+
+    // Call DeepL API
+    const response = await axios.post(DEEPL_API_URL, formData, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    if (response.data && response.data.translations) {
+      // Return translations in the format expected by frontend
+      const translations = response.data.translations.map((t, index) => ({
+        original: texts[index],
+        translated: t.text,
+      }));
+
+      res.json(translations);
+    } else {
+      throw new Error("Invalid response from DeepL API");
+    }
+  } catch (error) {
+    console.error("Translation error:", error);
+    res.status(500).json({
+      error: "Translation failed",
+      message: error.message,
+    });
+  }
+});*/
+
+const CACHE_FILE = path.join(process.cwd(), "cache.json");
+
+// Read cache file
+function readCache() {
+  if (!fs.existsSync(CACHE_FILE)) return {};
+  return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+}
+
+// Write cache file
+function writeCache(cache) {
+  fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+}
+
+app.post("/translate", async (req, res) => {
+  try {
+    const { texts, target_lang, source_lang = "EN" } = req.body;
+
+    if (!texts || !Array.isArray(texts) || texts.length === 0) {
+      return res.status(400).json({ error: "Texts array is required" });
+    }
+
+    if (!target_lang) {
+      return res.status(400).json({ error: "target_lang is required" });
+    }
+
+    const cache = readCache();
+    const results = [];
+
+    // Check cache for each text
+    const textsToTranslate = [];
+
+    texts.forEach((text) => {
+      const key = `${text}_${source_lang}_${target_lang}`;
+
+      if (cache[key]) {
+        // Cached translation found
+
+        console.log("cache");
+        results.push({
+          original: text,
+          translated: cache[key],
+          fromCache: true,
+        });
+      } else {
+        // Needs translation
+        textsToTranslate.push(text);
+      }
+    });
+
+    // If all translations exist in cache → return immediately
+    if (textsToTranslate.length === 0) {
+      return res.json(results);
+    }
+
+    // Prepare form data for DeepL API
+    const formData = new URLSearchParams();
+    formData.append("auth_key", DEEPL_API_KEY);
+    formData.append("target_lang", target_lang);
+    formData.append("source_lang", source_lang);
+
+    textsToTranslate.forEach((text) => formData.append("text", text));
+
+    // Call DeepL API
+    const response = await axios.post(DEEPL_API_URL, formData, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+    // Store new translations + push to results
+    response.data.translations.forEach((t, index) => {
+      const original = textsToTranslate[index];
+      const key = `${original}_${source_lang}_${target_lang}`;
+
+      // Save into cache
+      cache[key] = t.text;
+
+      results.push({
+        original,
+        translated: t.text,
+        fromCache: false,
+      });
+    });
+    console.log("first time");
+    // Update cache file
+    writeCache(cache);
+
+    res.json(results);
+  } catch (error) {
+    console.error("Translation error:", error);
+    res.status(500).json({
+      error: "Translation failed",
+      message: error.message,
+    });
+  }
+});
 
 app.post("/approv-task", async (req, res) => {
   try {
