@@ -1,0 +1,516 @@
+{
+    "page": {
+      "size": "A4",
+      "width": 612,
+      "height": 792,
+      "margins": { "top": 50, "bottom": 50, "left": 50, "right": 50 }
+    },
+    "styles": {
+      "h1": { "font": "Helvetica-Bold", "size": 14, "color": "black", "gapAfter": 10 },
+      "h2": { "font": "Helvetica-Bold", "size": 13, "color": "black", "gapAfter": 8 },
+      "h3": { "font": "Helvetica-Bold", "size": 12, "color": "black", "gapAfter": 6 },
+      "p":  { "font": "Helvetica", "size": 11, "color": "black", "gapAfter": 6 },
+      "small": { "font": "Helvetica", "size": 10, "color": "black", "gapAfter": 4 },
+      "dynamic": { "font": "Helvetica", "size": 11, "color": "red", "gapAfter": 6 },
+      "list": { "font": "Helvetica", "size": 11, "color": "black", "gapAfter": 2 }
+    },
+    "pages": [
+      {
+        "pageNumber": 1,
+        "blocks": [
+          { "type": "text", "style": "p", "text": "Executing part:" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "companyInfo",
+            "defaultText": "Own company Adress CVR and contact info.- company setup."
+          },
+          { "type": "text", "style": "p", "text": "Static control plan:" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "projectName",
+            "defaultText": "Project name – project setup."
+          },
+          { "type": "text", "style": "p", "text": "For those executed within the construction part:" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "documentIdB2",
+            "defaultText": "Document ID: B2.X number Special text"
+          },
+          { "type": "text", "style": "p", "text": "Applicable EU standards 2024" },
+  
+          {
+            "type": "list",
+            "style": "list",
+            "items": [
+              "Eurocode 0: Design basis for structures",
+              "Eurocode 1: Load on load-bearing structures",
+              "Eurocode 2: Concrete structures",
+              "Eurocode 3: Steel structures",
+              "Eurocode 4: Composite Structures",
+              "Eurocode 5: Timber structures",
+              "Eurocode 6: Masonry structures",
+              "Eurocode 7: Geotechnical Engineering",
+              "Eurocode 8: Structures in seismic areas",
+              "Eurocode 9: Aluminium structures.",
+              "EN 1520: Lightweight concrete with porous aggregates",
+              "EN 12602: Aerated concrete"
+            ]
+          },
+  
+          { "type": "text", "style": "p", "text": "Report - system" },
+          { "type": "text", "style": "p", "text": "Part of Quality Assurance Denmark" },
+          { "type": "text", "style": "p", "text": "logo" }
+        ]
+      },
+  
+      {
+        "pageNumber": 2,
+        "blocks": [
+          { "type": "text", "style": "h1", "text": "STATIC CONTROL PLAN" },
+          { "type": "text", "style": "p", "text": "For load-bearing structures, cf. DS1140 applies to:" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "constructionPart",
+            "defaultText": "Construction Part: Special text"
+          },
+          { "type": "text", "style": "p", "text": "The control plan is built according to the current EU standard:" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "eurocode",
+            "defaultText": "Eurocode: Eurocode"
+          },
+  
+          { "type": "text", "style": "h3", "text": "CONSTRUCTION CASE:" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "projectInfoHeader",
+            "defaultText": "Project INFO Main Contractor/Custumer"
+          },
+  
+          { "type": "text", "style": "p", "text": "ID/Case no. Project setup. Name Project setup" },
+          { "type": "text", "style": "p", "text": "Name Project setup Address Project setup" },
+          { "type": "text", "style": "p", "text": "Address Project setup Post no./City. Project setup" },
+          { "type": "text", "style": "p", "text": "post no./City Project setup CVR no. Project setup" },
+          { "type": "text", "style": "p", "text": "Contact person Project setup Email. Project setup" },
+          { "type": "text", "style": "p", "text": "Startup Project setup Contact person Project setup" },
+  
+          { "type": "text", "style": "h3", "text": "Signing:" },
+          { "type": "text", "style": "p", "text": "Same data as static report." },
+          { "type": "text", "style": "h3", "text": "DOCUMENT TYPE: VERSION CONSTRUCTION CLASS" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "docTypeVersionClass",
+            "defaultText": "STATIC CONTROL PLAN 1 OR OTHER, KKX"
+          },
+  
+          { "type": "text", "style": "p", "text": "Signed Prepared/approved by: Company" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "signedPreparedBy",
+            "defaultText": "[Select Date] Admin – company organization Own company– company organization"
+          },
+  
+          { "type": "text", "style": "p", "text": "Signed Own Control (OC) Company" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "signedOC",
+            "defaultText": "[Select Date] Project manager– company organization Own company– company organization"
+          },
+  
+          { "type": "text", "style": "p", "text": "Signed Independent controller (IC) Company" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "signedIC",
+            "defaultText": "[Select Date] company organization"
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 3,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "Document completion status" },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections."
+          },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document."
+          },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "Expected approval time 14 days, after which the content of the document is considered approved."
+          },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "docStatusBlock",
+            "defaultText": "Status: Approval\n18-11-2025 Under Approval\n18-11-2025"
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 4,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "Content" },
+          { "type": "text", "style": "p", "text": "Static control plan" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "contentConstructionPart",
+            "defaultText": "Construction Part: Special text"
+          },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "contentEurocode",
+            "defaultText": "Eurocode: Eurocode"
+          },
+          { "type": "text", "style": "p", "text": "Signing:" },
+  
+          {
+            "type": "list",
+            "style": "list",
+            "items": [
+              "1. General",
+              "1.1 Description of the control work",
+              "1.2 Control types",
+              "1.3 Level of control",
+              "1.4 Organisation of the control work",
+              "1.5 Controllers",
+              "1.6 Use of assistance",
+              "1.7 Follow-up on deviations",
+              "2. General controls",
+              "2.1 General",
+              "2.2 Control section",
+              "2.3 Explanation of the selection of controls",
+              "2.4 Checkpoints",
+              "3. Special controls",
+              "3.1 General",
+              "3.2 Special checkpoints",
+              "4. Documentation",
+              "4.1 General description of documentation",
+              "4.2 Documentation of general controls",
+              "4.3 Documentation of special controls",
+              "4.4 Documentation of deviations and follow-up",
+              "4.5 Checking Control Documentation",
+              "5. Listings",
+              "5.1 Scope of control",
+              "6. Control points selected",
+              "7. Static controls (schematic)"
+            ]
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 5,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "1. GENERAL" },
+          { "type": "text", "style": "h3", "text": "1.1 Description of the control work" },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "This static control plan covers the control for the execution of the construction section mentioned on the front page and associated works."
+          },
+          { "type": "text", "style": "p", "text": "The inspection is carried out in accordance with the building designer's:" },
+          { "type": "text", "style": "h3", "text": "LISTING DOCUMENT CONSTRUCTION PART: ACCOMPLISHMENT" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "b2StaticControlPlanLine",
+            "defaultText": "B2. X number STATIC CONTROL PLAN Special text"
+          },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "The focus is on seeing between the construction designer's material and the execution of the construction section on the site."
+          },
+          { "type": "text", "style": "p", "text": "The following forms the basis for the checks carried out:" },
+          {
+            "type": "list",
+            "style": "list",
+            "items": [
+              "Building Regulations 2018 - BR18",
+              "SBI 271 \"Documentation and Control of Load-Bearing Structures\"",
+              "DS/EN 1990 DK NA:2021, Annex B5",
+              "DS 1140:2019 \"Execution of load-bearing structures – General control\"",
+              "DS/INF 1140:2022 \"Guide to DS 1140\""
+            ]
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 6,
+        "blocks": [
+          { "type": "text", "style": "h3", "text": "1.2 Control types" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "constructionClassLine",
+            "defaultText": "The structure is classified as construction class KKX"
+          },
+          { "type": "text", "style": "p", "text": "Self-monitoring and independent control of the work carried out are carried out." },
+          { "type": "text", "style": "p", "text": "There is no requirement for third-party control." },
+          { "type": "text", "style": "h3", "text": "Self-monitoring" },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "The self-inspection of the execution is carried out by the person who carried out the construction when the construction or parts thereof are completed."
+          },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "Standards: This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE."
+          },
+          { "type": "text", "style": "h3", "text": "Independent controls" }
+        ]
+      },
+  
+      {
+        "pageNumber": 7,
+        "blocks": [
+          { "type": "text", "style": "h3", "text": "1.4 Organisation of the control work" },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "Each inspection section must be assigned one, and only one inspector who is ensured that he has not contributed to the execution of the construction section in question."
+          },
+          { "type": "text", "style": "h3", "text": "1.5 Controllers" },
+          { "type": "text", "style": "p", "text": "Applier Name Education Experience Initials" },
+          { "type": "text", "style": "p", "text": "Own Controller From Company organisation OC Fixed" },
+          { "type": "text", "style": "p", "text": "Independent controller From Company organisation IC Fixed" }
+        ]
+      },
+  
+      {
+        "pageNumber": 8,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "2. GENERAL CONTROLS" },
+          { "type": "text", "style": "h3", "text": "2.1 General" },
+          { "type": "text", "style": "p", "text": "The general control is carried out in accordance with the Constitution. DS 1140." },
+          { "type": "text", "style": "h3", "text": "Control subject" },
+          {
+            "type": "list",
+            "style": "list",
+            "items": [
+              "B.1 Execution basis from design",
+              "B.2 Basis for execution of the work",
+              "B.3 The material and products",
+              "B.4 Reception control",
+              "B.5 Execution",
+              "B.5.1 Transport and storage on site",
+              "B.5.2 Previously completed construction",
+              "B.5.3 Assembly of prefabricated structural parts",
+              "B.5.4 Execution of non-certified structural parts",
+              "B.6 Final inspection"
+            ]
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 9,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "3. SPECIAL CONTROLS" },
+          { "type": "text", "style": "h3", "text": "3.1 General" },
+          { "type": "text", "style": "p", "text": "There are no special controls assigned by the building designers, cf. This construction section." },
+          { "type": "text", "style": "h3", "text": "3.2 Special checkpoints" },
+          { "type": "text", "style": "p", "text": "Cf. section 3.1, no special controls are required." },
+          { "type": "text", "style": "p", "text": "Data from Special Control points - IF Any" },
+          { "type": "text", "style": "p", "text": "ID SPECIAL CONTROL DESCRIPTION" },
+  
+          { "type": "text", "style": "h2", "text": "4. DOCUMENTATION" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "b3StaticInspectionReportLine",
+            "defaultText": "B3. X number STATIC INSPECTION REPORT Special text"
+          },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "a5AsDoneLine",
+            "defaultText": "A5. X number A5 AS DONE Special text"
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 10,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "5. LISTINGS" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "listingB2",
+            "defaultText": "B2. X number STATIC CONTROL PLAN Special text"
+          },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "listingB3",
+            "defaultText": "B3. X number STATIC INSPECTION REPORT Special text"
+          },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "listingA5",
+            "defaultText": "A5. X number A5 AS DONE Special text"
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 11,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "6. CONTROL POINTS SELECTED" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "drawingName",
+            "defaultText": "DRAWING NAME: File name"
+          },
+          { "type": "text", "style": "p", "text": "Marked main drawing." },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "Above are points indicated where the executor intends to carry out inspections. (If no comment is received on this within 8 days, this is considered approved)"
+          }
+        ]
+      },
+  
+      {
+        "pageNumber": 12,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "7. STATIC CONTROLS (SCHEMATIC)" },
+          {
+            "type": "dynamic",
+            "style": "dynamic",
+            "field": "b2StaticControlPlanHeader",
+            "defaultText": "B2. X number STATIC CONTROL PLAN Special text"
+          },
+          {
+            "type": "text",
+            "style": "p",
+            "text": "In the form below, control has been carried out of the project material that has been handed out when awarding awards, and forms the basis for the intended and executed work, which is a dynamic process until delivery."
+          },
+          { "type": "text", "style": "h3", "text": "Standards and norms:" },
+          { "type": "text", "style": "p", "text": "DS/EN 13670: Execution of concrete structuresDI Denmark" },
+          { "type": "text", "style": "p", "text": "DS/EN 206: Concrete – Specification, Properties, Manufacture and ConformityDS1140 Load-Bearing Structures" }
+        ]
+      },
+  
+      {
+        "pageNumber": 13,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1" },
+  
+          {
+            "type": "table",
+            "tableId": "B1",
+            "columns": [
+              { "key": "pos", "label": "POS", "width": 50 },
+              { "key": "subject", "label": "CHECKING THE SUBJECT", "width": 140 },
+              { "key": "part", "label": "CONSTRUCTION PART", "width": 120 },
+              { "key": "basis", "label": "BASIS", "width": 70 },
+              { "key": "method", "label": "CONTROL METHOD", "width": 90 },
+              { "key": "scope", "label": "SCOPE", "width": 50 },
+              { "key": "control", "label": "CONTROL", "width": 50 }
+            ],
+            "rows": [
+              { "pos": "7.1.1", "subject": "Special text", "part": "Special text", "basis": "Design", "method": "Review", "scope": "100%", "control": "IC" },
+              { "pos": "7.1.2", "subject": "Special text", "part": "Special text", "basis": "Design", "method": "Review", "scope": "100%", "control": "IC" },
+              { "pos": "7.1.3", "subject": "Special text", "part": "Special text", "basis": "Design", "method": "Review", "scope": "100%", "control": "IC" },
+              { "pos": "7.1.4", "subject": "Special text", "part": "Special text", "basis": "Design", "method": "Review", "scope": "100%", "control": "IC" },
+              { "pos": "7.1.5", "subject": "Special text", "part": "Special text", "basis": "Design", "method": "Review", "scope": "100%", "control": "IC" }
+            ],
+            "note": "TODO: replace rows from MongoDB collection later"
+          },
+  
+          { "type": "text", "style": "h3", "text": "Checklist" },
+          { "type": "text", "style": "small", "text": "Fixed text" },
+          { "type": "text", "style": "small", "text": "IC = Independet controler" },
+          { "type": "text", "style": "small", "text": "Fixed text" },
+          { "type": "text", "style": "small", "text": "100%" }
+        ]
+      },
+  
+      {
+        "pageNumber": 14,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2" },
+          { "type": "text", "style": "p", "text": "Special text XX% IC / OC (placeholder rows)" },
+          { "type": "text", "style": "p", "text": "Scope rules placeholder (KK1/KK2 vs KK3/KK4)" },
+          { "type": "text", "style": "small", "text": "Fixed text" },
+          { "type": "text", "style": "small", "text": "IC = Independet controler" },
+          { "type": "text", "style": "small", "text": "OC = Own Controller (where applicable)" }
+        ]
+      },
+  
+      {
+        "pageNumber": 15,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3" },
+          { "type": "text", "style": "p", "text": "Special text XX% IC / OC (placeholder rows)" },
+          { "type": "text", "style": "p", "text": "Scope rules placeholder (KK1/KK2 vs KK3/KK4)" },
+          { "type": "text", "style": "small", "text": "Fixed text" },
+          { "type": "text", "style": "small", "text": "IC = Independet controler" },
+          { "type": "text", "style": "small", "text": "OC = Own Controller (where applicable)" }
+        ]
+      },
+  
+      {
+        "pageNumber": 16,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "7.4 RECEIPT CONTROL DELIVERIES B4" },
+          { "type": "text", "style": "p", "text": "Special text XX% IC / OC (placeholder rows)" },
+          { "type": "text", "style": "p", "text": "Scope rules placeholder (KK1/KK2 vs KK3/KK4)" },
+          { "type": "text", "style": "small", "text": "Fixed text" },
+          { "type": "text", "style": "small", "text": "IC = Independet controler" },
+          { "type": "text", "style": "small", "text": "OC = Own Controller (where applicable)" }
+        ]
+      },
+  
+      {
+        "pageNumber": 17,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "7.5 PERFORMANCE CONTROL; B5" },
+          { "type": "text", "style": "p", "text": "Special text XX% IC / OC (placeholder rows)" },
+          { "type": "text", "style": "p", "text": "Scope rules placeholder (KK1/KK2 vs KK3/KK4)" },
+          { "type": "text", "style": "small", "text": "Fixed text" },
+          { "type": "text", "style": "small", "text": "IC = Independet controler" },
+          { "type": "text", "style": "small", "text": "OC = Own Controller (where applicable)" }
+        ]
+      },
+  
+      {
+        "pageNumber": 18,
+        "blocks": [
+          { "type": "text", "style": "h2", "text": "7.6 FINAL INSPECTION B6" },
+          { "type": "text", "style": "p", "text": "Special text XX% IC / OC (placeholder rows)" },
+          { "type": "text", "style": "p", "text": "Scope rules placeholder (KK1/KK2 vs KK3/KK4)" },
+          { "type": "text", "style": "small", "text": "Fixed text" },
+          { "type": "text", "style": "small", "text": "IC = Independet controler" },
+          { "type": "text", "style": "small", "text": "OC = Own Controller (where applicable)" }
+        ]
+      }
+    ]
+  }
+  

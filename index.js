@@ -152,7 +152,7 @@ app.get("/convert-pdf-to-png", async (req, res) => {
 const cloudUri =
   process.env.MONGODB_BASE_URI ||
   "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
-const localUri = "mongodb://localhost:27017/construction_db";
+const localUri = "mongodb://localhost:27017/mughees";
 let uri = cloudUri;
 let client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 60000, // Increased timeout
@@ -167,7 +167,7 @@ let client = new MongoClient(uri, {
   // Add heartbeat options
   heartbeatFrequencyMS: 10000,
 });
-const dbName = "construction_db";
+const dbName = "mughees";
 let db;
 
 // JWT Secret Key
@@ -301,6 +301,10 @@ async function startServer() {
     // Register static control plan PDF routes
     const createStaticControlPlanPdfRoutes = require("./static-control-plan-pdf-routes");
     app.use("/", createStaticControlPlanPdfRoutes(db));
+
+    // Register RP1 PDF routes
+    const createRP1PdfRoutes = require("./routes/rp1-pdf-routes");
+    app.use("/", createRP1PdfRoutes(db));
 
     // Register KS report routes after database connection is established
     const createKsReportRoutes = require("./ks-report-routes");
@@ -15345,103 +15349,311 @@ app.post(
     }
   }
 );
-app.post("/store-gamma", upload.single("picture"), async (req, res) => {
-  try {
-    // Receive the new fields - use req.fields for multipart form data
-    const {
-      profession,
-      item,
-      independentController,
-      x,
-      text,
-      exc,
-      cc,
-      name,
-      email,
-      special,
-      projectsId,
-      companyId,
-      createdAt,
-      currentVersion,
-    } = req.fields || req.body; // Handle both multipart and JSON
-
-    const parsedProfessions =
-      typeof profession === "string" ? JSON.parse(profession) : profession;
-
-    // Only parse independentController if it exists (not null/undefined)
-    let parsedIndependentController = null;
-    if (independentController) {
-      parsedIndependentController =
-        typeof independentController === "string"
-          ? JSON.parse(independentController)
-          : independentController;
-    }
-
-    // Handle file upload with spread operator to capture ALL file information
-    const picture = req.file
-      ? {
-          ...req.file, // Captures ALL file information including S3 details
-          uploadedAt: new Date(),
-          fileType: "gamma-picture",
-        }
-      : null;
-
-    // Build the document object, only including fields that exist
-    const documentToInsert = {
-      profession: parsedProfessions,
-      item,
-      x,
-      text,
-      projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
-      companyId,
-      picture,
-      currentVersion: currentVersion || 1, // ✨ Set initial version to 1
-      createdAt: createdAt || new Date().toISOString(),
-    };
-
-    // Only add optional fields if they exist and are not empty
-    if (parsedIndependentController) {
-      documentToInsert.independentController = parsedIndependentController;
-    }
-    if (exc && exc.trim() !== "") {
-      documentToInsert.exc = exc;
-    }
-    if (cc && cc.trim() !== "") {
-      documentToInsert.cc = cc;
-    }
-    if (name && name.trim() !== "") {
-      documentToInsert.name = name;
-    }
-    if (email && email.trim() !== "") {
-      documentToInsert.email = email;
-    }
-    if (special !== undefined && special !== null) {
-      documentToInsert.special = special;
-    }
-
-    console.log(
-      `✅ Creating gamma with currentVersion: ${documentToInsert.currentVersion}`
-    );
-
-    // Insert the data into the database
-    const result = await db.collection("gammas").insertOne(documentToInsert);
-
-    res.status(201).json(result);
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Failed to create gamma" });
-  }
-});
 app.post(
-  "/update-gamma/:id",
-  upload.single("picture"), // Handles a single file upload with the field name "picture"
+  "/store-gamma",
+  upload.fields([
+    { name: "picture", maxCount: 1 },
+    { name: "generalPictures", maxCount: 10 },
+    { name: "markPictures", maxCount: 10 },
+    { name: "annotatedImage", maxCount: 1 },
+    { name: "originalPdf", maxCount: 1 },
+    { name: "annotatedPdf", maxCount: 1 },
+    { name: "annotatedPdfs", maxCount: 10 },
+  ]),
   async (req, res) => {
     try {
-      // Receive the new fields
+      // Receive the new fields - use req.fields for multipart form data
+      const {
+        profession,
+        item,
+        independentController,
+        onController,
+        x,
+        text,
+        exc,
+        cc,
+        name,
+        email,
+        special,
+        projectsId,
+        companyId,
+        createdAt,
+        currentVersion,
+        drawing,
+        generalPictureDescriptions,
+        markPictureDescriptions,
+        markPictureIndices,
+      } = req.fields || req.body; // Handle both multipart and JSON
+
+      const parsedProfessions =
+        typeof profession === "string" ? JSON.parse(profession) : profession;
+
+      // Only parse independentController if it exists (not null/undefined)
+      let parsedIndependentController = null;
+      if (independentController) {
+        parsedIndependentController =
+          typeof independentController === "string"
+            ? JSON.parse(independentController)
+            : independentController;
+      }
+
+      // Only parse onController if it exists (not null/undefined)
+      let parsedOnController = null;
+      if (onController) {
+        parsedOnController =
+          typeof onController === "string"
+            ? JSON.parse(onController)
+            : onController;
+      }
+
+      // Parse drawing field - similar to deviations
+      let parsedDrawing = null;
+      try {
+        parsedDrawing = drawing ? JSON.parse(drawing) : null;
+        console.log("Drawing parsed successfully");
+      } catch (e) {
+        console.error("Error parsing drawing:", e);
+        return res.status(400).json({ error: "Invalid drawing JSON" });
+      }
+
+      // Handle file uploads - similar to deviations
+      const picture =
+        req.files["picture"] && req.files["picture"].length > 0
+          ? {
+              ...req.files["picture"][0], // Captures ALL file information including S3 details
+              uploadedAt: new Date(),
+              fileType: "gamma-picture",
+            }
+          : null;
+
+      // Handle annotated image
+      let annotatedImage = null;
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        const file = req.files["annotatedImage"][0];
+        annotatedImage = {
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "annotated-image",
+        };
+      }
+
+      // Handle original PDF
+      let originalPdf = null;
+      if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
+        const file = req.files["originalPdf"][0];
+        originalPdf = {
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "original-pdf",
+        };
+      }
+
+      // Handle annotated PDF
+      let annotatedPdf = null;
+      if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
+        const file = req.files["annotatedPdf"][0];
+        annotatedPdf = {
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        };
+      }
+
+      // Handle multiple annotated PDFs
+      let annotatedPdfs = [];
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        }));
+      }
+
+      // Handle general pictures
+      let generalPictures = [];
+      if (
+        req.files["generalPictures"] &&
+        req.files["generalPictures"].length > 0
+      ) {
+        generalPictures = req.files["generalPictures"].map((file) => ({
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "general-picture",
+        }));
+      }
+
+      // Handle mark pictures
+      let markPictures = [];
+      if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
+        markPictures = req.files["markPictures"].map((file) => ({
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "mark-picture",
+        }));
+      }
+
+      // Parse description fields
+      let parsedGeneralPictureDescriptions = [];
+      if (generalPictureDescriptions) {
+        try {
+          if (Array.isArray(generalPictureDescriptions)) {
+            parsedGeneralPictureDescriptions = generalPictureDescriptions;
+          } else if (typeof generalPictureDescriptions === "string") {
+            parsedGeneralPictureDescriptions = JSON.parse(
+              generalPictureDescriptions
+            );
+          }
+        } catch (e) {
+          console.error("Error parsing generalPictureDescriptions:", e);
+          parsedGeneralPictureDescriptions = [];
+        }
+      }
+
+      let parsedMarkPictureDescriptions = [];
+      if (markPictureDescriptions) {
+        try {
+          if (Array.isArray(markPictureDescriptions)) {
+            parsedMarkPictureDescriptions = markPictureDescriptions;
+          } else if (typeof markPictureDescriptions === "string") {
+            parsedMarkPictureDescriptions = JSON.parse(markPictureDescriptions);
+          }
+        } catch (e) {
+          console.error("Error parsing markPictureDescriptions:", e);
+          parsedMarkPictureDescriptions = [];
+        }
+      }
+
+      let parsedMarkPictureIndices = [];
+      if (markPictureIndices) {
+        try {
+          if (Array.isArray(markPictureIndices)) {
+            parsedMarkPictureIndices = markPictureIndices
+              .map((indexStr) => {
+                try {
+                  return typeof indexStr === "string"
+                    ? JSON.parse(indexStr)
+                    : indexStr;
+                } catch (e) {
+                  return null;
+                }
+              })
+              .filter((index) => index !== null);
+          } else if (typeof markPictureIndices === "string") {
+            parsedMarkPictureIndices = JSON.parse(markPictureIndices);
+            if (!Array.isArray(parsedMarkPictureIndices)) {
+              parsedMarkPictureIndices = [parsedMarkPictureIndices];
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing markPictureIndices:", e);
+          parsedMarkPictureIndices = [];
+        }
+      }
+
+      // Build the document object, only including fields that exist
+      const documentToInsert = {
+        profession: parsedProfessions,
+        item,
+        x,
+        text,
+        projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
+        companyId,
+        picture,
+        currentVersion: currentVersion || 1, // ✨ Set initial version to 1
+        createdAt: createdAt || new Date().toISOString(),
+      };
+
+      // Only add optional fields if they exist and are not empty
+      if (parsedIndependentController) {
+        documentToInsert.independentController = parsedIndependentController;
+      }
+      if (parsedOnController) {
+        documentToInsert.onController = parsedOnController;
+      }
+      if (parsedDrawing) {
+        documentToInsert.drawing = parsedDrawing;
+      }
+      if (annotatedImage) {
+        documentToInsert.annotatedImage = annotatedImage;
+      }
+      if (originalPdf) {
+        documentToInsert.originalPdf = originalPdf;
+      }
+      if (annotatedPdf) {
+        documentToInsert.annotatedPdf = annotatedPdf;
+      }
+      if (annotatedPdfs.length > 0) {
+        documentToInsert.annotatedPdfs = annotatedPdfs;
+      }
+      if (generalPictures.length > 0) {
+        documentToInsert.generalPictures = generalPictures;
+      }
+      if (parsedGeneralPictureDescriptions.length > 0) {
+        documentToInsert.generalPictureDescriptions =
+          parsedGeneralPictureDescriptions;
+      }
+      if (markPictures.length > 0) {
+        documentToInsert.markPictures = markPictures;
+      }
+      if (parsedMarkPictureDescriptions.length > 0) {
+        documentToInsert.markPictureDescriptions =
+          parsedMarkPictureDescriptions;
+      }
+      if (parsedMarkPictureIndices.length > 0) {
+        documentToInsert.markPictureIndices = parsedMarkPictureIndices;
+      }
+      if (exc && exc.trim() !== "") {
+        documentToInsert.exc = exc;
+      }
+      if (cc && cc.trim() !== "") {
+        documentToInsert.cc = cc;
+      }
+      if (name && name.trim() !== "") {
+        documentToInsert.name = name;
+      }
+      if (email && email.trim() !== "") {
+        documentToInsert.email = email;
+      }
+      if (special !== undefined && special !== null) {
+        documentToInsert.special = special;
+      }
+
+      console.log(
+        `✅ Creating gamma with currentVersion: ${documentToInsert.currentVersion}`
+      );
+
+      // Insert the data into the database
+      const result = await db.collection("gammas").insertOne(documentToInsert);
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Failed to create gamma" });
+    }
+  }
+);
+app.post(
+  "/update-gamma/:id",
+  upload.fields([
+    { name: "picture", maxCount: 1 },
+    { name: "generalPictures", maxCount: 10 },
+    { name: "markPictures", maxCount: 10 },
+    { name: "annotatedImage", maxCount: 1 },
+    { name: "originalPdf", maxCount: 1 },
+    { name: "annotatedPdf", maxCount: 1 },
+    { name: "annotatedPdfs", maxCount: 10 },
+  ]),
+  async (req, res) => {
+    try {
+      // Receive the new fields - use req.fields for multipart form data
       const {
         profession,
         item,
         independentD,
+        onController,
         x,
         text,
         exc,
@@ -15450,14 +15662,60 @@ app.post(
         email,
         special,
         picture2,
-      } = req.body;
+        drawing,
+        generalPictureDescriptions,
+        markPictureDescriptions,
+        markPictureIndices,
+      } = req.fields || req.body; // Handle both multipart and JSON
 
       const updateData = {};
 
+      // Parse profession field - similar to store endpoint
+      let parsedProfession = null;
+      if (profession) {
+        try {
+          parsedProfession =
+            typeof profession === "string"
+              ? JSON.parse(profession)
+              : profession;
+          console.log("Profession parsed successfully");
+        } catch (e) {
+          console.error("Error parsing profession:", e);
+          return res.status(400).json({ error: "Invalid profession JSON" });
+        }
+      }
+
+      // Parse drawing field - similar to deviations
+      let parsedDrawing = null;
+      if (drawing) {
+        try {
+          parsedDrawing =
+            typeof drawing === "string" ? JSON.parse(drawing) : drawing;
+          console.log("Drawing parsed successfully");
+        } catch (e) {
+          console.error("Error parsing drawing:", e);
+          return res.status(400).json({ error: "Invalid drawing JSON" });
+        }
+      }
+
+      // Parse onController field
+      let parsedOnController = null;
+      if (onController) {
+        try {
+          parsedOnController =
+            typeof onController === "string"
+              ? JSON.parse(onController)
+              : onController;
+        } catch (e) {
+          console.error("Error parsing onController:", e);
+        }
+      }
+
       // Dynamically add provided fields to updateData
-      if (profession) updateData.profession = profession;
+      if (parsedProfession) updateData.profession = parsedProfession;
       if (item) updateData.item = item;
       if (independentD) updateData.independentD = independentD;
+      if (parsedOnController) updateData.onController = parsedOnController;
       if (x) updateData.x = x;
       if (text) updateData.text = text;
       if (exc) updateData.exc = exc;
@@ -15465,15 +15723,143 @@ app.post(
       if (cc) updateData.name = name;
       if (cc) updateData.email = email;
       if (special !== undefined) updateData.special = special;
+      if (parsedDrawing) updateData.drawing = parsedDrawing;
 
       updateData.picture = picture2;
       // If an image is uploaded, include its path in the update
-      if (req.file) {
+      if (req.files["picture"] && req.files["picture"].length > 0) {
         updateData.picture = {
-          ...req.file, // Captures ALL file information including S3 details
+          ...req.files["picture"][0], // Captures ALL file information including S3 details
           uploadedAt: new Date(),
           fileType: "user-picture",
         };
+      }
+
+      // Handle annotated image
+      if (
+        req.files["annotatedImage"] &&
+        req.files["annotatedImage"].length > 0
+      ) {
+        const file = req.files["annotatedImage"][0];
+        updateData.annotatedImage = {
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "annotated-image",
+        };
+      }
+
+      // Handle original PDF
+      if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
+        const file = req.files["originalPdf"][0];
+        updateData.originalPdf = {
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "original-pdf",
+        };
+      }
+
+      // Handle annotated PDF
+      if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
+        const file = req.files["annotatedPdf"][0];
+        updateData.annotatedPdf = {
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        };
+      }
+
+      // Handle multiple annotated PDFs
+      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+        updateData.annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "annotated-pdf",
+        }));
+      }
+
+      // Handle general pictures
+      if (
+        req.files["generalPictures"] &&
+        req.files["generalPictures"].length > 0
+      ) {
+        updateData.generalPictures = req.files["generalPictures"].map(
+          (file) => ({
+            ...file,
+            uploadedAt: new Date(),
+            fileType: "general-picture",
+          })
+        );
+      }
+
+      // Handle mark pictures
+      if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
+        updateData.markPictures = req.files["markPictures"].map((file) => ({
+          ...file,
+          uploadedAt: new Date(),
+          fileType: "mark-picture",
+        }));
+      }
+
+      // Parse description fields
+      if (generalPictureDescriptions) {
+        try {
+          let parsed = [];
+          if (Array.isArray(generalPictureDescriptions)) {
+            parsed = generalPictureDescriptions;
+          } else if (typeof generalPictureDescriptions === "string") {
+            parsed = JSON.parse(generalPictureDescriptions);
+          }
+          if (parsed.length > 0) {
+            updateData.generalPictureDescriptions = parsed;
+          }
+        } catch (e) {
+          console.error("Error parsing generalPictureDescriptions:", e);
+        }
+      }
+
+      if (markPictureDescriptions) {
+        try {
+          let parsed = [];
+          if (Array.isArray(markPictureDescriptions)) {
+            parsed = markPictureDescriptions;
+          } else if (typeof markPictureDescriptions === "string") {
+            parsed = JSON.parse(markPictureDescriptions);
+          }
+          if (parsed.length > 0) {
+            updateData.markPictureDescriptions = parsed;
+          }
+        } catch (e) {
+          console.error("Error parsing markPictureDescriptions:", e);
+        }
+      }
+
+      if (markPictureIndices) {
+        try {
+          let parsed = [];
+          if (Array.isArray(markPictureIndices)) {
+            parsed = markPictureIndices
+              .map((indexStr) => {
+                try {
+                  return typeof indexStr === "string"
+                    ? JSON.parse(indexStr)
+                    : indexStr;
+                } catch (e) {
+                  return null;
+                }
+              })
+              .filter((index) => index !== null);
+          } else if (typeof markPictureIndices === "string") {
+            parsed = JSON.parse(markPictureIndices);
+            if (!Array.isArray(parsed)) {
+              parsed = [parsed];
+            }
+          }
+          if (parsed.length > 0) {
+            updateData.markPictureIndices = parsed;
+          }
+        } catch (e) {
+          console.error("Error parsing markPictureIndices:", e);
+        }
       }
 
       // Get current document to increment version
@@ -15486,7 +15872,12 @@ app.post(
       }
 
       // Increment currentVersion (or set to 1 if not exists)
-      const newVersion = (currentDoc.currentVersion || 0) + 1;
+      // Ensure currentVersion is a number to avoid string concatenation
+      const currentVersionNum =
+        typeof currentDoc.currentVersion === "number"
+          ? currentDoc.currentVersion
+          : parseInt(currentDoc.currentVersion, 10) || 0;
+      const newVersion = currentVersionNum + 1;
       updateData.currentVersion = newVersion;
       updateData.updatedAt = new Date().toISOString();
 
@@ -17298,6 +17689,11 @@ app.get("/get-betas", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch betas" });
   }
 });
+
+//test pdf new way
+
+//end test pdf new way
+
 app.get("/get-alpha-detail/:id", async (req, res) => {
   try {
     // First, find the alpha document

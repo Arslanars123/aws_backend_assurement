@@ -1,0 +1,721 @@
+{
+  "pageWidth": 612,
+  "pageHeight": 792,
+  "margins": {
+    "top": 50,
+    "bottom": 50,
+    "left": 50,
+    "right": 50
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "content": [
+        { "text": "Executing part: Own company Adress CVR and contact info.- company setup.", "x": 50, "y": 100, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Static control plan: Project name – project setup.", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "For those executed within the construction part:", "x": 50, "y": 140, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "Document ID: B2.X number Special text",
+          "x": 50, "y": 160, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "documentId_line"
+        },
+        { "text": "Applicable EU standards 2024", "x": 50, "y": 180, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "Eurocode 0: Design basis for structures", "x": 70, "y": 205, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 1: Load on load-bearing structures", "x": 70, "y": 220, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 2: Concrete structures", "x": 70, "y": 235, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 3: Steel structures", "x": 70, "y": 250, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 4: Composite Structures", "x": 70, "y": 265, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 5: Timber structures", "x": 70, "y": 280, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 6: Masonry structures", "x": 70, "y": 295, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 7: Geotechnical Engineering", "x": 70, "y": 310, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 8: Structures in seismic areas", "x": 70, "y": 325, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode 9: Aluminium structures.", "x": 70, "y": 340, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "EN 1520: Lightweight concrete with porous aggregates", "x": 70, "y": 355, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "EN 12602: Aerated concrete", "x": 70, "y": 370, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "Report - system", "x": 50, "y": 400, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Part of Quality Assurance Denmark", "x": 50, "y": 420, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "logo", "x": 50, "y": 440, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 2,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 1 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "STATIC CONTROL PLAN", "x": 50, "y": 115, "fontSize": 14, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "For load-bearing structures, cf. DS1140 applies to:", "x": 50, "y": 140, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+
+        {
+          "text": "Construction Part: Special text",
+          "x": 50, "y": 160, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "constructionPartSpecialText"
+        },
+
+        { "text": "The control plan is built according to the current EU standard:", "x": 50, "y": 180, "fontSize": 12, "fontFamily": "Helvetica", "color": "black" },
+
+        {
+          "text": "Eurocode: Eurocode",
+          "x": 50, "y": 200, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "selectedEurocode"
+        },
+
+        { "text": "CONSTRUCTION CASE:", "x": 50, "y": 225, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "Project INFO Main Contractor/Custumer",
+          "x": 50, "y": 245, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectInfoHeader"
+        },
+
+        {
+          "text": "ID/Case no. Project setup. Name Project setup",
+          "x": 50, "y": 270, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectIdAndName"
+        },
+        {
+          "text": "Name Project setup Address Project setup",
+          "x": 50, "y": 290, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectNameAndAddress"
+        },
+        {
+          "text": "Address Project setup Post no./City. Project setup",
+          "x": 50, "y": 310, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectAddressAndCity"
+        },
+        {
+          "text": "post no./City Project setup CVR no. Project setup",
+          "x": 50, "y": 330, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectCityAndCvr"
+        },
+        {
+          "text": "Contact person Project setup Email. Project setup",
+          "x": 50, "y": 350, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectContactAndEmail"
+        },
+        {
+          "text": "Startup Project setup Contact person Project setup",
+          "x": 50, "y": 370, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectStartupAndContact"
+        },
+
+        { "text": "Signing:", "x": 50, "y": 400, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "Same data as static report.",
+          "x": 50, "y": 420, "fontSize": 12, "fontFamily": "Helvetica",
+          "color": "black"
+        },
+
+        {
+          "text": "DOCUMENT TYPE: VERSION CONSTRUCTION CLASS",
+          "x": 50, "y": 450, "fontSize": 11, "fontFamily": "Helvetica-Bold", "color": "black"
+        },
+        {
+          "text": "STATIC CONTROL PLAN 1 OR OTHER, KKX",
+          "x": 50, "y": 470, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "documentTypeVersionClass"
+        },
+
+        {
+          "text": "Signed Prepared/approved by: Company",
+          "x": 50, "y": 500, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "preparedByCompany"
+        },
+        {
+          "text": "[Select Date] Admin – company organization Own company– company organization",
+          "x": 50, "y": 520, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "adminSigningRow"
+        },
+
+        {
+          "text": "Signed Own Control (OC) Company",
+          "x": 50, "y": 545, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "ownControlCompany"
+        },
+        {
+          "text": "[Select Date] Project manager– company organization Own company– company organization",
+          "x": 50, "y": 565, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "projectManagerSigningRow"
+        },
+
+        {
+          "text": "Signed Independent controller (IC) Company",
+          "x": 50, "y": 590, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "independentControllerCompany"
+        },
+        {
+          "text": "[Select Date] company organization",
+          "x": 50, "y": 610, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "icSigningDateOrg"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 3,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 2 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Document completion status", "x": 50, "y": 120, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections.",
+          "x": 50, "y": 145, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        {
+          "text": "The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document.",
+          "x": 50, "y": 190, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        {
+          "text": "Expected approval time 14 days, after which the content of the document is considered approved.",
+          "x": 50, "y": 220, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        {
+          "text": "Status: Approval",
+          "x": 50, "y": 255, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "approvalStatus"
+        },
+        {
+          "text": "18-11-2025 Under Approval",
+          "x": 50, "y": 275, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "approvalDateLine1"
+        },
+        {
+          "text": "18-11-2025",
+          "x": 50, "y": 295, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "approvalDateLine2"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 4,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 3 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Content", "x": 50, "y": 120, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+
+        { "text": "Static control plan", "x": 50, "y": 150, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Construction Part: Special text", "x": 50, "y": 165, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Eurocode: Eurocode", "x": 50, "y": 180, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Signing:", "x": 50, "y": 195, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "1. General", "x": 50, "y": 225, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.1 Description of the control work", "x": 70, "y": 240, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.2 Control types", "x": 70, "y": 255, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.3 Level of control", "x": 70, "y": 270, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.4 Organisation of the control work", "x": 70, "y": 285, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.5 Controllers", "x": 70, "y": 300, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.6 Use of assistance", "x": 70, "y": 315, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.7 Follow-up on deviations", "x": 70, "y": 330, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "2. General controls", "x": 50, "y": 355, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "2.1 General", "x": 70, "y": 370, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "2.2 Control section", "x": 70, "y": 385, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "2.3 Explanation of the selection of controls", "x": 70, "y": 400, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "2.4 Checkpoints", "x": 70, "y": 415, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "3. Special controls", "x": 50, "y": 440, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "3.1 General", "x": 70, "y": 455, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "3.2 Special checkpoints", "x": 70, "y": 470, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "4. Documentation", "x": 50, "y": 495, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "4.1 General description of documentation", "x": 70, "y": 510, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "4.2 Documentation of general controls", "x": 70, "y": 525, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "4.3 Documentation of special controls", "x": 70, "y": 540, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "4.4 Documentation of deviations and follow-up", "x": 70, "y": 555, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "4.5 Checking Control Documentation", "x": 70, "y": 570, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "5. Listings", "x": 50, "y": 595, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "5.1 Scope of control", "x": 70, "y": 610, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "6. Control points selected", "x": 50, "y": 635, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7. Static controls (schematic)", "x": 50, "y": 650, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7.1 Review of the execution basis from the design B1", "x": 70, "y": 665, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7.2 Verification of the basis for execution of the work B2", "x": 70, "y": 680, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7.3 Verification of Documentation of Materials and Products B3", "x": 70, "y": 695, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7.4 Receipt control deliveries B4", "x": 70, "y": 710, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7.5 Performance control B5", "x": 70, "y": 725, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7.6 Final inspection B6", "x": 70, "y": 740, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 5,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 4 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1. GENERAL", "x": 50, "y": 120, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "1.1 Description of the control work", "x": 50, "y": 145, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+
+        {
+          "text": "This static control plan covers the control for the execution of the construction section mentioned on the front page and associated works.",
+          "x": 50, "y": 170, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        { "text": "The inspection is carried out in accordance with the building designer's:", "x": 50, "y": 195, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        {
+          "text": "LISTING DOCUMENT CONSTRUCTION PART: ACCOMPLISHMENT",
+          "x": 50, "y": 220, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        {
+          "text": "B2. X number STATIC CONTROL PLAN Special text",
+          "x": 50, "y": 240, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2ListingLine"
+        },
+
+        {
+          "text": "The focus is on seeing between the construction designer's material and the execution of the construction section on the site.",
+          "x": 50, "y": 265, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+
+        {
+          "text": "The following forms the basis for the checks carried out:",
+          "x": 50, "y": 290, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        { "text": "Building Regulations 2018 - BR18", "x": 70, "y": 310, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "SBI 271 \"Documentation and Control of Load-Bearing Structures\"", "x": 70, "y": 325, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "DS/EN 1990 DK NA:2021, Annex B5", "x": 70, "y": 340, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "DS 1140:2019 \"Execution of load-bearing structures – General control\"", "x": 70, "y": 355, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "DS/INF 1140:2022 \"Guide to DS 1140\"", "x": 70, "y": 370, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 6,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 5 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.2 Control types", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "The structure is classified as construction class KKX",
+          "x": 50, "y": 145, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "constructionClass"
+        },
+        { "text": "Self-monitoring and independent control of the work carried out are carried out.", "x": 50, "y": 165, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "There is no requirement for third-party control.", "x": 50, "y": 185, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "Self-monitoring", "x": 50, "y": 210, "fontSize": 11, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "The self-inspection of the execution is carried out by the person who carried out the construction when the construction or parts thereof are completed.",
+          "x": 50, "y": 230, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+
+        {
+          "text": "Standards: This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE.",
+          "x": 50, "y": 300, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+
+        { "text": "Independent controls", "x": 50, "y": 330, "fontSize": 11, "fontFamily": "Helvetica-Bold", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 7,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 6 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "1.4 Organisation of the control work", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "Each inspection section must be assigned one, and only one inspector who is ensured that he has not contributed to the execution of the construction section in question.",
+          "x": 50, "y": 145, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        { "text": "1.5 Controllers", "x": 50, "y": 190, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "Applier Name Education Experience Initials",
+          "x": 50, "y": 220, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "black"
+        },
+        {
+          "text": "Own Controller From Company organisation OC Fixed",
+          "x": 50, "y": 240, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        {
+          "text": "Independent controller From Company organisation IC Fixed",
+          "x": 50, "y": 260, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        {
+          "text": "Create new fields (education & Experience) on the Admin, Project manager, worker, independent controller, sub-contractor setup.",
+          "x": 50, "y": 300, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 8,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 7 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "2. GENERAL CONTROLS", "x": 50, "y": 120, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "2.1 General", "x": 50, "y": 145, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+
+        { "text": "The general control is carried out in accordance with the Constitution. DS 1140.", "x": 50, "y": 170, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "Control subject", "x": 50, "y": 205, "fontSize": 11, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "B.1 Execution basis from design", "x": 70, "y": 225, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.2 Basis for execution of the work", "x": 70, "y": 240, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.3 The material and products", "x": 70, "y": 255, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.4 Reception control", "x": 70, "y": 270, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.5 Execution", "x": 70, "y": 285, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.5.1 Transport and storage on site", "x": 90, "y": 300, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.5.2 Previously completed construction", "x": 90, "y": 315, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.5.3 Assembly of prefabricated structural parts", "x": 90, "y": 330, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.5.4 Execution of non-certified structural parts", "x": 90, "y": 345, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "B.6 Final inspection", "x": 70, "y": 365, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 9,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 8 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "3. SPECIAL CONTROLS", "x": 50, "y": 120, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "3.1 General", "x": 50, "y": 145, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "There are no special controls assigned by the building designers, cf. This construction section.", "x": 50, "y": 170, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "3.2 Special checkpoints", "x": 50, "y": 200, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "Cf. section 3.1, no special controls are required.", "x": 50, "y": 225, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "Data from Special Control points - IF Any",
+          "x": 50, "y": 255, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        { "text": "ID SPECIAL CONTROL DESCRIPTION", "x": 50, "y": 275, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "4. DOCUMENTATION", "x": 50, "y": 315, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "B3. X number STATIC INSPECTION REPORT Special text",
+          "x": 50, "y": 350, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b3ListingLine"
+        },
+        {
+          "text": "A5. X number A5 AS DONE Special text",
+          "x": 50, "y": 370, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "a5ListingLine"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 10,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 9 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "A deviation report will be created for this report, which will be attached to the inspection report as an annex.", "x": 50, "y": 130, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "4.5 Checking Control Documentation", "x": 50, "y": 170, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "The control documentation is collected and reviewed by the inspector and it is ensured that all documents are present, as well as all controls are completed, dated and signed.", "x": 50, "y": 195, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+
+        { "text": "5. LISTINGS", "x": 50, "y": 240, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "B2. X number STATIC CONTROL PLAN Special text",
+          "x": 50, "y": 270, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2ListingRepeat"
+        },
+        {
+          "text": "B3. X number. STATIC INSPECTION REPORT Special text",
+          "x": 50, "y": 290, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b3ListingRepeat"
+        },
+        {
+          "text": "A5. X number A5 AS DONE Special text",
+          "x": 50, "y": 310, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "a5ListingRepeat"
+        },
+
+        { "text": "5.1 Scope of control", "x": 50, "y": 350, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 11,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 10 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "6. CONTROL POINTS SELECTED", "x": 50, "y": 120, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "OVERVIEW:", "x": 50, "y": 150, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "DRAWINGS INDICATING SELECTED INSPECTION POINTS:",
+          "x": 50, "y": 170, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        {
+          "text": "DRAWING NAME: File name",
+          "x": 50, "y": 190, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "mainDrawingFileName"
+        },
+        { "text": "Marked main drawing.", "x": 50, "y": 210, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "Above are points indicated where the executor intends to carry out inspections. (If no comment is received on this within 8 days, this is considered approved)",
+          "x": 50, "y": 240, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 12,
+      "content": [
+        { "text": "Part of Kvalitetssikring Danmark ApS Page 11 af 17", "x": 50, "y": 90, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "7. STATIC CONTROLS (SCHEMATIC)", "x": 50, "y": 120, "fontSize": 13, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "B2. X number STATIC CONTROL PLAN Special text",
+          "x": 50, "y": 150, "fontSize": 11, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2ListingForSection7"
+        },
+        {
+          "text": "In the form below, control has been carried out of the project material that has been handed out when awarding awards, and forms the basis for the intended and executed work, which is a dynamic process until delivery.",
+          "x": 50, "y": 175, "fontSize": 11, "fontFamily": "Helvetica", "color": "black"
+        },
+        { "text": "Standards and norms:", "x": 50, "y": 215, "fontSize": 11, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "DS/EN 13670: Execution of concrete structuresDI Denmark", "x": 70, "y": 235, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "DS/EN 206: Concrete – Specification, Properties, Manufacture and ConformityDS1140 Load-Bearing Structures", "x": 70, "y": 250, "fontSize": 11, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 13,
+      "content": [
+        { "text": "7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+
+        { "text": "POS CHECKING THE SUBJECT CONSTRUCTION PART BASIS CONTROL METHOD SCOPE ACCEPTANCE CRITERIA TIME CONTROL", "x": 50, "y": 150, "fontSize": 9, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "7.1.1 Special text 100% IC",
+          "x": 50, "y": 170, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b1_row_711"
+        },
+        {
+          "text": "7.1.2 Special text 100% IC",
+          "x": 50, "y": 190, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b1_row_712"
+        },
+        {
+          "text": "7.1.3 Special text 100% IC",
+          "x": 50, "y": 210, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b1_row_713"
+        },
+        {
+          "text": "7.1.4 Special text 100% IC",
+          "x": 50, "y": 230, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b1_row_714"
+        },
+        {
+          "text": "7.1.5 Special text 100% IC",
+          "x": 50, "y": 250, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b1_row_715"
+        },
+
+        { "text": "Checklist", "x": 50, "y": 290, "fontSize": 11, "fontFamily": "Helvetica-Bold", "color": "black" },
+        { "text": "Fixed text", "x": 50, "y": 310, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "IC = Independet controler", "x": 50, "y": 330, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Fixed text", "x": 50, "y": 350, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "100%", "x": 50, "y": 370, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 14,
+      "content": [
+        { "text": "7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "7.2.1 Special text XX% IC",
+          "x": 50, "y": 160, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2_row_721"
+        },
+        {
+          "text": "7.2.2 Special text XX% IC",
+          "x": 50, "y": 180, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2_row_722"
+        },
+        {
+          "text": "7.2.3 Special text XX% IC",
+          "x": 50, "y": 200, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2_row_723"
+        },
+        {
+          "text": "7.2.4 Special text XX% IC",
+          "x": 50, "y": 220, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2_row_724"
+        },
+        {
+          "text": "7.2.5 Special text XX% IC",
+          "x": 50, "y": 240, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2_row_725"
+        },
+        {
+          "text": "7.2.6 Special text XX% IC",
+          "x": 50, "y": 260, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b2_row_726"
+        },
+        {
+          "text": "Fixed text",
+          "x": 50, "y": 300, "fontSize": 10, "fontFamily": "Helvetica", "color": "black"
+        },
+        { "text": "IC = Independet controler", "x": 50, "y": 320, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "Scope 10% if KK1 or kk2",
+          "x": 50, "y": 340, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleLow"
+        },
+        {
+          "text": "scope 20% if KK3 or KK4",
+          "x": 50, "y": 360, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleHigh"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 15,
+      "content": [
+        { "text": "7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+
+        {
+          "text": "7.3.1 Special text XX% IC",
+          "x": 50, "y": 160, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b3_row_731"
+        },
+        {
+          "text": "7.3.2 Special text XX% IC",
+          "x": 50, "y": 180, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b3_row_732"
+        },
+        {
+          "text": "7.3.3 Special text XX% IC",
+          "x": 50, "y": 200, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b3_row_733"
+        },
+        {
+          "text": "7.3.4 Special text XX% IC",
+          "x": 50, "y": 220, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b3_row_734"
+        },
+        {
+          "text": "7.3.5 Special text XX% IC",
+          "x": 50, "y": 240, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b3_row_735"
+        },
+
+        { "text": "Fixed text", "x": 50, "y": 290, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "IC = Independet controler", "x": 50, "y": 310, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "Scope 10% if KK1 or kk2",
+          "x": 50, "y": 330, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleLow"
+        },
+        {
+          "text": "scope 20% if KK3 or KK4",
+          "x": 50, "y": 350, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleHigh"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 16,
+      "content": [
+        { "text": "7.4 RECEIPT CONTROL DELIVERIES B4", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+
+        {
+          "text": "7.4.1 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 160, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b4_row_741"
+        },
+        {
+          "text": "7.4.2 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 180, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b4_row_742"
+        },
+        {
+          "text": "7.4.3 Special text XXX% Planned Sample Checks IC",
+          "x": 50, "y": 200, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b4_row_743"
+        },
+
+        { "text": "Fixed text", "x": 50, "y": 250, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "IC = Independet controler", "x": 50, "y": 270, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "Scope 10% if KK1 or kk2",
+          "x": 50, "y": 290, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleLow"
+        },
+        {
+          "text": "scope 20% if KK3 or KK4",
+          "x": 50, "y": 310, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleHigh"
+        },
+        {
+          "text": "Planned Sample Checks",
+          "x": 50, "y": 330, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "black"
+        }
+      ]
+    },
+
+    {
+      "pageNumber": 17,
+      "content": [
+        { "text": "7.5 PERFORMANCE CONTROL; B5", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+
+        {
+          "text": "7.5.1 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 160, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b5_row_751"
+        },
+        {
+          "text": "7.5.2 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 180, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b5_row_752"
+        },
+        {
+          "text": "7.5.3 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 200, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b5_row_753"
+        },
+        {
+          "text": "7.5.4 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 220, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b5_row_754"
+        },
+        {
+          "text": "7.5.5 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 240, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b5_row_755"
+        },
+        {
+          "text": "7.5.6 Special text XX% Planned Sample Checks IC",
+          "x": 50, "y": 260, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b5_row_756"
+        },
+
+        { "text": "Fixed text", "x": 50, "y": 300, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "IC = Independet controler", "x": 50, "y": 320, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        {
+          "text": "Scope 10% if KK1 or kk2",
+          "x": 50, "y": 340, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleLow"
+        },
+        {
+          "text": "scope 20% if KK3 or KK4",
+          "x": 50, "y": 360, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "scopeRuleHigh"
+        },
+        { "text": "Planned Sample Checks", "x": 50, "y": 380, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    },
+
+    {
+      "pageNumber": 18,
+      "content": [
+        { "text": "7.6 FINAL INSPECTION B6", "x": 50, "y": 120, "fontSize": 12, "fontFamily": "Helvetica-Bold", "color": "black" },
+        {
+          "text": "7.6.1 Special text 100% Max IC/OC",
+          "x": 50, "y": 160, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b6_row_761"
+        },
+        {
+          "text": "7.6.2 Special text 100% Max IC/OC",
+          "x": 50, "y": 180, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b6_row_762"
+        },
+        {
+          "text": "7.6.3 Special text 100% Max IC/OC",
+          "x": 50, "y": 200, "fontSize": 10, "fontFamily": "Helvetica",
+          "color": "red", "isDynamic": true, "fieldName": "b6_row_763"
+        },
+        { "text": "Fixed text", "x": 50, "y": 250, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "IC = Independet controler", "x": 50, "y": 270, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "OC = Own Controller", "x": 50, "y": 290, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "Fixed text", "x": 50, "y": 310, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "100%", "x": 50, "y": 330, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" },
+        { "text": "MAX", "x": 50, "y": 350, "fontSize": 10, "fontFamily": "Helvetica", "color": "black" }
+      ]
+    }
+  ]
+}
