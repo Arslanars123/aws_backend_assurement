@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 
 const app = express();
-const PORT = 3000;
+const PORT = 5000;
 
 // -------------------- DATABASE CONNECTION --------------------
 const localUri = "mongodb://localhost:27017/mughees";
@@ -95,8 +95,893 @@ const CONTENT_W = PAGE.w - M.l - M.r;
 //   selectDate: "[Select Date]",
 // };
 
+// -------------------- TRANSLATION HELPERS --------------------
+// Helper function to call translation API
+async function translateTexts(texts, targetLang, sourceLang = "EN") {
+  try {
+    if (!targetLang) {
+      // No translation needed, return original texts as map
+      const translationMap = {};
+      texts.forEach((text) => {
+        translationMap[text] = text;
+      });
+      return translationMap;
+    }
+
+    console.log(`Translating ${texts.length} texts to ${targetLang}...`);
+    const response = await axios.post("http://localhost:3000/translate", {
+      texts: texts,
+      target_lang: targetLang,
+      source_lang: sourceLang,
+    });
+
+    // Create a map of original -> translated
+    const translationMap = {};
+    response.data.forEach((item) => {
+      translationMap[item.original] = item.translated;
+    });
+
+    console.log(
+      `Translation completed. ${response.data.length} texts translated.`
+    );
+    return translationMap;
+  } catch (error) {
+    console.error("Translation error:", error.message);
+    // On error, return original texts
+    const translationMap = {};
+    texts.forEach((text) => {
+      translationMap[text] = text;
+    });
+    return translationMap;
+  }
+}
+
+// Helper function to check if a string is a number or date
+function isNumberOrDate(str) {
+  if (!str || typeof str !== "string") return false;
+  const trimmed = str.trim();
+
+  // Check if it's a number (including decimals, negative, with spaces/commas)
+  if (/^-?\d+([.,]\d+)?$/.test(trimmed.replace(/[\s,]/g, ""))) {
+    return true;
+  }
+
+  // Check if it's a date (ISO format, common date formats)
+  if (
+    /^\d{4}-\d{2}-\d{2}/.test(trimmed) ||
+    /^\d{2}\/\d{2}\/\d{4}/.test(trimmed) ||
+    /^\d{2}\.\d{2}\.\d{4}/.test(trimmed)
+  ) {
+    return true;
+  }
+
+  // Check if it contains only digits and common separators
+  if (
+    /^[\d\s\-+().,]+$/.test(trimmed) &&
+    trimmed.replace(/[\s\-+().,]/g, "").length > 3
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+// Collect all translatable texts from page 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, and 17 (static + dynamic)
+function collectPage1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts(
+  dynamicData
+) {
+  const texts = {
+    // Page 1 - Static texts
+    "Executing part": "Executing part",
+    "Static control plan: ": "Static control plan: ",
+    "For those executed within the construction part:":
+      "For those executed within the construction part:",
+    "Document ID": "Document ID",
+    "Applicable EU standards 2024": "Applicable EU standards 2024",
+    "Eurocode 0: Design basis for structures":
+      "Eurocode 0: Design basis for structures",
+    "Eurocode 1: Load on load-bearing structures":
+      "Eurocode 1: Load on load-bearing structures",
+    "Eurocode 2: Concrete structures": "Eurocode 2: Concrete structures",
+    "Eurocode 3: Steel structures": "Eurocode 3: Steel structures",
+    "Eurocode 4: Composite Structures": "Eurocode 4: Composite Structures",
+    "Eurocode 5: Timber structures": "Eurocode 5: Timber structures",
+    "Eurocode 6: Masonry structures": "Eurocode 6: Masonry structures",
+    "Eurocode 7: Geotechnical Engineering":
+      "Eurocode 7: Geotechnical Engineering",
+    "Eurocode 8: Structures in seismic areas":
+      "Eurocode 8: Structures in seismic areas",
+    "Eurocode 9: Aluminium structures.": "Eurocode 9: Aluminium structures.",
+    "EN 1520: Lightweight concrete with porous aggregates":
+      "EN 1520: Lightweight concrete with porous aggregates",
+    "EN 12602: Aerated concrete": "EN 12602: Aerated concrete",
+    "Part of Kvalitetssikring Danmark ApS":
+      "Part of Kvalitetssikring Danmark ApS",
+    Page: "Page",
+    "af 17": "af 17",
+    // Labels for company info
+    "Name:": "Name:",
+    "Address:": "Address:",
+    "CVR:": "CVR:",
+    "Tel:": "Tel:",
+
+    // Page 2 - Static texts
+    "STATIC CONTROL PLAN": "STATIC CONTROL PLAN",
+    "For load-bearing structures, cf. DS1140 applies to:":
+      "For load-bearing structures, cf. DS1140 applies to:",
+    "Construction Part:": "Construction Part:",
+    "The control plan is built according to the current EU standard:":
+      "The control plan is built according to the current EU standard:",
+    "Eurocode:": "Eurocode:",
+    "CONSTRUCTION CASE:": "CONSTRUCTION CASE:",
+    "Project INFO": "Project INFO",
+    "Main Contractor/Custumer": "Main Contractor/Custumer",
+    "ID/Case no.": "ID/Case no.",
+    Name: "Name",
+    Address: "Address",
+    "Post no./City.": "Post no./City.",
+    "CVR no.": "CVR no.",
+    "Contact person": "Contact person",
+    "Email.": "Email.",
+    Startup: "Startup",
+    "Document type": "Document type",
+    Version: "Version",
+    "Construction class": "Construction class",
+    "Static control plan": "Static control plan",
+    "Signing:": "Signing:",
+    "Same data as static report.": "Same data as static report.",
+    Signed: "Signed",
+    "Prepared/approved by:": "Prepared/approved by:",
+    Company: "Company",
+    "Own Control (OC)": "Own Control (OC)",
+    "Independent controller (IC)": "Independent controller (IC)",
+    "Project setup": "Project setup",
+    "Admin – company organization": "Admin – company organization",
+    "Project manager– company organization":
+      "Project manager– company organization",
+    "company organization": "company organization",
+
+    // Page 3 - Static texts
+    "Document completion status": "Document completion status",
+    "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections.":
+      "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections.",
+    "The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document.":
+      "The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document.",
+    "Expected approval time 14 days, after which the content of the document is considered approved.":
+      "Expected approval time 14 days, after which the content of the document is considered approved.",
+    "Status:": "Status:",
+    Approval: "Approval",
+    "Under Approval": "Under Approval",
+
+    // Page 4 - Static texts
+    Content: "Content",
+    "Static control plan": "Static control plan",
+    "Construction Part:": "Construction Part:",
+    "Eurocode:": "Eurocode:",
+    "Signing:": "Signing:",
+    "1. General": "1. General",
+    "1.1 Description of the control work":
+      "1.1 Description of the control work",
+    "1.2 Control types": "1.2 Control types",
+    "1.3 Level of control": "1.3 Level of control",
+    "1.4 Organisation of the control work":
+      "1.4 Organisation of the control work",
+    "1.5 Controllers": "1.5 Controllers",
+    "1.6 Use of assistance": "1.6 Use of assistance",
+    "1.7 Follow-up on deviations": "1.7 Follow-up on deviations",
+    "2. General controls": "2. General controls",
+    "2.1 General": "2.1 General",
+    "2.2 Control section": "2.2 Control section",
+    "2.3 Explanation of the selection of controls":
+      "2.3 Explanation of the selection of controls",
+    "2.4 Checkpoints": "2.4 Checkpoints",
+    "3. Special controls": "3. Special controls",
+    "3.1 General": "3.1 General",
+    "3.2 Special checkpoints": "3.2 Special checkpoints",
+    "4. Documentation": "4. Documentation",
+    "4.1 General description of documentation":
+      "4.1 General description of documentation",
+    "4.2 Documentation of general controls":
+      "4.2 Documentation of general controls",
+    "4.3 Documentation of special controls":
+      "4.3 Documentation of special controls",
+    "4.4 Documentation of deviations and follow-up":
+      "4.4 Documentation of deviations and follow-up",
+    "4.5 Checking Control Documentation": "4.5 Checking Control Documentation",
+    "5. Listings": "5. Listings",
+    "5.1 Scope of control": "5.1 Scope of control",
+    "6. Control points selected": "6. Control points selected",
+    "7. Static controls (schematic)": "7. Static controls (schematic)",
+    "7.1 Review of the execution basis from the design B1":
+      "7.1 Review of the execution basis from the design B1",
+    "7.2 Verification of the basis for execution of the work B2":
+      "7.2 Verification of the basis for execution of the work B2",
+    "7.3 Verification of Documentation of Materials and Products B3":
+      "7.3 Verification of Documentation of Materials and Products B3",
+    "7.4 RECEIPT CONTROL DELIVERIES B4": "7.4 RECEIPT CONTROL DELIVERIES B4",
+    "7.5 PERFORMANCE CONTROL; B5": "7.5 PERFORMANCE CONTROL; B5",
+    "7.6 FINAL INSPECTION B6": "7.6 FINAL INSPECTION B6",
+
+    // Page 5 - Static texts
+    "1. GENERAL": "1. GENERAL",
+    "1.1 Description of the control work":
+      "1.1 Description of the control work",
+    "This static control plan covers the control for the execution of the construction section mentioned on the front page and associated works. The inspection is carried out in accordance with the building designer's:":
+      "This static control plan covers the control for the execution of the construction section mentioned on the front page and associated works. The inspection is carried out in accordance with the building designer's:",
+    LISTING: "LISTING",
+    DOCUMENT: "DOCUMENT",
+    "CONSTRUCTION PART:": "CONSTRUCTION PART:",
+    ACCOMPLISHMENT: "ACCOMPLISHMENT",
+    "STATIC CONTROL PLAN": "STATIC CONTROL PLAN",
+    "Construction part text": "Construction part text",
+    "The focus is on seeing between the construction designer's material and the execution of the construction section on the site.":
+      "The focus is on seeing between the construction designer's material and the execution of the construction section on the site.",
+    "Particular consideration is given to the materials used and their dimensions in reception control, placement on level versus location on site and compliance with tolerances.":
+      "Particular consideration is given to the materials used and their dimensions in reception control, placement on level versus location on site and compliance with tolerances.",
+    "The following forms the basis for the checks carried out:":
+      "The following forms the basis for the checks carried out:",
+    "Building Regulations 2018 - BR18": "Building Regulations 2018 - BR18",
+    'SBI 271 "Documentation and Control of Load-Bearing Structures"':
+      'SBI 271 "Documentation and Control of Load-Bearing Structures"',
+    "DS/EN 1990 DK NA:2021 , Annex B5": "DS/EN 1990 DK NA:2021 , Annex B5",
+    'DS 1140:2019 "Execution of load-bearing structures – General control"':
+      'DS 1140:2019 "Execution of load-bearing structures – General control"',
+    'DS/INF 1140:2022 "Guide to DS 1140"':
+      'DS/INF 1140:2022 "Guide to DS 1140"',
+    "The review is carried out on the basis of the above-mentioned material and the contractor's documented quality assurance system.":
+      "The review is carried out on the basis of the above-mentioned material and the contractor's documented quality assurance system.",
+    "Procedures are complied with as described in the quality assurance system":
+      "Procedures are complied with as described in the quality assurance system",
+    "A review of the execution basis from the design phase has been carried out":
+      "A review of the execution basis from the design phase has been carried out",
+    "The materials used are in accordance with the design basis":
+      "The materials used are in accordance with the design basis",
+    "The basis for the execution of the work has been controlled/approved and reflects the requirements of the basis for execution from the design":
+      "The basis for the execution of the work has been controlled/approved and reflects the requirements of the basis for execution from the design",
+    "Employees have the necessary qualifications and competencies":
+      "Employees have the necessary qualifications and competencies",
+    "Self-monitoring and independent control are described in control plans and carried out as prescribed":
+      "Self-monitoring and independent control are described in control plans and carried out as prescribed",
+    "Controls are documented in control reports as described":
+      "Controls are documented in control reports as described",
+    "Deviations are processed according to the procedure for deviations":
+      "Deviations are processed according to the procedure for deviations",
+    "Documentation of construction as executed is available":
+      "Documentation of construction as executed is available",
+    "The independent control is carried out by the executor, with the exception of a few of the special control points where the independent control is carried out by the designing organisation. This is because the control requires a certain insight into the static conditions that form the basis for the construction.":
+      "The independent control is carried out by the executor, with the exception of a few of the special control points where the independent control is carried out by the designing organisation. This is because the control requires a certain insight into the static conditions that form the basis for the construction.",
+
+    // Page 6 - Static texts
+    "1.2 Control types": "1.2 Control types",
+    "The structure is classified as ": "The structure is classified as ",
+    "construction class ": "construction class ",
+    "Self-monitoring and independent control of the work carried out are carried out.":
+      "Self-monitoring and independent control of the work carried out are carried out.",
+    "There is no requirement for third-party control.":
+      "There is no requirement for third-party control.",
+    "Self-monitoring": "Self-monitoring",
+    "The self-inspection of the execution is carried out by the person who carried out the construction when the construction or parts thereof are completed. Where structural parts are subsequently hidden, the self-inspection is carried out during the execution of the relevant structural part.":
+      "The self-inspection of the execution is carried out by the person who carried out the construction when the construction or parts thereof are completed. Where structural parts are subsequently hidden, the self-inspection is carried out during the execution of the relevant structural part.",
+    "The own-check includes at least an assessment of whether:":
+      "The own-check includes at least an assessment of whether:",
+    "The entire construction and all of its parts are actually done.":
+      "The entire construction and all of its parts are actually done.",
+    "The construction based on a craftsmanship assessment is carried out correctly and is in accordance with good building practice.":
+      "The construction based on a craftsmanship assessment is carried out correctly and is in accordance with good building practice.",
+    "The construction has been carried out in accordance with the execution basis and agreements with the design and/or construction management on details or other matters that are not stated in the execution basis.":
+      "The construction has been carried out in accordance with the execution basis and agreements with the design and/or construction management on details or other matters that are not stated in the execution basis.",
+    "Tolerances in the execution are complied with in relation to relevant standards, good practice within the type of work in question (see e.g. tolerancer.dk) and any project-specific tolerances that may appear in the execution basis.":
+      "Tolerances in the execution are complied with in relation to relevant standards, good practice within the type of work in question (see e.g. tolerancer.dk) and any project-specific tolerances that may appear in the execution basis.",
+    "Documentation of the execution of the construction has been carried out, collected and systematised in accordance with SBi 271 section 2.6, Construction as executed.":
+      "Documentation of the execution of the construction has been carried out, collected and systematised in accordance with SBi 271 section 2.6, Construction as executed.",
+    "After completion of the self-inspection, the person carrying out the inspection documents this in the current inspection report. Self-monitoring is always carried out.":
+      "After completion of the self-inspection, the person carrying out the inspection documents this in the current inspection report. Self-monitoring is always carried out.",
+    "Standards:": "Standards:",
+    "This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE.":
+      "This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE.",
+    "Independent controls": "Independent controls",
+    "The independent inspection shall be carried out by persons who have not directly participated in the actual performance of the inspection section in question. All independent checks within a control section are carried out by the same person. The independent inspector is not carried out by the head of the work team, The independent inspector must have the necessary competencies that allow him to have knowledge within the chosen construction section that is stated on the front page.":
+      "The independent inspection shall be carried out by persons who have not directly participated in the actual performance of the inspection section in question. All independent checks within a control section are carried out by the same person. The independent inspector is not carried out by the head of the work team, The independent inspector must have the necessary competencies that allow him to have knowledge within the chosen construction section that is stated on the front page.",
+    "When the performance of an inspection section or parts thereof has been carried out and the performer has been ready for independent control (i.e. after self-monitoring has been carried out), the independent inspection is carried out.":
+      "When the performance of an inspection section or parts thereof has been carried out and the performer has been ready for independent control (i.e. after self-monitoring has been carried out), the independent inspection is carried out.",
+    "The independent control is carried out according to the project-specific static control plan for execution.":
+      "The independent control is carried out according to the project-specific static control plan for execution.",
+    "1.3 Level of control": "1.3 Level of control",
+    "The level of control for the general control is governed by the selected execution classes, cf. DS/EN 1990 DK NA, Annex B5.":
+      "The level of control for the general control is governed by the selected execution classes, cf. DS/EN 1990 DK NA, Annex B5.",
+    "The execution class is ": "The execution class is ",
+    " and Self-control is performed as a maximum control. The independent control is carried out as a random and maximum control.":
+      " and Self-control is performed as a maximum control. The independent control is carried out as a random and maximum control.",
+    "Performance classes indicate the importance of the design for the safety of a load-bearing structure:":
+      "Performance classes indicate the importance of the design for the safety of a load-bearing structure:",
+    "EXC1: The design has limited impact on the safety of a load-bearing structure":
+      "EXC1: The design has limited impact on the safety of a load-bearing structure",
+    "EXC2: The execution is important for the safety of a load-bearing structure":
+      "EXC2: The execution is important for the safety of a load-bearing structure",
+    "EXC3: The execution is of great importance for the safety of a load-bearing structure.":
+      "EXC3: The execution is of great importance for the safety of a load-bearing structure.",
+
+    // Page 7 - Static texts
+    "1.4 Organisation of the control work":
+      "1.4 Organisation of the control work",
+    "Each inspection section must be assigned one, and only one inspector who is ensured that he has not contributed to the execution of the construction section in question. The executing party or its representative has drawn up the control plan and will act as the lead inspector in connection with the selection of inspectors for the individual control sections, as well as compiling and checking the inspection report. As far as possible... the aim is that the lead inspector also carries out the actual inspection on site in order to simplify the inspection work.":
+      "Each inspection section must be assigned one, and only one inspector who is ensured that he has not contributed to the execution of the construction section in question. The executing party or its representative has drawn up the control plan and will act as the lead inspector in connection with the selection of inspectors for the individual control sections, as well as compiling and checking the inspection report. As far as possible... the aim is that the lead inspector also carries out the actual inspection on site in order to simplify the inspection work.",
+    "1.5 Controllers": "1.5 Controllers",
+    "The independent inspection is carried out by an operator who has not acted as the executor on the site.":
+      "The independent inspection is carried out by an operator who has not acted as the executor on the site.",
+    "Controls are carried out by the same organisation as the executing organisation.":
+      "Controls are carried out by the same organisation as the executing organisation.",
+    "It is ensured that the inspector has the right and necessary skills to carry out the inspection.":
+      "It is ensured that the inspector has the right and necessary skills to carry out the inspection.",
+    "Inspectors must always have the necessary qualifications acquired through training and the necessary competences acquired through experience both in relation to the subject of the inspection and in planning, carrying out and documenting the inspection.":
+      "Inspectors must always have the necessary qualifications acquired through training and the necessary competences acquired through experience both in relation to the subject of the inspection and in planning, carrying out and documenting the inspection.",
+    "Therefore, the inspector must at least":
+      "Therefore, the inspector must at least",
+    "be familiar with best practices for the execution of the relevant structural parts and construction sections.":
+      "be familiar with best practices for the execution of the relevant structural parts and construction sections.",
+    "Have the ability to create an overview and wonder":
+      "Have the ability to create an overview and wonder",
+    "Have knowledge of your own limitations and make use of professional experts for parts of the control task":
+      "Have knowledge of your own limitations and make use of professional experts for parts of the control task",
+    "Have competencies at least equivalent to those of the person who has performed the work":
+      "Have competencies at least equivalent to those of the person who has performed the work",
+    "Have professional qualifications and competencies for carrying out the construction work":
+      "Have professional qualifications and competencies for carrying out the construction work",
+    "Be able to understand standards, control plans and good craftsmanship":
+      "Be able to understand standards, control plans and good craftsmanship",
+    "Be able to familiarize themselves with the documents that form the basis for the execution":
+      "Be able to familiarize themselves with the documents that form the basis for the execution",
+    "In order to document the examiner's qualifications and competences, his/her competences are described in detail in the inspection report, e.g. in the examiner's CV.":
+      "In order to document the examiner's qualifications and competences, his/her competences are described in detail in the inspection report, e.g. in the examiner's CV.",
+    Applier: "Applier",
+    Name: "Name",
+    Initials: "Initials",
+    "Own Controller": "Own Controller",
+    "OC Fixed": "OC Fixed",
+    "Independent controller": "Independent controller",
+    "IC Fixed": "IC Fixed",
+    "From Company organisation": "From Company organisation",
+    "1.6 Use of assistance": "1.6 Use of assistance",
+    "If the inspector chooses to use assistance in carrying out the inspection, the assistant inspector must have at least the competencies described in section 1.2 above. In addition, it is important to be aware that the final responsibility for the inspection at all times rests with the inspector and is therefore not transferred to the assistant inspector. The inspector must therefore follow up on inspections carried out by assistant inspectors and ensure that the inspection has been carried out sensibly by checking the documentation for the inspection and sign this as the inspector.":
+      "If the inspector chooses to use assistance in carrying out the inspection, the assistant inspector must have at least the competencies described in section 1.2 above. In addition, it is important to be aware that the final responsibility for the inspection at all times rests with the inspector and is therefore not transferred to the assistant inspector. The inspector must therefore follow up on inspections carried out by assistant inspectors and ensure that the inspection has been carried out sensibly by checking the documentation for the inspection and sign this as the inspector.",
+    "1.7 Follow-up on deviations": "1.7 Follow-up on deviations",
+    "If deviations are found in the controls, the following procedure shall be followed:":
+      "If deviations are found in the controls, the following procedure shall be followed:",
+    "The work on the structural part is stopped and may not be continued until the deviation has been corrected.":
+      "The work on the structural part is stopped and may not be continued until the deviation has been corrected.",
+    "The inspector prepares a non-conformance report, which may include illustrations of the non-conformity and proposed solutions.":
+      "The inspector prepares a non-conformance report, which may include illustrations of the non-conformity and proposed solutions.",
+    "The inspector assesses, together with the executors, whether the defect is of a nature that makes it necessary to reassess the working basis for the execution and the associated controls.":
+      "The inspector assesses, together with the executors, whether the defect is of a nature that makes it necessary to reassess the working basis for the execution and the associated controls.",
+    "The inspector assesses, together with the executors, the implications of the deviation for the further execution and suitability in relation to the intended purpose of the design.":
+      "The inspector assesses, together with the executors, the implications of the deviation for the further execution and suitability in relation to the intended purpose of the design.",
+    "The verifier assesses, together with the performing measures, the necessary measures to make the component acceptable.":
+      "The verifier assesses, together with the performing measures, the necessary measures to make the component acceptable.",
+    "The inspector assesses, together with the contractors, the necessity of rejecting and replacing the non-repairable building part.":
+      "The inspector assesses, together with the contractors, the necessity of rejecting and replacing the non-repairable building part.",
+    "After rectifying the deviation, this is checked again and the result is documented.":
+      "After rectifying the deviation, this is checked again and the result is documented.",
+    "If it is not possible to correct the deviation, the building designer must approve the deviation.":
+      "If it is not possible to correct the deviation, the building designer must approve the deviation.",
+    "If there are serious or more repeated errors in a control point, the control can be extended to a maximum control of the current control point and/or the building designer can be involved.":
+      "If there are serious or more repeated errors in a control point, the control can be extended to a maximum control of the current control point and/or the building designer can be involved.",
+
+    // Page 8 - Static texts
+    "2. GENERAL CONTROLS": "2. GENERAL CONTROLS",
+    "2.1 General": "2.1 General",
+    "The general control is carried out in accordance with the Construction standard DS 1140. In addition, the general control is carried out in accordance with the rules of DS/EN 1992-DS/EN 1999 including the associated national annexes and in accordance with the rules of the related execution standards including the corresponding national application documents.":
+      "The general control is carried out in accordance with the Construction standard DS 1140. In addition, the general control is carried out in accordance with the rules of DS/EN 1992-DS/EN 1999 including the associated national annexes and in accordance with the rules of the related execution standards including the corresponding national application documents.",
+    "The general control is carried out on the basis of the division in DS 1140, Annex B.":
+      "The general control is carried out on the basis of the division in DS 1140, Annex B.",
+    "Control subject": "Control subject",
+    "B.1 Execution basis from design": "B.1 Execution basis from design",
+    "B.2 Basis for execution of the work":
+      "B.2 Basis for execution of the work",
+    "B.3 The material and products": "B.3 The material and products",
+    "B.4 Reception control": "B.4 Reception control",
+    "B.5 Execution": "B.5 Execution",
+    "   B.5.1 Transport and storage on site":
+      "   B.5.1 Transport and storage on site",
+    "   B.5.2 Previously completed construction":
+      "   B.5.2 Previously completed construction",
+    "   B.5.3 Assembly of prefabricated structural parts":
+      "   B.5.3 Assembly of prefabricated structural parts",
+    "   B.5.4 Execution of non-certified structural parts":
+      "   B.5.4 Execution of non-certified structural parts",
+    "B.6 Final inspection": "B.6 Final inspection",
+    "The independent verification that the own-check has been carried out is always carried out as a maximum control.":
+      "The independent verification that the own-check has been carried out is always carried out as a maximum control.",
+    "Explanation of B.5.2 to B.5.4:": "Explanation of B.5.2 to B.5.4:",
+    "When constructing structures that are of critical importance to the functioning and integrity of the structure,":
+      "When constructing structures that are of critical importance to the functioning and integrity of the structure,",
+    "Control points are fully checked (maximum) for:":
+      "Control points are fully checked (maximum) for:",
+    "Presence of structural parts": "Presence of structural parts",
+    "Presence of joint parts": "Presence of joint parts",
+    "Remuneration depths for assembly of prefabricated structural parts":
+      "Remuneration depths for assembly of prefabricated structural parts",
+    "The subsoil for geotechnical constructions with regard to whether the soil is as assumed in the execution basis from the design stage.":
+      "The subsoil for geotechnical constructions with regard to whether the soil is as assumed in the execution basis from the design stage.",
+    "2.2 Control section": "2.2 Control section",
+    "The delimited design section is subdivided into control sections according to e.g. construction types, scope or time of execution, however, common to the fact that control sections must always be well defined, delimited in relation to other control sections and delimited by a continuous production period of a maximum of 4 weeks.":
+      "The delimited design section is subdivided into control sections according to e.g. construction types, scope or time of execution, however, common to the fact that control sections must always be well defined, delimited in relation to other control sections and delimited by a continuous production period of a maximum of 4 weeks.",
+    "The execution of the construction section is divided according to the tender control plan for the following control sections:":
+      "The execution of the construction section is divided according to the tender control plan for the following control sections:",
+    "2.3 Explanation of the selection of controls":
+      "2.3 Explanation of the selection of controls",
+    "As this construction section is placed in construction class ":
+      "As this construction section is placed in construction class ",
+    ", the selected control points must be explained. This is done in connection with the inspection report.":
+      ", the selected control points must be explained. This is done in connection with the inspection report.",
+    "2.4 Checkpoints": "2.4 Checkpoints",
+    "Control points are stated in the control plan prepared by the executing contractor.":
+      "Control points are stated in the control plan prepared by the executing contractor.",
+
+    // Page 9 - Static texts
+    "3. SPECIAL CONTROLS": "3. SPECIAL CONTROLS",
+    "3.1 General": "3.1 General",
+    "There are no special controls assigned by the building designers, cf.  This construction section.":
+      "There are no special controls assigned by the building designers, cf.  This construction section.",
+    "Should there be special controls, they will be stated in section 3.2":
+      "Should there be special controls, they will be stated in section 3.2",
+    "3.2 Special checkpoints": "3.2 Special checkpoints",
+    "Cf. section 3.1, no special controls are required.":
+      "Cf. section 3.1, no special controls are required.",
+    "If there are special checks, it will be stated below in the form, otherwise there will be none.":
+      "If there are special checks, it will be stated below in the form, otherwise there will be none.",
+    "Data from Special Control points - IF Any":
+      "Data from Special Control points - IF Any",
+    ID: "ID",
+    "SPECIAL CONTROL": "SPECIAL CONTROL",
+    DESCRIPTION: "DESCRIPTION",
+    "4. DOCUMENTATION": "4. DOCUMENTATION",
+    "4.1 General description of documentation":
+      "4.1 General description of documentation",
+    "The documentation of the control consists of this control plan and associated appendices for the present construction section. In addition, this also consists of an inspection report and associated appendices.":
+      "The documentation of the control consists of this control plan and associated appendices for the present construction section. In addition, this also consists of an inspection report and associated appendices.",
+    "Document:": "Document:",
+    "The above is updated every time a change occurs in the execution.":
+      "The above is updated every time a change occurs in the execution.",
+    "Documentation contains the actual control result, but also contains a follow-up on the control, including an account of the points where there have been comments from the control in relation to how the comment has been followed up.":
+      "Documentation contains the actual control result, but also contains a follow-up on the control, including an account of the points where there have been comments from the control in relation to how the comment has been followed up.",
+    "4.2 Documentation of general controls":
+      "4.2 Documentation of general controls",
+    "The general control is documented in accordance with the requirements specified in the control plans.":
+      "The general control is documented in accordance with the requirements specified in the control plans.",
+    "Documentation of general controls consists of a completed control report, with all points clarified, approved and signed by the examiner. Deviations must be documented to be remedied by a deviation report, and the item in the control report cannot be approved until the deviation report has been completed.":
+      "Documentation of general controls consists of a completed control report, with all points clarified, approved and signed by the examiner. Deviations must be documented to be remedied by a deviation report, and the item in the control report cannot be approved until the deviation report has been completed.",
+    "The documentation for the general control is kept with the contractor. Documentation is stored for at least 5 years after the occupancy permit.":
+      "The documentation for the general control is kept with the contractor. Documentation is stored for at least 5 years after the occupancy permit.",
+    "4.3 Documentation of special controls":
+      "4.3 Documentation of special controls",
+    "In its documentation, the building designer has not required any special controls.":
+      "In its documentation, the building designer has not required any special controls.",
+    "4.4 Documentation of deviations and follow-up":
+      "4.4 Documentation of deviations and follow-up",
+    "If, in the course of the general or special control, deviations are detected, this shall be noted in the control scheme for that control point in the static report.":
+      "If, in the course of the general or special control, deviations are detected, this shall be noted in the control scheme for that control point in the static report.",
+    "4.5 Checking Control Documentation": "4.5 Checking Control Documentation",
+    "The control documentation is collected and reviewed by the inspector and it is ensured that all documents are present, as well as all controls are completed, dated and signed.":
+      "The control documentation is collected and reviewed by the inspector and it is ensured that all documents are present, as well as all controls are completed, dated and signed.",
+
+    // Page 10 - Static texts
+    "5. LISTINGS": "5. LISTINGS",
+    "The naming of the documents above is determined by the building designer.":
+      "The naming of the documents above is determined by the building designer.",
+    "The above documents will be part of the overall static documentation for the section of this construction when the work is completed.":
+      "The above documents will be part of the overall static documentation for the section of this construction when the work is completed.",
+    "See also the table further down in the control plan under section 7.1.":
+      "See also the table further down in the control plan under section 7.1.",
+    "5.1 Scope of control": "5.1 Scope of control",
+    "The scope of controls is stated in the tables under section 7.1 and is determined on the basis of which (classes) the Structural Engineer has stated in the project material.":
+      "The scope of controls is stated in the tables under section 7.1 and is determined on the basis of which (classes) the Structural Engineer has stated in the project material.",
+
+    // Page 11 - Static texts
+    "6. CONTROL POINTS SELECTED": "6. CONTROL POINTS SELECTED",
+    "OVERVIEW:": "OVERVIEW:",
+    "DRAWINGS INDICATING SELECTED INSPECTION POINTS :":
+      "DRAWINGS INDICATING SELECTED INSPECTION POINTS :",
+    "DRAWING NAME : ": "DRAWING NAME : ",
+    "Marked main drawing .": "Marked main drawing .",
+    "(Image could not be loaded)": "(Image could not be loaded)",
+    "Above are points indicated where the executor intends to carry out inspections.":
+      "Above are points indicated where the executor intends to carry out inspections.",
+    "(If no comment is received on this within 8 days, this is considered approved)":
+      "(If no comment is received on this within 8 days, this is considered approved)",
+
+    // Page 12 - Static texts
+    "7. STATIC CONTROLS (SCHEMATIC)": "7. STATIC CONTROLS (SCHEMATIC)",
+    "In the form below, control has been carried out of the project material that has been handed out when awarding awards, and forms the basis for the intended and executed work, which is a dynamic process until delivery.":
+      "In the form below, control has been carried out of the project material that has been handed out when awarding awards, and forms the basis for the intended and executed work, which is a dynamic process until delivery.",
+    "Standards and norms:": "Standards and norms:",
+    "DS/EN 13670: Execution of concrete structures DI Denmark":
+      "DS/EN 13670: Execution of concrete structures DI Denmark",
+    "DS/EN 206: Concrete – Specification, Properties, Manufacture and Conformity DS1140 Load-Bearing Structures":
+      "DS/EN 206: Concrete – Specification, Properties, Manufacture and Conformity DS1140 Load-Bearing Structures",
+
+    // Page 13 - Static texts
+    "7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1":
+      "7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1",
+    POS: "POS",
+    "CHECKING THE": "CHECKING THE",
+    SUBJECT: "SUBJECT",
+    "CONSTRUCTION PART": "CONSTRUCTION PART",
+    BASIS: "BASIS",
+    "CONTROL METHOD": "CONTROL METHOD",
+    SCOPE: "SCOPE",
+    "ACCEPTANCE CRITERIA": "ACCEPTANCE CRITERIA",
+    "TIME CONTROL": "TIME CONTROL",
+
+    // Page 14 - Static texts
+    "7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2":
+      "7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2",
+
+    // Page 15 - Static texts
+    "7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3":
+      "7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3",
+
+    // Page 16 - Static texts
+    "7.4 RECEIPT CONTROL DELIVERIES B4": "7.4 RECEIPT CONTROL DELIVERIES B4",
+    "Planned Sample Checks": "Planned Sample Checks",
+
+    // Page 17 - Static texts
+    "7.5 PERFORMANCE CONTROL; B5": "7.5 PERFORMANCE CONTROL; B5",
+
+    // Page 18 - Static texts
+    "7.6 FINAL INSPECTION B6": "7.6 FINAL INSPECTION B6",
+  };
+
+  // Add dynamic texts (excluding numbers and dates)
+  if (dynamicData) {
+    // Page 1 dynamic texts
+    // Company name
+    if (
+      dynamicData.company?.name &&
+      !isNumberOrDate(dynamicData.company.name)
+    ) {
+      texts[dynamicData.company.name] = dynamicData.company.name;
+    }
+
+    // Company address
+    if (
+      dynamicData.company?.address &&
+      !isNumberOrDate(dynamicData.company.address)
+    ) {
+      texts[dynamicData.company.address] = dynamicData.company.address;
+    }
+
+    // Project name
+    if (dynamicData.projectName && !isNumberOrDate(dynamicData.projectName)) {
+      texts[dynamicData.projectName] = dynamicData.projectName;
+    }
+
+    // Special text / Construction Part
+    if (dynamicData.specialText && !isNumberOrDate(dynamicData.specialText)) {
+      texts[dynamicData.specialText] = dynamicData.specialText;
+    }
+    if (
+      dynamicData.constructionPart &&
+      !isNumberOrDate(dynamicData.constructionPart)
+    ) {
+      texts[dynamicData.constructionPart] = dynamicData.constructionPart;
+    }
+
+    // Eurocode (if it's text, not just a number)
+    if (dynamicData.eurocode && !isNumberOrDate(dynamicData.eurocode)) {
+      texts[dynamicData.eurocode] = dynamicData.eurocode;
+    }
+
+    // Page 2 dynamic texts
+    const project = dynamicData.project || {};
+    const mainUser = dynamicData.mainUser || {};
+
+    // Project case number (if text)
+    const caseNumber =
+      project.caseNumber || project.case_number || project.projectNumber;
+    if (caseNumber && !isNumberOrDate(caseNumber)) {
+      texts[caseNumber] = caseNumber;
+    }
+
+    // Project address
+    if (project.address && !isNumberOrDate(project.address)) {
+      texts[project.address] = project.address;
+    }
+
+    // Project postal code + city (combined)
+    if (project.postalCode && project.city) {
+      const postCity = `${project.postalCode} ${project.city}`;
+      if (!isNumberOrDate(postCity)) {
+        texts[postCity] = postCity;
+      }
+    } else if (project.postalCode && !isNumberOrDate(project.postalCode)) {
+      texts[project.postalCode] = project.postalCode;
+    } else if (project.city && !isNumberOrDate(project.city)) {
+      texts[project.city] = project.city;
+    }
+
+    // Project contact person
+    if (project.contactPerson && !isNumberOrDate(project.contactPerson)) {
+      texts[project.contactPerson] = project.contactPerson;
+    }
+
+    // Main user name
+    if (mainUser.name && !isNumberOrDate(mainUser.name)) {
+      texts[mainUser.name] = mainUser.name;
+    }
+
+    // Main user address
+    if (mainUser.address && !isNumberOrDate(mainUser.address)) {
+      texts[mainUser.address] = mainUser.address;
+    }
+
+    // Main user postal code + city
+    if (mainUser.postalCode && mainUser.city) {
+      const mainUserPostCity = `${mainUser.postalCode} ${mainUser.city}`;
+      if (!isNumberOrDate(mainUserPostCity)) {
+        texts[mainUserPostCity] = mainUserPostCity;
+      }
+    } else if (mainUser.postalCode && !isNumberOrDate(mainUser.postalCode)) {
+      texts[mainUser.postalCode] = mainUser.postalCode;
+    } else if (mainUser.city && !isNumberOrDate(mainUser.city)) {
+      texts[mainUser.city] = mainUser.city;
+    }
+
+    // Main user email
+    if (mainUser.email && !isNumberOrDate(mainUser.email)) {
+      texts[mainUser.email] = mainUser.email;
+    }
+
+    // Main user contact person
+    if (mainUser.contactPerson && !isNumberOrDate(mainUser.contactPerson)) {
+      texts[mainUser.contactPerson] = mainUser.contactPerson;
+    }
+
+    // Signature names
+    const signatures = dynamicData.signatures || {};
+    [1, 2, 3].forEach((sigType) => {
+      const sig = signatures[sigType] || signatures[String(sigType)];
+      if (sig?.name && !isNumberOrDate(sig.name)) {
+        texts[sig.name] = sig.name;
+      }
+    });
+
+    // Company name (for signing section)
+    const company = dynamicData.company || {};
+    if (company.name && !isNumberOrDate(company.name)) {
+      texts[company.name] = company.name;
+    }
+
+    // Page 5 dynamic texts
+    // Listing value (e.g., "B2. X number")
+    if (dynamicData.listingValue && !isNumberOrDate(dynamicData.listingValue)) {
+      texts[dynamicData.listingValue] = dynamicData.listingValue;
+    } else {
+      // Handle "B2. X number" format
+      const xNumber = dynamicData.xNumber || "X number";
+      if (xNumber && !isNumberOrDate(xNumber)) {
+        const listingValue = `B2. ${xNumber}`;
+        texts[listingValue] = listingValue;
+      }
+    }
+
+    // Document value
+    if (
+      dynamicData.documentValue &&
+      !isNumberOrDate(dynamicData.documentValue)
+    ) {
+      texts[dynamicData.documentValue] = dynamicData.documentValue;
+    }
+
+    // Construction value (already collected above)
+
+    // Accomplishment value
+    if (
+      dynamicData.accomplishmentValue &&
+      !isNumberOrDate(dynamicData.accomplishmentValue)
+    ) {
+      texts[dynamicData.accomplishmentValue] = dynamicData.accomplishmentValue;
+    }
+
+    // Page 3 dynamic texts
+    // Status label
+    if (
+      dynamicData.page3StatusLabel &&
+      !isNumberOrDate(dynamicData.page3StatusLabel)
+    ) {
+      texts[dynamicData.page3StatusLabel] = dynamicData.page3StatusLabel;
+    }
+
+    // Status line 1 (extract text part, not date)
+    if (dynamicData.page3StatusLine1) {
+      // Try to extract text part (after date)
+      const statusLine1 = dynamicData.page3StatusLine1;
+      // Check if it contains a date pattern and text
+      const dateMatch = statusLine1.match(/^\d{2}-\d{2}-\d{4}\s+(.+)$/);
+      if (dateMatch && dateMatch[1]) {
+        const textPart = dateMatch[1].trim();
+        if (textPart && !isNumberOrDate(textPart)) {
+          texts[textPart] = textPart;
+        }
+      } else if (!isNumberOrDate(statusLine1)) {
+        // If no date pattern, treat whole string as text
+        texts[statusLine1] = statusLine1;
+      }
+    }
+
+    // Page 13 dynamic texts - B1 rows data
+    if (dynamicData.b1Rows && Array.isArray(dynamicData.b1Rows)) {
+      dynamicData.b1Rows.forEach((row) => {
+        // Collect translatable text fields (excluding numbers and dates)
+        if (row.checkingThe && !isNumberOrDate(row.checkingThe)) {
+          texts[row.checkingThe] = row.checkingThe;
+        }
+        if (row.subject && !isNumberOrDate(row.subject)) {
+          texts[row.subject] = row.subject;
+        }
+        if (row.constructionPart && !isNumberOrDate(row.constructionPart)) {
+          texts[row.constructionPart] = row.constructionPart;
+        }
+        if (row.basis && !isNumberOrDate(row.basis)) {
+          texts[row.basis] = row.basis;
+        }
+        if (row.method && !isNumberOrDate(row.method)) {
+          texts[row.method] = row.method;
+        }
+        if (row.acceptance && !isNumberOrDate(row.acceptance)) {
+          texts[row.acceptance] = row.acceptance;
+        }
+        if (row.timeControl && !isNumberOrDate(row.timeControl)) {
+          texts[row.timeControl] = row.timeControl;
+        }
+      });
+    }
+
+    // Page 14 dynamic texts - B2 rows data
+    if (dynamicData.b2Rows && Array.isArray(dynamicData.b2Rows)) {
+      dynamicData.b2Rows.forEach((row) => {
+        // Collect translatable text fields (excluding numbers and dates)
+        if (row.checkingThe && !isNumberOrDate(row.checkingThe)) {
+          texts[row.checkingThe] = row.checkingThe;
+        }
+        if (row.subject && !isNumberOrDate(row.subject)) {
+          texts[row.subject] = row.subject;
+        }
+        if (row.constructionPart && !isNumberOrDate(row.constructionPart)) {
+          texts[row.constructionPart] = row.constructionPart;
+        }
+        if (row.basis && !isNumberOrDate(row.basis)) {
+          texts[row.basis] = row.basis;
+        }
+        if (row.method && !isNumberOrDate(row.method)) {
+          texts[row.method] = row.method;
+        }
+        if (row.acceptance && !isNumberOrDate(row.acceptance)) {
+          texts[row.acceptance] = row.acceptance;
+        }
+        if (row.timeControl && !isNumberOrDate(row.timeControl)) {
+          texts[row.timeControl] = row.timeControl;
+        }
+      });
+    }
+
+    // Page 15 dynamic texts - B3 rows data
+    if (dynamicData.b3Rows && Array.isArray(dynamicData.b3Rows)) {
+      dynamicData.b3Rows.forEach((row) => {
+        // Collect translatable text fields (excluding numbers and dates)
+        if (row.checkingThe && !isNumberOrDate(row.checkingThe)) {
+          texts[row.checkingThe] = row.checkingThe;
+        }
+        if (row.subject && !isNumberOrDate(row.subject)) {
+          texts[row.subject] = row.subject;
+        }
+        if (row.constructionPart && !isNumberOrDate(row.constructionPart)) {
+          texts[row.constructionPart] = row.constructionPart;
+        }
+        if (row.basis && !isNumberOrDate(row.basis)) {
+          texts[row.basis] = row.basis;
+        }
+        if (row.method && !isNumberOrDate(row.method)) {
+          texts[row.method] = row.method;
+        }
+        if (row.acceptance && !isNumberOrDate(row.acceptance)) {
+          texts[row.acceptance] = row.acceptance;
+        }
+        if (row.timeControl && !isNumberOrDate(row.timeControl)) {
+          texts[row.timeControl] = row.timeControl;
+        }
+      });
+    }
+
+    // Page 16 dynamic texts - B5 rows data
+    if (dynamicData.b5Rows && Array.isArray(dynamicData.b5Rows)) {
+      dynamicData.b5Rows.forEach((row) => {
+        // Collect translatable text fields (excluding numbers and dates)
+        if (row.checkingThe && !isNumberOrDate(row.checkingThe)) {
+          texts[row.checkingThe] = row.checkingThe;
+        }
+        if (row.subject && !isNumberOrDate(row.subject)) {
+          texts[row.subject] = row.subject;
+        }
+        if (row.constructionPart && !isNumberOrDate(row.constructionPart)) {
+          texts[row.constructionPart] = row.constructionPart;
+        }
+        if (row.basis && !isNumberOrDate(row.basis)) {
+          texts[row.basis] = row.basis;
+        }
+        if (row.method && !isNumberOrDate(row.method)) {
+          texts[row.method] = row.method;
+        }
+        if (row.acceptance && !isNumberOrDate(row.acceptance)) {
+          texts[row.acceptance] = row.acceptance;
+        }
+        if (row.timeControl && !isNumberOrDate(row.timeControl)) {
+          texts[row.timeControl] = row.timeControl;
+        }
+      });
+    }
+
+    // Page 17 dynamic texts - B6 rows data
+    if (dynamicData.b6Rows && Array.isArray(dynamicData.b6Rows)) {
+      dynamicData.b6Rows.forEach((row) => {
+        // Collect translatable text fields (excluding numbers and dates)
+        if (row.checkingThe && !isNumberOrDate(row.checkingThe)) {
+          texts[row.checkingThe] = row.checkingThe;
+        }
+        if (row.subject && !isNumberOrDate(row.subject)) {
+          texts[row.subject] = row.subject;
+        }
+        if (row.constructionPart && !isNumberOrDate(row.constructionPart)) {
+          texts[row.constructionPart] = row.constructionPart;
+        }
+        if (row.basis && !isNumberOrDate(row.basis)) {
+          texts[row.basis] = row.basis;
+        }
+        if (row.method && !isNumberOrDate(row.method)) {
+          texts[row.method] = row.method;
+        }
+        if (row.acceptance && !isNumberOrDate(row.acceptance)) {
+          texts[row.acceptance] = row.acceptance;
+        }
+        if (row.timeControl && !isNumberOrDate(row.timeControl)) {
+          texts[row.timeControl] = row.timeControl;
+        }
+      });
+    }
+
+    // Page 18 dynamic texts - B7 rows data
+    if (dynamicData.b7Rows && Array.isArray(dynamicData.b7Rows)) {
+      dynamicData.b7Rows.forEach((row) => {
+        // Collect translatable text fields (excluding numbers and dates)
+        if (row.checkingThe && !isNumberOrDate(row.checkingThe)) {
+          texts[row.checkingThe] = row.checkingThe;
+        }
+        if (row.subject && !isNumberOrDate(row.subject)) {
+          texts[row.subject] = row.subject;
+        }
+        if (row.constructionPart && !isNumberOrDate(row.constructionPart)) {
+          texts[row.constructionPart] = row.constructionPart;
+        }
+        if (row.basis && !isNumberOrDate(row.basis)) {
+          texts[row.basis] = row.basis;
+        }
+        if (row.method && !isNumberOrDate(row.method)) {
+          texts[row.method] = row.method;
+        }
+        if (row.acceptance && !isNumberOrDate(row.acceptance)) {
+          texts[row.acceptance] = row.acceptance;
+        }
+        if (row.timeControl && !isNumberOrDate(row.timeControl)) {
+          texts[row.timeControl] = row.timeControl;
+        }
+      });
+    }
+  }
+
+  return texts;
+}
+
 // -------------------- HELPERS --------------------
-function footer(doc, pageNo, suffix = "") {
+function footer(doc, pageNo, suffix = "", translations = {}) {
   const footerHeight = 25; // Height of footer
   const footerY = PAGE.h - footerHeight;
 
@@ -135,15 +1020,20 @@ function footer(doc, pageNo, suffix = "") {
 
   // Column 2: "Part of..." text (center)
   doc.font("Helvetica").fontSize(8).fillColor("white");
-  doc.text("Part of Kvalitetssikring Danmark ApS", x2, textY, {
+  const partOfText =
+    translations["Part of Kvalitetssikring Danmark ApS"] ||
+    "Part of Kvalitetssikring Danmark ApS";
+  doc.text(partOfText, x2, textY, {
     width: col2Width,
     align: "center",
   });
 
   // Column 3: Page number (right)
+  const pageLabel = translations["Page"] || "Page";
+  const af17Text = translations["af 17"] || "af 17";
   const pageText = suffix
-    ? `Page ${pageNo}.${suffix} af 17`
-    : `Page ${pageNo} af 17`;
+    ? `${pageLabel} ${pageNo}.${suffix} ${af17Text}`
+    : `${pageLabel} ${pageNo} ${af17Text}`;
   doc.text(pageText, x3, textY, {
     width: col3Width,
     align: "right",
@@ -273,7 +1163,7 @@ function bulletsCentered(doc, items, y) {
 }
 
 // Document ID row = 3 cells: Document ID | B2.X number | Special text
-function drawDocumentIdRow(doc, y, dynamic) {
+function drawDocumentIdRow(doc, y, dynamic, translations = {}) {
   const xStart = M.l;
   const h = 22;
 
@@ -287,7 +1177,8 @@ function drawDocumentIdRow(doc, y, dynamic) {
   // Cell 1: label
   doc.rect(xStart, y, w1, h).stroke();
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("Document ID", xStart + 6, y + 6, {
+  const documentIdText = translations["Document ID"] || "Document ID";
+  doc.text(documentIdText, xStart + 6, y + 6, {
     width: w1 - 12,
     align: "left",
   });
@@ -305,7 +1196,9 @@ function drawDocumentIdRow(doc, y, dynamic) {
   const x3 = x2 + w2;
   doc.rect(x3, y, w3, h).stroke();
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text(dynamic.specialText, x3 + 6, y + 6, {
+  const translatedSpecialText =
+    translations[dynamic.specialText] || dynamic.specialText;
+  doc.text(translatedSpecialText, x3 + 6, y + 6, {
     width: w3 - 12,
     align: "left",
   });
@@ -316,7 +1209,7 @@ function drawDocumentIdRow(doc, y, dynamic) {
   return y + h + 10;
 }
 
-async function page1(doc, dynamic) {
+async function page1(doc, dynamic, translations = {}) {
   let y = M.t + 10;
 
   // Add mainlg.jpg image at the top left
@@ -343,7 +1236,8 @@ async function page1(doc, dynamic) {
 
   // Heading: Executing part (dark blue, no cell)
   doc.font("Helvetica-Bold").fontSize(11).fillColor(HEADING_COLOR);
-  doc.text("Executing part", M.l, y);
+  const executingPartText = translations["Executing part"] || "Executing part";
+  doc.text(executingPartText, M.l, y);
   y = doc.y + 6;
 
   // Company image and details side by side on the right
@@ -353,9 +1247,37 @@ async function page1(doc, dynamic) {
   const companyDetailsX = M.l;
   const companyImageX = M.l + companyDetailsWidth + 20;
 
-  // Company data on the left
+  // Company data on the left (with translations)
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text(dynamic.companyInfo, companyDetailsX, y, {
+  // Rebuild companyInfo with translated labels and values
+  let translatedCompanyInfo = "";
+  if (dynamic.company) {
+    const parts = [];
+    if (dynamic.company.name) {
+      const nameLabel = translations["Name:"] || "Name:";
+      const companyName =
+        translations[dynamic.company.name] || dynamic.company.name;
+      parts.push(`${nameLabel} ${companyName}`);
+    }
+    if (dynamic.company.address) {
+      const addressLabel = translations["Address:"] || "Address:";
+      const companyAddress =
+        translations[dynamic.company.address] || dynamic.company.address;
+      parts.push(`${addressLabel} ${companyAddress}`);
+    }
+    if (dynamic.company.cvr) {
+      const cvrLabel = translations["CVR:"] || "CVR:";
+      parts.push(`${cvrLabel} ${dynamic.company.cvr}`); // CVR is a number, don't translate
+    }
+    if (dynamic.company.contactPhone) {
+      const telLabel = translations["Tel:"] || "Tel:";
+      parts.push(`${telLabel} ${dynamic.company.contactPhone}`); // Phone is a number, don't translate
+    }
+    translatedCompanyInfo = parts.join("\n");
+  } else {
+    translatedCompanyInfo = dynamic.companyInfo || "";
+  }
+  doc.text(translatedCompanyInfo, companyDetailsX, y, {
     width: companyDetailsWidth,
   });
   doc.fillColor("black");
@@ -412,29 +1334,38 @@ async function page1(doc, dynamic) {
 
   // Static control plan heading (bigger) first, then project name on same baseline
   doc.font("Helvetica-Bold").fontSize(22).fillColor(HEADING_COLOR);
-  const headingText = "Static control plan: ";
+  const headingText =
+    translations["Static control plan: "] || "Static control plan: ";
   doc.text(headingText, M.l, y);
 
   // Calculate x position after heading and adjust y for baseline alignment
   const headingWidth = doc.widthOfString(headingText);
   const baselineOffset = 3; // Adjust to match baseline (fontSize 22 vs 16)
   doc.font("Helvetica-Bold").fontSize(16).fillColor("black");
-  doc.text(dynamic.projectName, M.l + headingWidth, y + baselineOffset);
+  const translatedProjectName =
+    translations[dynamic.projectName] || dynamic.projectName;
+  doc.text(translatedProjectName, M.l + headingWidth, y + baselineOffset);
 
   doc.fillColor("black");
   y = doc.y + 18;
 
   // Line: For those executed...
   doc.font("Helvetica").fontSize(11).fillColor("black");
-  doc.text("For those executed within the construction part:", M.l, y);
+  const forThoseExecutedText =
+    translations["For those executed within the construction part:"] ||
+    "For those executed within the construction part:";
+  doc.text(forThoseExecutedText, M.l, y);
   y = doc.y + 16;
 
   // Document ID row (in dark blue bordered cells)
-  y = drawDocumentIdRow(doc, y, dynamic);
+  y = drawDocumentIdRow(doc, y, dynamic, translations);
 
   // Centered heading: Applicable EU standards 2024 (dark blue)
   doc.font("Helvetica-Bold").fontSize(11).fillColor(HEADING_COLOR);
-  doc.text("Applicable EU standards 2024", M.l, y, {
+  const euStandardsText =
+    translations["Applicable EU standards 2024"] ||
+    "Applicable EU standards 2024";
+  doc.text(euStandardsText, M.l, y, {
     width: CONTENT_W,
     align: "center",
   });
@@ -456,10 +1387,15 @@ async function page1(doc, dynamic) {
     "EN 12602: Aerated concrete",
   ];
 
-  y = bulletsCentered(doc, eurocodes, y);
+  // Translate eurocodes
+  const translatedEurocodes = eurocodes.map(
+    (code) => translations[code] || code
+  );
+
+  y = bulletsCentered(doc, translatedEurocodes, y);
 
   // Footer for page 1
-  footer(doc, 1);
+  footer(doc, 1, "", translations);
 }
 
 // -------------------- PAGE 2 (FULL) --------------------
@@ -468,7 +1404,7 @@ async function page1(doc, dynamic) {
 // If already defined for Page 1, REMOVE this line:
 
 // Blue section bar with white text: STATIC CONTROL PLAN / CONSTRUCTION CASE / Signing:
-function drawSectionBar(doc, y, label) {
+function drawSectionBar(doc, y, label, translations = {}) {
   const barHeight = 20;
 
   // Blue background
@@ -477,9 +1413,10 @@ function drawSectionBar(doc, y, label) {
   doc.rect(M.l, y, CONTENT_W, barHeight).fill();
   doc.restore();
 
-  // White text on top
+  // White text on top (with translation)
   doc.font("Helvetica-Bold").fontSize(11).fillColor("white");
-  doc.text(label, M.l + 8, y + 5, {
+  const translatedLabel = translations[label] || label;
+  doc.text(translatedLabel, M.l + 8, y + 5, {
     width: CONTENT_W - 16,
     align: "left",
   });
@@ -490,7 +1427,7 @@ function drawSectionBar(doc, y, label) {
 }
 
 // Single-column underlined row (full width)
-function underlineRow(doc, y, text, options = {}) {
+function underlineRow(doc, y, text, options = {}, translations = {}) {
   const color = options.color || "black";
   const bold = options.bold || false;
   const size = options.size || 10;
@@ -499,7 +1436,8 @@ function underlineRow(doc, y, text, options = {}) {
     .font(bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(size)
     .fillColor(color);
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
   });
   const afterY = doc.y;
@@ -517,7 +1455,14 @@ function underlineRow(doc, y, text, options = {}) {
 }
 
 // 2-column underlined row: label | value
-function underlineRowTwoCols(doc, y, label, value, options = {}) {
+function underlineRowTwoCols(
+  doc,
+  y,
+  label,
+  value,
+  options = {},
+  translations = {}
+) {
   const split = options.split || 170; // X position where value column starts
   const labelColor = options.labelColor || "black";
   const valueColor = options.valueColor || "black";
@@ -530,19 +1475,24 @@ function underlineRowTwoCols(doc, y, label, value, options = {}) {
   const labelWidth = split - 10;
   const valueWidth = CONTENT_W - split + 10;
 
-  // Label
+  // Label (with translation)
   doc
     .font(labelBold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(labelSize)
     .fillColor(labelColor);
-  doc.text(label, labelX, y, {
+  const translatedLabel = translations[label] || label;
+  doc.text(translatedLabel, labelX, y, {
     width: labelWidth,
   });
   const afterLabelY = doc.y;
 
-  // Value
+  // Value (with translation, but check if it's a number/date first)
   doc.font("Helvetica").fontSize(valueSize).fillColor(valueColor);
-  doc.text(value, valueX, y, {
+  let translatedValue = value;
+  if (value && typeof value === "string" && !isNumberOrDate(value)) {
+    translatedValue = translations[value] || value;
+  }
+  doc.text(translatedValue, valueX, y, {
     width: valueWidth,
   });
   const afterValueY = doc.y;
@@ -568,7 +1518,8 @@ function underlineRowFourCols(
   leftLabel,
   leftValue,
   rightLabel,
-  rightValue
+  rightValue,
+  translations = {}
 ) {
   const x1 = M.l;
   const col1W = 90; // left label
@@ -580,24 +1531,42 @@ function underlineRowFourCols(
   const x3 = x2 + col2W;
   const x4 = x3 + col3W;
 
-  // Left label (bold)
+  // Left label (bold, with translation)
   doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-  doc.text(leftLabel, x1, y, { width: col1W - 4 });
+  const translatedLeftLabel = translations[leftLabel] || leftLabel;
+  doc.text(translatedLeftLabel, x1, y, { width: col1W - 4 });
   const y1 = doc.y;
 
-  // Left value
+  // Left value (with translation, but check if it's a number/date first)
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text(leftValue, x2, y, { width: col2W - 4 });
+  let translatedLeftValue = leftValue;
+  if (
+    leftValue &&
+    typeof leftValue === "string" &&
+    !isNumberOrDate(leftValue)
+  ) {
+    translatedLeftValue = translations[leftValue] || leftValue;
+  }
+  doc.text(translatedLeftValue, x2, y, { width: col2W - 4 });
   const y2 = doc.y;
 
-  // Right label (bold)
+  // Right label (bold, with translation)
   doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-  doc.text(rightLabel, x3, y, { width: col3W - 4 });
+  const translatedRightLabel = translations[rightLabel] || rightLabel;
+  doc.text(translatedRightLabel, x3, y, { width: col3W - 4 });
   const y3 = doc.y;
 
-  // Right value
+  // Right value (with translation, but check if it's a number/date first)
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text(rightValue, x4, y, { width: col4W - 4 });
+  let translatedRightValue = rightValue;
+  if (
+    rightValue &&
+    typeof rightValue === "string" &&
+    !isNumberOrDate(rightValue)
+  ) {
+    translatedRightValue = translations[rightValue] || rightValue;
+  }
+  doc.text(translatedRightValue, x4, y, { width: col4W - 4 });
   const y4 = doc.y;
 
   const bottom = Math.max(y1, y2, y3, y4) + 2;
@@ -615,7 +1584,15 @@ function underlineRowFourCols(
 }
 
 // 3-column underlined row: Col1 | Col2 | Col3
-function underlineRowThreeColsSigning(doc, y, col1, col2, col3, options = {}) {
+function underlineRowThreeColsSigning(
+  doc,
+  y,
+  col1,
+  col2,
+  col3,
+  options = {},
+  translations = {}
+) {
   const col1W = 90; // date (increased to accommodate dates like "18/11/2025")
   const col2W = 200; // name
   const col3W = CONTENT_W - (col1W + col2W); // company
@@ -630,7 +1607,7 @@ function underlineRowThreeColsSigning(doc, y, col1, col2, col3, options = {}) {
   const col3Color = options.col3Color || "black";
   const bold = options.bold || false;
 
-  // Column 1 (date)
+  // Column 1 (date - usually not translated as it's a date)
   doc
     .font(bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(size)
@@ -638,20 +1615,28 @@ function underlineRowThreeColsSigning(doc, y, col1, col2, col3, options = {}) {
   doc.text(String(col1), x1, y, { width: col1W - 4 });
   const y1 = doc.y;
 
-  // Column 2 (name)
+  // Column 2 (name - with translation, but check if it's a number/date first)
   doc
     .font(bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(size)
     .fillColor(col2Color);
-  doc.text(String(col2), x2, y, { width: col2W - 4 });
+  let translatedCol2 = col2;
+  if (col2 && typeof col2 === "string" && !isNumberOrDate(col2)) {
+    translatedCol2 = translations[col2] || col2;
+  }
+  doc.text(String(translatedCol2), x2, y, { width: col2W - 4 });
   const y2 = doc.y;
 
-  // Column 3 (company)
+  // Column 3 (company - with translation, but check if it's a number/date first)
   doc
     .font(bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(size)
     .fillColor(col3Color);
-  doc.text(String(col3), x3, y, { width: col3W - 4 });
+  let translatedCol3 = col3;
+  if (col3 && typeof col3 === "string" && !isNumberOrDate(col3)) {
+    translatedCol3 = translations[col3] || col3;
+  }
+  doc.text(String(translatedCol3), x3, y, { width: col3W - 4 });
   const y3 = doc.y;
 
   const bottom = Math.max(y1, y2, y3) + 2;
@@ -670,32 +1655,36 @@ function underlineRowThreeColsSigning(doc, y, col1, col2, col3, options = {}) {
 
 // ===== PAGE 2 =====
 
-function page2(doc, dynamic) {
+function page2(doc, dynamic, translations = {}) {
   let y = M.t + 30;
 
   // ---------- STATIC CONTROL PLAN (blue bar) ----------
-  y = drawSectionBar(doc, y, "STATIC CONTROL PLAN");
+  y = drawSectionBar(doc, y, "STATIC CONTROL PLAN", translations);
 
   // For load-bearing structures...
   y = underlineRow(
     doc,
     y,
     "For load-bearing structures, cf. DS1140 applies to:",
-    { size: 10 }
+    { size: 10 },
+    translations
   );
 
   // Construction Part: Special text (from gamma.special) - label bigger, bold, blue
+  const constructionPartValue =
+    dynamic.constructionPart || dynamic.specialText || "Special text";
   y = underlineRowTwoCols(
     doc,
     y,
     "Construction Part:",
-    dynamic.constructionPart || dynamic.specialText || "Special text",
+    constructionPartValue,
     {
       valueColor: "black",
       labelColor: HEADING_COLOR,
       labelBold: true,
       labelSize: 14,
-    }
+    },
+    translations
   );
 
   // The control plan is built according to the current EU standard:
@@ -703,21 +1692,29 @@ function page2(doc, dynamic) {
     doc,
     y,
     "The control plan is built according to the current EU standard:",
-    { size: 10 }
+    { size: 10 },
+    translations
   );
 
   // Eurocode: from projectprofessioneurocodes - label bigger, bold, blue
-  y = underlineRowTwoCols(doc, y, "Eurocode:", dynamic.eurocode || "Eurocode", {
-    valueColor: "black",
-    labelColor: HEADING_COLOR,
-    labelBold: true,
-    labelSize: 14,
-  });
+  y = underlineRowTwoCols(
+    doc,
+    y,
+    "Eurocode:",
+    dynamic.eurocode || "Eurocode",
+    {
+      valueColor: "black",
+      labelColor: HEADING_COLOR,
+      labelBold: true,
+      labelSize: 14,
+    },
+    translations
+  );
 
   y += 8;
 
   // ---------- CONSTRUCTION CASE (blue bar) ----------
-  y = drawSectionBar(doc, y, "CONSTRUCTION CASE:");
+  y = drawSectionBar(doc, y, "CONSTRUCTION CASE:", translations);
 
   // Get project and user data
   const project = dynamic.project || {};
@@ -728,50 +1725,73 @@ function page2(doc, dynamic) {
     ? new Date(project.createdAt).toLocaleDateString("en-GB")
     : project.startup || "Project setup";
 
+  // Helper to get translated value
+  const getTranslatedValue = (value, fallback = "Project setup") => {
+    if (!value || value === fallback) return translations[fallback] || fallback;
+    if (isNumberOrDate(value)) return value;
+    return translations[value] || value;
+  };
+
   // Two side-by-side sections (left & right), keys bold
   // Row 1
+  const projectName = project.name || "Project setup";
+  const mainUserName = mainUser.name || "Project setup";
   y = underlineRowFourCols(
     doc,
     y,
     "Project INFO",
-    project.name || "Project setup",
+    projectName,
     "Main Contractor/Custumer",
-    mainUser.name || "Project setup"
+    mainUserName,
+    translations
   );
 
   // Row 2
+  const caseNumber =
+    project.caseNumber ||
+    project.case_number ||
+    project.projectNumber ||
+    "Project setup.";
   y = underlineRowFourCols(
     doc,
     y,
     "ID/Case no.",
-    project.caseNumber ||
-      project.case_number ||
-      project.projectNumber ||
-      "Project setup.",
+    caseNumber,
     "Name",
-    mainUser.name || "Project setup"
+    mainUserName,
+    translations
   );
 
   // Row 3
+  const projectAddress = project.address || "Project setup";
+  const mainUserAddress = mainUser.address || "Project setup";
   y = underlineRowFourCols(
     doc,
     y,
     "Name",
-    project.name || "Project setup",
+    projectName,
     "Address",
-    mainUser.address || "Project setup"
+    mainUserAddress,
+    translations
   );
 
   // Row 4
+  const projectPostCity =
+    project.postalCode && project.city
+      ? `${project.postalCode} ${project.city}`
+      : project.postalCode || project.city || "Project setup";
+  const mainUserPostCity =
+    mainUser.postalCode && mainUser.city
+      ? `${mainUser.postalCode} ${mainUser.city}`
+      : mainUser.postalCode || mainUser.city || "Project setup";
   y = underlineRowFourCols(
     doc,
     y,
     "Address",
-    project.address || "Project setup",
+    projectAddress,
     "Post no./City.",
-    mainUser.postalCode && mainUser.city
-      ? `${mainUser.postalCode} ${mainUser.city}`
-      : mainUser.postalCode || mainUser.city || "Project setup"
+    mainUserPostCity,
+    translations
   );
 
   // Row 5
@@ -779,31 +1799,35 @@ function page2(doc, dynamic) {
     doc,
     y,
     "Post no./City.",
-    project.postalCode && project.city
-      ? `${project.postalCode} ${project.city}`
-      : project.postalCode || project.city || "Project setup",
+    projectPostCity,
     "CVR no.",
-    mainUser.cvr || "Project setup"
+    mainUser.cvr || "Project setup",
+    translations
   );
 
   // Row 6
+  const projectContactPerson = project.contactPerson || "Project setup";
+  const mainUserEmail = mainUser.email || "Project setup";
   y = underlineRowFourCols(
     doc,
     y,
     "Contact person",
-    project.contactPerson || "Project setup",
+    projectContactPerson,
     "Email.",
-    mainUser.email || "Project setup"
+    mainUserEmail,
+    translations
   );
 
   // Row 7
+  const mainUserContactPerson = mainUser.contactPerson || "Project setup";
   y = underlineRowFourCols(
     doc,
     y,
     "Startup",
-    projectDate,
+    projectDate, // Date, not translated
     "Contact person",
-    mainUser.contactPerson || "Project setup"
+    mainUserContactPerson,
+    translations
   );
 
   y += 8;
@@ -833,13 +1857,17 @@ function page2(doc, dynamic) {
     .fill()
     .fillColor("black"); // Reset fill color
 
-  // Draw text on top of gray background
+  // Draw text on top of gray background (with translations)
   doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-  doc.text("Document type", x1, y, { width: col1W - 4 });
+  const docTypeLabel = translations["Document type"] || "Document type";
+  doc.text(docTypeLabel, x1, y, { width: col1W - 4 });
   const y1 = doc.y;
-  doc.text("Version", x2, y, { width: col2W - 4 });
+  const versionLabel = translations["Version"] || "Version";
+  doc.text(versionLabel, x2, y, { width: col2W - 4 });
   const y2 = doc.y;
-  doc.text("Construction class", x3, y, { width: col3W - 4 });
+  const constructionClassLabel =
+    translations["Construction class"] || "Construction class";
+  doc.text(constructionClassLabel, x3, y, { width: col3W - 4 });
   const y3 = doc.y;
 
   const bottomHeader = Math.max(y1, y2, y3) + 2;
@@ -851,13 +1879,14 @@ function page2(doc, dynamic) {
     .stroke();
   y = bottomHeader + 6;
 
-  // Data row - all values in bold
+  // Data row - all values in bold (with translations)
   doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-  doc.text(docType, x1, y, { width: col1W - 4 });
+  const translatedDocType = translations[docType] || docType;
+  doc.text(translatedDocType, x1, y, { width: col1W - 4 });
   const y1Data = doc.y;
-  doc.text(version, x2, y, { width: col2W - 4 });
+  doc.text(version, x2, y, { width: col2W - 4 }); // Version is a number
   const y2Data = doc.y;
-  doc.text(constructionClass, x3, y, { width: col3W - 4 });
+  doc.text(constructionClass, x3, y, { width: col3W - 4 }); // Construction class is usually a code
   const y3Data = doc.y;
 
   const bottomData = Math.max(y1Data, y2Data, y3Data) + 2;
@@ -872,10 +1901,16 @@ function page2(doc, dynamic) {
   y += 10;
 
   // ---------- Signing (blue bar) ----------
-  y = drawSectionBar(doc, y, "Signing:");
+  y = drawSectionBar(doc, y, "Signing:", translations);
 
   // Same data as static report.
-  y = underlineRow(doc, y, "Same data as static report.", { size: 10 });
+  y = underlineRow(
+    doc,
+    y,
+    "Same data as static report.",
+    { size: 10 },
+    translations
+  );
 
   // Get signatures and company
   const signatures = dynamic.signatures || {};
@@ -909,20 +1944,29 @@ function page2(doc, dynamic) {
       col3Color: "black",
       size: 10,
       bold: true,
-    }
+    },
+    translations
   );
   // Data row
   const sig1 = signatures[1] || signatures["1"];
   const sig1Name = sig1?.name || "Admin – company organization";
   const sig1Date = formatDate(sig1?.createdAt || sig1?.signatureDate);
   console.log("Row 1 - signatureType 1, name:", sig1Name, "date:", sig1Date);
-  y = underlineRowThreeColsSigning(doc, y, sig1Date, sig1Name, companyName, {
-    col1Color: "black",
-    col2Color: "black",
-    col3Color: "black",
-    size: 10,
-    bold: false,
-  });
+  y = underlineRowThreeColsSigning(
+    doc,
+    y,
+    sig1Date,
+    sig1Name,
+    companyName,
+    {
+      col1Color: "black",
+      col2Color: "black",
+      col3Color: "black",
+      size: 10,
+      bold: false,
+    },
+    translations
+  );
 
   // Row 2: signatureType 2 - Own Control (OC)
   // Header row
@@ -938,20 +1982,29 @@ function page2(doc, dynamic) {
       col3Color: "black",
       size: 10,
       bold: true,
-    }
+    },
+    translations
   );
   // Data row
   const sig2 = signatures[2] || signatures["2"];
   const sig2Name = sig2?.name || "Project manager– company organization";
   const sig2Date = formatDate(sig2?.createdAt || sig2?.signatureDate);
   console.log("Row 2 - signatureType 2, name:", sig2Name, "date:", sig2Date);
-  y = underlineRowThreeColsSigning(doc, y, sig2Date, sig2Name, companyName, {
-    col1Color: "black",
-    col2Color: "black",
-    col3Color: "black",
-    size: 10,
-    bold: false,
-  });
+  y = underlineRowThreeColsSigning(
+    doc,
+    y,
+    sig2Date,
+    sig2Name,
+    companyName,
+    {
+      col1Color: "black",
+      col2Color: "black",
+      col3Color: "black",
+      size: 10,
+      bold: false,
+    },
+    translations
+  );
 
   // Row 3: signatureType 3 - Independent controller
   // Header row
@@ -967,32 +2020,42 @@ function page2(doc, dynamic) {
       col3Color: "black",
       size: 10,
       bold: true,
-    }
+    },
+    translations
   );
   // Data row
   const sig3 = signatures[3] || signatures["3"];
   const sig3Name = sig3?.name || "company organization";
   const sig3Date = formatDate(sig3?.createdAt || sig3?.signatureDate);
   console.log("Row 3 - signatureType 3, name:", sig3Name, "date:", sig3Date);
-  y = underlineRowThreeColsSigning(doc, y, sig3Date, sig3Name, companyName, {
-    col1Color: "black",
-    col2Color: "black",
-    col3Color: "black",
-    size: 10,
-    bold: false,
-  });
+  y = underlineRowThreeColsSigning(
+    doc,
+    y,
+    sig3Date,
+    sig3Name,
+    companyName,
+    {
+      col1Color: "black",
+      col2Color: "black",
+      col3Color: "black",
+      size: 10,
+      bold: false,
+    },
+    translations
+  );
 
   // Footer
-  footer(doc, 1);
+  footer(doc, 2, "", translations);
 }
 
 // -------------------- PAGE 3 (STUB) --------------------
 // ===== Page 3 helpers =====
 
 // Main heading in dark blue with underline
-function drawMainHeadingBlue(doc, y, text) {
+function drawMainHeadingBlue(doc, y, text, translations = {}) {
   doc.font("Helvetica-Bold").fontSize(12).fillColor(HEADING_COLOR);
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
   });
 
@@ -1009,9 +2072,10 @@ function drawMainHeadingBlue(doc, y, text) {
 }
 
 // Simple paragraph helper for this page
-function paraPage3(doc, y, text) {
+function paraPage3(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 2,
   });
@@ -1020,58 +2084,68 @@ function paraPage3(doc, y, text) {
 
 // ===== PAGE 3 =====
 
-function page3(doc, dynamic) {
+function page3(doc, dynamic, translations = {}) {
   let y = M.t + 30;
 
   // Heading: Document completion status
-  y = drawMainHeadingBlue(doc, y, "Document completion status");
+  y = drawMainHeadingBlue(doc, y, "Document completion status", translations);
 
   // Paragraph 1
-  y = paraPage3(
-    doc,
-    y,
+  const para1Text =
     "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document " +
-      "submissions, and must also help to ensure that both the contractor and the consultant work " +
-      "proactively to communicate back and forth in connection with any corrections."
-  );
+    "submissions, and must also help to ensure that both the contractor and the consultant work " +
+    "proactively to communicate back and forth in connection with any corrections.";
+  y = paraPage3(doc, y, para1Text, translations);
 
   // Paragraph 2
-  y = paraPage3(
-    doc,
-    y,
+  const para2Text =
     "The document is signed when this has been approved by the structural engineer, until then the " +
-      "document is a dynamic document."
-  );
+    "document is a dynamic document.";
+  y = paraPage3(doc, y, para2Text, translations);
 
   // Paragraph 3 (Expected approval time)
-  y = paraPage3(
-    doc,
-    y,
-    "Expected approval time 14 days, after which the content of the document is considered approved."
-  );
+  const para3Text =
+    "Expected approval time 14 days, after which the content of the document is considered approved.";
+  y = paraPage3(doc, y, para3Text, translations);
 
   y += 12;
 
   // Status line: "Status:    Approval"
   doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-  doc.text("Status:", M.l, y, { continued: true });
+  const statusLabelText = translations["Status:"] || "Status:";
+  doc.text(statusLabelText, M.l, y, { continued: true });
 
   const statusLabel = dynamic.page3StatusLabel || "Approval";
+  const translatedStatusLabel = translations[statusLabel] || statusLabel;
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text("    " + statusLabel, { continued: false });
+  doc.text("    " + translatedStatusLabel, { continued: false });
 
   y = doc.y + 8;
 
   // Status line 1: date + text, in red (dynamic-friendly)
   const statusLine1 =
     dynamic.page3StatusLine1 || "18-11-2025    Under Approval";
+
+  // Parse statusLine1 to separate date and text
+  let translatedStatusLine1 = statusLine1;
+  const dateMatch = statusLine1.match(/^(\d{2}-\d{2}-\d{4})\s+(.+)$/);
+  if (dateMatch) {
+    const datePart = dateMatch[1]; // Date, don't translate
+    const textPart = dateMatch[2].trim();
+    const translatedTextPart = translations[textPart] || textPart;
+    translatedStatusLine1 = `${datePart}    ${translatedTextPart}`;
+  } else if (!isNumberOrDate(statusLine1)) {
+    // If no date pattern, try to translate whole string
+    translatedStatusLine1 = translations[statusLine1] || statusLine1;
+  }
+
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text(statusLine1, M.l, y, {
+  doc.text(translatedStatusLine1, M.l, y, {
     width: CONTENT_W,
   });
   y = doc.y + 4;
 
-  // Status line 2: second date, in red
+  // Status line 2: second date, in red (date, not translated)
   const statusLine2 = dynamic.page3StatusLine2 || "18-11-2025";
   doc.text(statusLine2, M.l, y, {
     width: CONTENT_W,
@@ -1081,22 +2155,52 @@ function page3(doc, dynamic) {
   doc.fillColor("black");
 
   // Footer (this is logical page 3)
-  footer(doc, 2);
+  footer(doc, 3, "", translations);
 }
 
 // -------------------- PAGE 4 (STUB) --------------------
 // ===== Page 4 helpers =====
 
 // One TOC row: label ......... pageNo
-function drawTocItemWithDots(doc, y, label, pageNo) {
+function drawTocItemWithDots(doc, y, label, pageNo, translations = {}) {
   doc.font("Helvetica").fontSize(10).fillColor("black");
 
   const leftX = M.l;
   const rightX = M.l + CONTENT_W;
   const pageStr = String(pageNo);
 
-  // Measure text widths
-  const labelWidth = doc.widthOfString(label);
+  // Translate label (handle dynamic parts)
+  let translatedLabel = label;
+
+  // Check if label contains dynamic parts like "Construction Part: ${value}" or "Eurocode: ${value}"
+  const constructionPartMatch = label.match(/^Construction Part:\s*(.+)$/);
+  const eurocodeMatch = label.match(/^Eurocode:\s*(.+)$/);
+
+  if (constructionPartMatch) {
+    const labelPart = "Construction Part:";
+    const valuePart = constructionPartMatch[1];
+    const translatedLabelPart = translations[labelPart] || labelPart;
+    const translatedValuePart =
+      valuePart && !isNumberOrDate(valuePart)
+        ? translations[valuePart] || valuePart
+        : valuePart;
+    translatedLabel = `${translatedLabelPart} ${translatedValuePart}`;
+  } else if (eurocodeMatch) {
+    const labelPart = "Eurocode:";
+    const valuePart = eurocodeMatch[1];
+    const translatedLabelPart = translations[labelPart] || labelPart;
+    const translatedValuePart =
+      valuePart && !isNumberOrDate(valuePart)
+        ? translations[valuePart] || valuePart
+        : valuePart;
+    translatedLabel = `${translatedLabelPart} ${translatedValuePart}`;
+  } else {
+    // Regular label translation
+    translatedLabel = translations[label] || label;
+  }
+
+  // Measure text widths (use translated label)
+  const labelWidth = doc.widthOfString(translatedLabel);
   const pageWidth = doc.widthOfString(pageStr);
   const dotWidth = doc.widthOfString(".");
 
@@ -1104,7 +2208,7 @@ function drawTocItemWithDots(doc, y, label, pageNo) {
   const pageX = rightX - pageWidth;
 
   // Draw label (slightly limited width so it doesn't run into dots)
-  doc.text(label, labelX, y, {
+  doc.text(translatedLabel, labelX, y, {
     width: CONTENT_W - pageWidth - 30,
     ellipsis: true,
   });
@@ -1132,17 +2236,21 @@ function drawTocItemWithDots(doc, y, label, pageNo) {
 
 // ===== PAGE 4 =====
 
-function page4(doc, dynamic) {
+function page4(doc, dynamic, translations = {}) {
   let y = M.t + 30;
 
   // Heading: Content (blue with underline, same style as Page 3)
-  y = drawMainHeadingBlue(doc, y, "Content");
+  y = drawMainHeadingBlue(doc, y, "Content", translations);
 
   // Table of contents items (labels + page numbers)
+  const constructionPartValue =
+    dynamic.constructionPart || dynamic.specialText || "";
+  const eurocodeValue = dynamic.eurocode || "";
+
   const tocItems = [
     { label: "Static control plan", page: 1 },
-    { label: `Construction Part: ${dynamic.constructionPart}`, page: 1 },
-    { label: `Eurocode: ${dynamic.eurocode}`, page: 1 },
+    { label: `Construction Part: ${constructionPartValue}`, page: 1 },
+    { label: `Eurocode: ${eurocodeValue}`, page: 1 },
     { label: "Signing:", page: 1 },
 
     { label: "1. General", page: 4 },
@@ -1192,10 +2300,8 @@ function page4(doc, dynamic) {
   ];
 
   tocItems.forEach((item) => {
-    y = drawTocItemWithDots(doc, y, item.label, item.page);
+    y = drawTocItemWithDots(doc, y, item.label, item.page, translations);
   });
-
-  footer(doc, 3);
 }
 
 // -------------------- PAGE 5–12 (STUBS) --------------------
@@ -1344,7 +2450,7 @@ function underlineRowThreeBlocks(
 }
 
 // Full-width underlined row (for the two sentences you mentioned)
-function underlineRowFullWidth(doc, y, text, options = {}) {
+function underlineRowFullWidth(doc, y, text, options = {}, translations = {}) {
   const size = options.size || 10;
   const bold = options.bold || false;
 
@@ -1352,7 +2458,8 @@ function underlineRowFullWidth(doc, y, text, options = {}) {
     .font(bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(size)
     .fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
   });
   const afterY = doc.y;
@@ -1372,9 +2479,10 @@ function underlineRowFullWidth(doc, y, text, options = {}) {
 // ===== Page 5 helpers =====
 
 // Simple paragraph
-function paraPage5(doc, y, text) {
+function paraPage5(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(10).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 2,
   });
@@ -1382,11 +2490,12 @@ function paraPage5(doc, y, text) {
 }
 
 // Bullets, left aligned
-function bulletsLeft(doc, y, items) {
+function bulletsLeft(doc, y, items, translations = {}) {
   doc.font("Helvetica").fontSize(10).fillColor("black");
   let yy = y;
   items.forEach((txt) => {
-    doc.text("• " + txt, M.l + 10, yy, {
+    const translatedTxt = translations[txt] || txt;
+    doc.text("• " + translatedTxt, M.l + 10, yy, {
       width: CONTENT_W - 20,
       lineGap: 2,
     });
@@ -1396,7 +2505,7 @@ function bulletsLeft(doc, y, items) {
 }
 
 // Full-width underlined row (for sentences like "The following forms..." etc.)
-function underlineRowFullWidth(doc, y, text, options = {}) {
+function underlineRowFullWidth(doc, y, text, options = {}, translations = {}) {
   const size = options.size || 10;
   const bold = options.bold || false;
 
@@ -1404,7 +2513,8 @@ function underlineRowFullWidth(doc, y, text, options = {}) {
     .font(bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(size)
     .fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
   });
   const afterY = doc.y;
@@ -1428,7 +2538,8 @@ function underlineRowFourColsTable(
   col2,
   col3,
   col4,
-  options = {}
+  options = {},
+  translations = {}
 ) {
   const col1W = 90; // LISTING
   const col2W = 120; // DOCUMENT
@@ -1451,20 +2562,48 @@ function underlineRowFourColsTable(
     doc.font("Helvetica").fontSize(size).fillColor(valueColor);
   }
 
+  // Translate columns (check if they're numbers/dates first)
+  let translatedCol1 = col1;
+  let translatedCol2 = col2;
+  let translatedCol3 = col3;
+  let translatedCol4 = col4;
+
+  if (!options.header) {
+    // For data rows, translate values if they're not numbers/dates
+    if (col1 && typeof col1 === "string" && !isNumberOrDate(col1)) {
+      translatedCol1 = translations[col1] || col1;
+    }
+    if (col2 && typeof col2 === "string" && !isNumberOrDate(col2)) {
+      translatedCol2 = translations[col2] || col2;
+    }
+    if (col3 && typeof col3 === "string" && !isNumberOrDate(col3)) {
+      translatedCol3 = translations[col3] || col3;
+    }
+    if (col4 && typeof col4 === "string" && !isNumberOrDate(col4)) {
+      translatedCol4 = translations[col4] || col4;
+    }
+  } else {
+    // For header rows, translate labels
+    translatedCol1 = translations[col1] || col1;
+    translatedCol2 = translations[col2] || col2;
+    translatedCol3 = translations[col3] || col3;
+    translatedCol4 = translations[col4] || col4;
+  }
+
   // Column 1
-  doc.text(col1, x1, y, { width: col1W - 4 });
+  doc.text(translatedCol1, x1, y, { width: col1W - 4 });
   const y1 = doc.y;
 
   // Column 2
-  doc.text(col2, x2, y, { width: col2W - 4 });
+  doc.text(translatedCol2, x2, y, { width: col2W - 4 });
   const y2 = doc.y;
 
   // Column 3
-  doc.text(col3, x3, y, { width: col3W - 4 });
+  doc.text(translatedCol3, x3, y, { width: col3W - 4 });
   const y3 = doc.y;
 
   // Column 4
-  doc.text(col4, x4, y, { width: col4W - 4 });
+  doc.text(translatedCol4, x4, y, { width: col4W - 4 });
   const y4 = doc.y;
 
   const bottom = Math.max(y1, y2, y3, y4) + 2;
@@ -1482,24 +2621,25 @@ function underlineRowFourColsTable(
 
 // ===== PAGE 5 =====
 
-function page5(doc, dynamic) {
+function page5(doc, dynamic, translations = {}) {
   let y = M.t + 30;
 
   // 1.GENERAL heading with blue background + white text
-  y = drawSectionBar(doc, y, "1. GENERAL");
+  y = drawSectionBar(doc, y, "1. GENERAL", translations);
 
   // 1.1 Description of the control work (sub-heading)
   doc.font("Helvetica-Bold").fontSize(11).fillColor(HEADING_COLOR);
-  doc.text("1.1 Description of the control work", M.l, y);
+  const subHeadingText =
+    translations["1.1 Description of the control work"] ||
+    "1.1 Description of the control work";
+  doc.text(subHeadingText, M.l, y);
   y = doc.y + 8;
 
   // Intro paragraph
-  y = paraPage5(
-    doc,
-    y,
+  const introParaText =
     "This static control plan covers the control for the execution of the construction section mentioned on the front page and associated works. " +
-      "The inspection is carried out in accordance with the building designer's:"
-  );
+    "The inspection is carried out in accordance with the building designer's:";
+  y = paraPage5(doc, y, introParaText, translations);
 
   y += 4;
 
@@ -1511,7 +2651,8 @@ function page5(doc, dynamic) {
     "DOCUMENT",
     "CONSTRUCTION PART:",
     "ACCOMPLISHMENT",
-    { header: true, size: 10 }
+    { header: true, size: 10 },
+    translations
   );
 
   // 4-column value row – all dynamic
@@ -1534,24 +2675,21 @@ function page5(doc, dynamic) {
       header: false,
       size: 10,
       valueColor: "black", // all dynamic: red
-    }
+    },
+    translations
   );
 
   y += 8;
 
   // Focus paragraph
-  y = paraPage5(
-    doc,
-    y,
-    "The focus is on seeing between the construction designer's material and the execution of the construction section on the site."
-  );
+  const focusParaText =
+    "The focus is on seeing between the construction designer's material and the execution of the construction section on the site.";
+  y = paraPage5(doc, y, focusParaText, translations);
 
   // Particular consideration paragraph
-  y = paraPage5(
-    doc,
-    y,
-    "Particular consideration is given to the materials used and their dimensions in reception control, placement on level versus location on site and compliance with tolerances."
-  );
+  const considerationParaText =
+    "Particular consideration is given to the materials used and their dimensions in reception control, placement on level versus location on site and compliance with tolerances.";
+  y = paraPage5(doc, y, considerationParaText, translations);
 
   y += 4;
 
@@ -1560,7 +2698,8 @@ function page5(doc, dynamic) {
     doc,
     y,
     "The following forms the basis for the checks carried out:",
-    { size: 10 }
+    { size: 10 },
+    translations
   );
 
   // Bullet list of basis documents
@@ -1571,14 +2710,15 @@ function page5(doc, dynamic) {
     'DS 1140:2019 "Execution of load-bearing structures – General control"',
     'DS/INF 1140:2022 "Guide to DS 1140"',
   ];
-  y = bulletsLeft(doc, y, basisItems);
+  y = bulletsLeft(doc, y, basisItems, translations);
 
   // Underlined line: "The review is carried out..."
   y = underlineRowFullWidth(
     doc,
     y,
     "The review is carried out on the basis of the above-mentioned material and the contractor's documented quality assurance system.",
-    { size: 10 }
+    { size: 10 },
+    translations
   );
 
   // Bullet block about contractor QA system etc.
@@ -1593,27 +2733,26 @@ function page5(doc, dynamic) {
     "Deviations are processed according to the procedure for deviations",
     "Documentation of construction as executed is available",
   ];
-  y = bulletsLeft(doc, y, generalConditions);
+  y = bulletsLeft(doc, y, generalConditions, translations);
 
   // Final paragraph about independent control
-  y = paraPage5(
-    doc,
-    y,
+  const finalParaText =
     "The independent control is carried out by the executor, with the exception of a few of the special control points where the independent control is carried out by the designing organisation. " +
-      "This is because the control requires a certain insight into the static conditions that form the basis for the construction."
-  );
+    "This is because the control requires a certain insight into the static conditions that form the basis for the construction.";
+  y = paraPage5(doc, y, finalParaText, translations);
 
   // Footer: logical page 5
-  footer(doc, 4);
+  footer(doc, 4, "", translations);
 }
 
 // ===== Page 6 helpers =====
 // ===== Page 6 helpers =====
 // ===== Page 6 helpers (compact version) =====
 
-function paraPage6(doc, y, text) {
+function paraPage6(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 1,
   });
@@ -1621,11 +2760,12 @@ function paraPage6(doc, y, text) {
 }
 
 // Bullets that mimic "o  ..." style for self-monitoring list
-function bulletsCirclePage6(doc, y, items) {
+function bulletsCirclePage6(doc, y, items, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
   let yy = y;
   items.forEach((txt) => {
-    doc.text("o  " + txt, M.l, yy, {
+    const translatedTxt = translations[txt] || txt;
+    doc.text("o  " + translatedTxt, M.l, yy, {
       width: CONTENT_W,
       lineGap: 1,
     });
@@ -1635,11 +2775,12 @@ function bulletsCirclePage6(doc, y, items) {
 }
 
 // Bullets that mimic "− ..." style for EXC1/2/3
-function bulletsDashPage6(doc, y, items) {
+function bulletsDashPage6(doc, y, items, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
   let yy = y;
   items.forEach((txt) => {
-    doc.text("− " + txt, M.l, yy, {
+    const translatedTxt = translations[txt] || txt;
+    doc.text("− " + translatedTxt, M.l, yy, {
       width: CONTENT_W,
       lineGap: 1,
     });
@@ -1649,7 +2790,7 @@ function bulletsDashPage6(doc, y, items) {
 }
 
 // Full-width underlined row
-function underlineRowFullWidth(doc, y, text, options = {}) {
+function underlineRowFullWidth(doc, y, text, options = {}, translations = {}) {
   const size = options.size || 9;
   const bold = options.bold || false;
 
@@ -1657,7 +2798,8 @@ function underlineRowFullWidth(doc, y, text, options = {}) {
     .font(bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(size)
     .fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
   });
   const afterY = doc.y;
@@ -1675,19 +2817,23 @@ function underlineRowFullWidth(doc, y, text, options = {}) {
 
 // ===== PAGE 6 (compact layout) =====
 
-function page6(doc, dynamic) {
+function page6(doc, dynamic, translations = {}) {
   let y = M.t + 25; // slightly higher start
 
   // ---------- 1.2 Control types ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("1.2 Control types", M.l, y);
+  const controlTypesHeading =
+    translations["1.2 Control types"] || "1.2 Control types";
+  doc.text(controlTypesHeading, M.l, y);
   y = doc.y + 6;
 
   // "The structure is classified as construction class KKX"
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  const prefixText1 = "The structure is classified as ";
-  const prefixText2 = "construction class ";
-  const fullPrefixText = prefixText1 + prefixText2;
+  const prefixText1 =
+    translations["The structure is classified as "] ||
+    "The structure is classified as ";
+  const prefixText2 =
+    translations["construction class "] || "construction class ";
   doc.text(prefixText1, M.l, y, {
     continued: true,
   });
@@ -1716,31 +2862,42 @@ function page6(doc, dynamic) {
   y = paraPage6(
     doc,
     y,
-    "Self-monitoring and independent control of the work carried out are carried out."
+    "Self-monitoring and independent control of the work carried out are carried out.",
+    translations
   );
 
-  y = paraPage6(doc, y, "There is no requirement for third-party control.");
-
-  // ---------- Self-monitoring ----------
-  y = underlineRowFullWidth(doc, y, "Self-monitoring", {
-    bold: true,
-    size: 9,
-  });
-
-  // Self-monitoring paragraph
   y = paraPage6(
     doc,
     y,
-    "The self-inspection of the execution is carried out by the person who carried out the construction when the construction or " +
-      "parts thereof are completed. Where structural parts are subsequently hidden, the self-inspection is carried out during the " +
-      "execution of the relevant structural part."
+    "There is no requirement for third-party control.",
+    translations
   );
+
+  // ---------- Self-monitoring ----------
+  y = underlineRowFullWidth(
+    doc,
+    y,
+    "Self-monitoring",
+    {
+      bold: true,
+      size: 9,
+    },
+    translations
+  );
+
+  // Self-monitoring paragraph
+  const selfInspectionPara =
+    "The self-inspection of the execution is carried out by the person who carried out the construction when the construction or " +
+    "parts thereof are completed. Where structural parts are subsequently hidden, the self-inspection is carried out during the " +
+    "execution of the relevant structural part.";
+  y = paraPage6(doc, y, selfInspectionPara, translations);
 
   // "The own-check includes at least an assessment of whether:"
   y = paraPage6(
     doc,
     y,
-    "The own-check includes at least an assessment of whether:"
+    "The own-check includes at least an assessment of whether:",
+    translations
   );
 
   // FULL self-monitoring bullet list (5 bullets)
@@ -1751,73 +2908,82 @@ function page6(doc, dynamic) {
     "Tolerances in the execution are complied with in relation to relevant standards, good practice within the type of work in question (see e.g. tolerancer.dk) and any project-specific tolerances that may appear in the execution basis.",
     "Documentation of the execution of the construction has been carried out, collected and systematised in accordance with SBi 271 section 2.6, Construction as executed.",
   ];
-  y = bulletsCirclePage6(doc, y, selfMonitorItems);
+  y = bulletsCirclePage6(doc, y, selfMonitorItems, translations);
 
   // After completion of the self-inspection...
-  y = paraPage6(
-    doc,
-    y,
+  const afterSelfInspectionPara =
     "After completion of the self-inspection, the person carrying out the inspection documents this in the current inspection " +
-      "report. Self-monitoring is always carried out."
-  );
+    "report. Self-monitoring is always carried out.";
+  y = paraPage6(doc, y, afterSelfInspectionPara, translations);
 
   // ---------- Standards ----------
-  y = underlineRowFullWidth(doc, y, "Standards:", {
-    bold: true,
-    size: 9,
-  });
-
-  y = paraPage6(
+  y = underlineRowFullWidth(
     doc,
     y,
-    "This section is taken from the Eurocode table here we need an extra field with a static text talking about which " +
-      "standards covering the chosen EUROCODE."
+    "Standards:",
+    {
+      bold: true,
+      size: 9,
+    },
+    translations
   );
+
+  const standardsPara =
+    "This section is taken from the Eurocode table here we need an extra field with a static text talking about which " +
+    "standards covering the chosen EUROCODE.";
+  y = paraPage6(doc, y, standardsPara, translations);
 
   // ---------- Independent controls ----------
-  y = underlineRowFullWidth(doc, y, "Independent controls", {
-    bold: true,
-    size: 9,
-  });
-
-  y = paraPage6(
+  y = underlineRowFullWidth(
     doc,
     y,
+    "Independent controls",
+    {
+      bold: true,
+      size: 9,
+    },
+    translations
+  );
+
+  const independentInspectionPara1 =
     "The independent inspection shall be carried out by persons who have not directly participated in the actual performance of " +
-      "the inspection section in question. All independent checks within a control section are carried out by the same person. The " +
-      "independent inspector is not carried out by the head of the work team, The independent inspector must have the necessary " +
-      "competencies that allow him to have knowledge within the chosen construction section that is stated on the front page."
-  );
+    "the inspection section in question. All independent checks within a control section are carried out by the same person. The " +
+    "independent inspector is not carried out by the head of the work team, The independent inspector must have the necessary " +
+    "competencies that allow him to have knowledge within the chosen construction section that is stated on the front page.";
+  y = paraPage6(doc, y, independentInspectionPara1, translations);
 
-  y = paraPage6(
-    doc,
-    y,
+  const independentInspectionPara2 =
     "When the performance of an inspection section or parts thereof has been carried out and the performer has been ready for " +
-      "independent control (i.e. after self-monitoring has been carried out), the independent inspection is carried out."
-  );
+    "independent control (i.e. after self-monitoring has been carried out), the independent inspection is carried out.";
+  y = paraPage6(doc, y, independentInspectionPara2, translations);
 
   y = paraPage6(
     doc,
     y,
-    "The independent control is carried out according to the project-specific static control plan for execution."
+    "The independent control is carried out according to the project-specific static control plan for execution.",
+    translations
   );
 
   // ---------- 1.3 Level of control ----------
   y = y + 4;
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("1.3 Level of control", M.l, y);
+  const levelOfControlHeading =
+    translations["1.3 Level of control"] || "1.3 Level of control";
+  doc.text(levelOfControlHeading, M.l, y);
   y = doc.y + 6;
 
   y = paraPage6(
     doc,
     y,
-    "The level of control for the general control is governed by the selected execution classes, cf. DS/EN 1990 DK NA, Annex B5."
+    "The level of control for the general control is governed by the selected execution classes, cf. DS/EN 1990 DK NA, Annex B5.",
+    translations
   );
 
   const excClass = dynamic.executionClass || "EXCX";
 
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  const excPrefixText = "The execution class is ";
+  const excPrefixText =
+    translations["The execution class is "] || "The execution class is ";
   doc.text(excPrefixText, M.l, y, { continued: true });
   doc.fillColor("black").text(excClass, { continued: true });
 
@@ -1834,20 +3000,20 @@ function page6(doc, dynamic) {
     .stroke();
   doc.strokeColor("black"); // Reset stroke color
 
-  doc
-    .fillColor("black")
-    .text(
-      " and Self-control is performed as a maximum control. The independent control is carried out as a " +
-        "random and maximum control.",
-      { continued: false }
-    );
+  const excSuffixText =
+    translations[
+      " and Self-control is performed as a maximum control. The independent control is carried out as a random and maximum control."
+    ] ||
+    " and Self-control is performed as a maximum control. The independent control is carried out as a random and maximum control.";
+  doc.fillColor("black").text(excSuffixText, { continued: false });
   y = doc.y + 4;
 
   // Performance classes intro
   y = paraPage6(
     doc,
     y,
-    "Performance classes indicate the importance of the design for the safety of a load-bearing structure:"
+    "Performance classes indicate the importance of the design for the safety of a load-bearing structure:",
+    translations
   );
 
   // Performance classes as dashed list
@@ -1856,17 +3022,18 @@ function page6(doc, dynamic) {
     "EXC2: The execution is important for the safety of a load-bearing structure",
     "EXC3: The execution is of great importance for the safety of a load-bearing structure.",
   ];
-  y = bulletsDashPage6(doc, y, performanceItems);
+  y = bulletsDashPage6(doc, y, performanceItems, translations);
 
   // Footer: logical page 6
-  footer(doc, 5);
+  footer(doc, 5, "", translations);
 }
 
 // ===== Page 7 helpers =====
 
-function paraPage7(doc, y, text) {
+function paraPage7(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 1,
   });
@@ -1874,11 +3041,12 @@ function paraPage7(doc, y, text) {
 }
 
 // Bullets with "•" – used under 1.5 Controllers
-function bulletsDotPage7(doc, y, items) {
+function bulletsDotPage7(doc, y, items, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
   let yy = y;
   items.forEach((txt) => {
-    doc.text("• " + txt, M.l, yy, {
+    const translatedTxt = translations[txt] || txt;
+    doc.text("• " + translatedTxt, M.l, yy, {
       width: CONTENT_W,
       lineGap: 1,
     });
@@ -1888,11 +3056,12 @@ function bulletsDotPage7(doc, y, items) {
 }
 
 // Bullets with "o  " – used for inspector competencies and deviations
-function bulletsCirclePage7(doc, y, items) {
+function bulletsCirclePage7(doc, y, items, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
   let yy = y;
   items.forEach((txt) => {
-    doc.text("o  " + txt, M.l, yy, {
+    const translatedTxt = translations[txt] || txt;
+    doc.text("o  " + translatedTxt, M.l, yy, {
       width: CONTENT_W,
       lineGap: 1,
     });
@@ -1909,7 +3078,8 @@ function underlineRowFourColsApplier(
   col2,
   col3,
   col4,
-  options = {}
+  options = {},
+  translations = {}
 ) {
   const col1W = 120; // Applier
   const col2W = 220; // Name / value (increased since we removed Education/Experience)
@@ -1927,15 +3097,20 @@ function underlineRowFourColsApplier(
     .fontSize(size)
     .fillColor("black");
 
-  doc.text(col1, x1, y, { width: col1W - 4 });
+  const translatedCol1 = translations[col1] || col1;
+  doc.text(translatedCol1, x1, y, { width: col1W - 4 });
   const y1 = doc.y;
 
-  doc.text(col2, x2, y, { width: col2W - 4 });
+  // col2 might be dynamic (person name) or static label - translate if it's in translations (static labels)
+  // Person names won't be in translations, so they'll use the original value
+  const translatedCol2 = translations[col2] || col2;
+  doc.text(translatedCol2, x2, y, { width: col2W - 4 });
   const y2 = doc.y;
 
   // Skip col3 (Education / Experience) - removed
 
-  doc.text(col4, x4, y, { width: col4W - 4 });
+  const translatedCol4 = translations[col4] || col4;
+  doc.text(translatedCol4, x4, y, { width: col4W - 4 });
   const y4 = doc.y;
 
   const bottom = Math.max(y1, y2, y4) + 2;
@@ -1952,29 +3127,32 @@ function underlineRowFourColsApplier(
 
 // ===== PAGE 7 =====
 
-function page7(doc, dynamic) {
+function page7(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // ---------- 1.4 Organisation of the control work ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("1.4 Organisation of the control work", M.l, y);
+  const orgHeading =
+    translations["1.4 Organisation of the control work"] ||
+    "1.4 Organisation of the control work";
+  doc.text(orgHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage7(
-    doc,
-    y,
+  const orgParaText =
     "Each inspection section must be assigned one, and only one inspector who is ensured that he has not contributed to the " +
-      "execution of the construction section in question. The executing party or its representative has drawn up the control plan and " +
-      "will act as the lead inspector in connection with the selection of inspectors for the individual control sections, as well as " +
-      "compiling and checking the inspection report. As far as possible... the aim is that the lead inspector also carries out the actual " +
-      "inspection on site in order to simplify the inspection work."
-  );
+    "execution of the construction section in question. The executing party or its representative has drawn up the control plan and " +
+    "will act as the lead inspector in connection with the selection of inspectors for the individual control sections, as well as " +
+    "compiling and checking the inspection report. As far as possible... the aim is that the lead inspector also carries out the actual " +
+    "inspection on site in order to simplify the inspection work.";
+  y = paraPage7(doc, y, orgParaText, translations);
 
   y += 4;
 
   // ---------- 1.5 Controllers ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("1.5 Controllers", M.l, y);
+  const controllersHeading =
+    translations["1.5 Controllers"] || "1.5 Controllers";
+  doc.text(controllersHeading, M.l, y);
   y = doc.y + 4;
 
   // Bullet list under 1.5
@@ -1984,10 +3162,12 @@ function page7(doc, dynamic) {
     "It is ensured that the inspector has the right and necessary skills to carry out the inspection.",
     "Inspectors must always have the necessary qualifications acquired through training and the necessary competences acquired through experience both in relation to the subject of the inspection and in planning, carrying out and documenting the inspection.",
   ];
-  y = bulletsDotPage7(doc, y, controllersItems);
+  y = bulletsDotPage7(doc, y, controllersItems, translations);
 
   // "Therefore, the inspector must at least" - bold with underline
-  const inspectorText = "Therefore, the inspector must at least";
+  const inspectorText =
+    translations["Therefore, the inspector must at least"] ||
+    "Therefore, the inspector must at least";
   doc.font("Helvetica-Bold").fontSize(9).fillColor("black");
   doc.text(inspectorText, M.l, y, {
     width: CONTENT_W,
@@ -2016,15 +3196,13 @@ function page7(doc, dynamic) {
     "Be able to understand standards, control plans and good craftsmanship",
     "Be able to familiarize themselves with the documents that form the basis for the execution",
   ];
-  y = bulletsCirclePage7(doc, y, inspectorMustItems);
+  y = bulletsCirclePage7(doc, y, inspectorMustItems, translations);
 
   // Paragraph about documenting examiner's qualifications
-  y = paraPage7(
-    doc,
-    y,
+  const examinerQualText =
     "In order to document the examiner's qualifications and competences, his/her competences are described in detail in the " +
-      "inspection report, e.g. in the examiner's CV."
-  );
+    "inspection report, e.g. in the examiner's CV.";
+  y = paraPage7(doc, y, examinerQualText, translations);
 
   // Small Applier table
   y = underlineRowFourColsApplier(
@@ -2034,20 +3212,25 @@ function page7(doc, dynamic) {
     "Name",
     "", // Education / Experience - removed
     "Initials",
-    { bold: true }
+    { bold: true },
+    translations
   );
 
   // Get onController name from gamma
   const onControllerName =
-    dynamic.gamma?.onController?.name || "From Company organisation";
+    dynamic.gamma?.onController?.name ||
+    translations["From Company organisation"] ||
+    "From Company organisation";
 
   y = underlineRowFourColsApplier(
     doc,
     y,
-    "Own Controller",
+    translations["Own Controller"] || "Own Controller",
     onControllerName,
     "", // Education / Experience - removed
-    "OC Fixed"
+    translations["OC Fixed"] || "OC Fixed",
+    {},
+    translations
   );
 
   // Show Independent Controller users - one row per user
@@ -2057,14 +3240,19 @@ function page7(doc, dynamic) {
     // Show each Independent Controller user on a separate row
     for (const controller of independentControllers) {
       const controllerName =
-        controller.name || controller.username || "From Company organisation";
+        controller.name ||
+        controller.username ||
+        translations["From Company organisation"] ||
+        "From Company organisation";
       y = underlineRowFourColsApplier(
         doc,
         y,
-        "Independent controller",
+        translations["Independent controller"] || "Independent controller",
         controllerName,
         "", // Education / Experience - removed
-        "IC Fixed"
+        translations["IC Fixed"] || "IC Fixed",
+        {},
+        translations
       );
     }
   } else {
@@ -2072,10 +3260,12 @@ function page7(doc, dynamic) {
     y = underlineRowFourColsApplier(
       doc,
       y,
-      "Independent controller",
-      "From Company organisation",
+      translations["Independent controller"] || "Independent controller",
+      translations["From Company organisation"] || "From Company organisation",
       "", // Education / Experience - removed
-      "IC Fixed"
+      translations["IC Fixed"] || "IC Fixed",
+      {},
+      translations
     );
   }
 
@@ -2083,31 +3273,32 @@ function page7(doc, dynamic) {
 
   // ---------- 1.6 Use of assistance ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("1.6 Use of assistance", M.l, y);
+  const assistanceHeading =
+    translations["1.6 Use of assistance"] || "1.6 Use of assistance";
+  doc.text(assistanceHeading, M.l, y);
   y = doc.y + 4;
 
-  y = paraPage7(
-    doc,
-    y,
+  const assistanceParaText =
     "If the inspector chooses to use assistance in carrying out the inspection, the assistant inspector must have at least the " +
-      "competencies described in section 1.2 above. In addition, it is important to be aware that the final responsibility for the " +
-      "inspection at all times rests with the inspector and is therefore not transferred to the assistant inspector. The inspector must " +
-      "therefore follow up on inspections carried out by assistant inspectors and ensure that the inspection has been carried out " +
-      "sensibly by checking the documentation for the inspection and sign this as the inspector."
-  );
+    "competencies described in section 1.2 above. In addition, it is important to be aware that the final responsibility for the " +
+    "inspection at all times rests with the inspector and is therefore not transferred to the assistant inspector. The inspector must " +
+    "therefore follow up on inspections carried out by assistant inspectors and ensure that the inspection has been carried out " +
+    "sensibly by checking the documentation for the inspection and sign this as the inspector.";
+  y = paraPage7(doc, y, assistanceParaText, translations);
 
   y += 4;
 
   // ---------- 1.7 Follow-up on deviations ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("1.7 Follow-up on deviations", M.l, y);
+  const deviationsHeading =
+    translations["1.7 Follow-up on deviations"] ||
+    "1.7 Follow-up on deviations";
+  doc.text(deviationsHeading, M.l, y);
   y = doc.y + 4;
 
-  y = paraPage7(
-    doc,
-    y,
-    "If deviations are found in the controls, the following procedure shall be followed:"
-  );
+  const deviationsIntroText =
+    "If deviations are found in the controls, the following procedure shall be followed:";
+  y = paraPage7(doc, y, deviationsIntroText, translations);
 
   const deviationsItems = [
     "The work on the structural part is stopped and may not be continued until the deviation has been corrected.",
@@ -2119,14 +3310,12 @@ function page7(doc, dynamic) {
     "After rectifying the deviation, this is checked again and the result is documented.",
     "If it is not possible to correct the deviation, the building designer must approve the deviation.",
   ];
-  y = bulletsCirclePage7(doc, y, deviationsItems);
+  y = bulletsCirclePage7(doc, y, deviationsItems, translations);
 
   // Final sentence about serious errors / maximum control
-  y = paraPage7(
-    doc,
-    y,
-    "If there are serious or more repeated errors in a control point, the control can be extended to a maximum control of the current control point and/or the building designer can be involved."
-  );
+  const finalParaText =
+    "If there are serious or more repeated errors in a control point, the control can be extended to a maximum control of the current control point and/or the building designer can be involved.";
+  y = paraPage7(doc, y, finalParaText, translations);
 
   // Footer – logical page 7
   footer(doc, 6);
@@ -2134,9 +3323,10 @@ function page7(doc, dynamic) {
 
 // ===== Page 8 helpers =====
 
-function paraPage8(doc, y, text) {
+function paraPage8(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 1,
   });
@@ -2144,11 +3334,12 @@ function paraPage8(doc, y, text) {
 }
 
 // Bullets with "o  ..." for Explanation of B.5.2–B.5.4
-function bulletsCirclePage8(doc, y, items) {
+function bulletsCirclePage8(doc, y, items, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
   let yy = y;
   items.forEach((txt) => {
-    doc.text("o  " + txt, M.l, yy, {
+    const translatedTxt = translations[txt] || txt;
+    doc.text("o  " + translatedTxt, M.l, yy, {
       width: CONTENT_W,
       lineGap: 1,
     });
@@ -2159,35 +3350,34 @@ function bulletsCirclePage8(doc, y, items) {
 
 // ===== PAGE 8 – 2. GENERAL CONTROLS =====
 
-function page8(doc, dynamic) {
+function page8(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // ---------- 2. GENERAL CONTROLS (blue bar) ----------
-  y = drawSectionBar(doc, y, "2. GENERAL CONTROLS");
+  y = drawSectionBar(doc, y, "2. GENERAL CONTROLS", translations);
 
   // ---------- 2.1 General ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("2.1 General", M.l, y);
+  const generalHeading = translations["2.1 General"] || "2.1 General";
+  doc.text(generalHeading, M.l, y);
   y = doc.y + 6;
 
   // First paragraph (general control according to DS 1140 / Eurocodes)
-  y = paraPage8(
-    doc,
-    y,
+  const generalControlPara =
     "The general control is carried out in accordance with the Construction standard DS 1140. In addition, the general control is carried out " +
-      "in accordance with the rules of DS/EN 1992-DS/EN 1999 including the associated national annexes and in accordance with the rules of the " +
-      "related execution standards including the corresponding national application documents."
-  );
+    "in accordance with the rules of DS/EN 1992-DS/EN 1999 including the associated national annexes and in accordance with the rules of the " +
+    "related execution standards including the corresponding national application documents.";
+  y = paraPage8(doc, y, generalControlPara, translations);
 
   // Division in DS 1140, Annex B – B.1–B.6 list
-  y = paraPage8(
-    doc,
-    y,
-    "The general control is carried out on the basis of the division in DS 1140, Annex B."
-  );
+  const divisionPara =
+    "The general control is carried out on the basis of the division in DS 1140, Annex B.";
+  y = paraPage8(doc, y, divisionPara, translations);
 
   doc.font("Helvetica-Bold").fontSize(9).fillColor("black");
-  doc.text("Control subject", M.l, y);
+  const controlSubjectLabel =
+    translations["Control subject"] || "Control subject";
+  doc.text(controlSubjectLabel, M.l, y);
   y = doc.y + 4;
 
   doc.font("Helvetica").fontSize(9);
@@ -2204,28 +3394,28 @@ function page8(doc, dynamic) {
     "B.6 Final inspection",
   ];
   controlSubjects.forEach((line) => {
-    doc.text(line, M.l, y, { width: CONTENT_W, lineGap: 1 });
+    const translatedLine = translations[line] || line;
+    doc.text(translatedLine, M.l, y, { width: CONTENT_W, lineGap: 1 });
     y = doc.y + 1;
   });
   y += 4;
 
   // Independent verification line
-  y = paraPage8(
-    doc,
-    y,
-    "The independent verification that the own-check has been carried out is always carried out as a maximum control."
-  );
+  const independentVerificationPara =
+    "The independent verification that the own-check has been carried out is always carried out as a maximum control.";
+  y = paraPage8(doc, y, independentVerificationPara, translations);
 
   // ---------- Explanation of B.5.2 to B.5.4 ----------
   doc.font("Helvetica-Bold").fontSize(9).fillColor("black");
-  doc.text("Explanation of B.5.2 to B.5.4:", M.l, y);
+  const explanationLabel =
+    translations["Explanation of B.5.2 to B.5.4:"] ||
+    "Explanation of B.5.2 to B.5.4:";
+  doc.text(explanationLabel, M.l, y);
   y = doc.y + 4;
 
-  y = paraPage8(
-    doc,
-    y,
-    "When constructing structures that are of critical importance to the functioning and integrity of the structure,"
-  );
+  const criticalStructuresPara =
+    "When constructing structures that are of critical importance to the functioning and integrity of the structure,";
+  y = paraPage8(doc, y, criticalStructuresPara, translations);
 
   const b5Bullets = [
     "Control points are fully checked (maximum) for:",
@@ -2240,27 +3430,25 @@ function page8(doc, dynamic) {
   const firstLine = b5Bullets[0];
   const restLines = b5Bullets.slice(1);
 
-  y = paraPage8(doc, y, firstLine);
-  y = bulletsCirclePage8(doc, y, restLines);
+  y = paraPage8(doc, y, firstLine, translations);
+  y = bulletsCirclePage8(doc, y, restLines, translations);
 
   // ---------- 2.2 Control section ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("2.2 Control section", M.l, y);
+  const controlSectionHeading =
+    translations["2.2 Control section"] || "2.2 Control section";
+  doc.text(controlSectionHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage8(
-    doc,
-    y,
+  const delimitedSectionPara =
     "The delimited design section is subdivided into control sections according to e.g. construction types, scope or time of " +
-      "execution, however, common to the fact that control sections must always be well defined, delimited in relation to other " +
-      "control sections and delimited by a continuous production period of a maximum of 4 weeks."
-  );
+    "execution, however, common to the fact that control sections must always be well defined, delimited in relation to other " +
+    "control sections and delimited by a continuous production period of a maximum of 4 weeks.";
+  y = paraPage8(doc, y, delimitedSectionPara, translations);
 
-  y = paraPage8(
-    doc,
-    y,
-    "The execution of the construction section is divided according to the tender control plan for the following control sections:"
-  );
+  const executionDividedPara =
+    "The execution of the construction section is divided according to the tender control plan for the following control sections:";
+  y = paraPage8(doc, y, executionDividedPara, translations);
 
   // Table: LISTING | DOCUMENT | CONSTRUCTION PART: | ACCOMPLISHMENT
   // Reuses underlineRowFourColsTable from Page 5
@@ -2271,7 +3459,8 @@ function page8(doc, dynamic) {
     "DOCUMENT",
     "CONSTRUCTION PART:",
     "ACCOMPLISHMENT",
-    { header: true, size: 9 }
+    { header: true, size: 9 },
+    translations
   );
 
   const listingVal =
@@ -2288,29 +3477,41 @@ function page8(doc, dynamic) {
     documentVal,
     constructionVal,
     accomplishmentVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
   // ---------- 2.3 Explanation of the selection of controls ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("2.3 Explanation of the selection of controls", M.l, y);
+  const explanationSelectionHeading =
+    translations["2.3 Explanation of the selection of controls"] ||
+    "2.3 Explanation of the selection of controls";
+  doc.text(explanationSelectionHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage8(
-    doc,
-    y,
-    "As this construction section is placed in construction class " +
-      (dynamic.kkx || "KKX") +
-      ", the selected control points must be explained. This is done in " +
-      "connection with the inspection report."
-  );
+  // Handle dynamic kkx value in the paragraph
+  const kkx = dynamic.kkx || "KKX";
+  const constructionClassPrefix =
+    translations[
+      "As this construction section is placed in construction class "
+    ] || "As this construction section is placed in construction class ";
+  const constructionClassSuffix =
+    translations[
+      ", the selected control points must be explained. This is done in connection with the inspection report."
+    ] ||
+    ", the selected control points must be explained. This is done in connection with the inspection report.";
+  const constructionClassPara =
+    constructionClassPrefix + kkx + constructionClassSuffix;
+  y = paraPage8(doc, y, constructionClassPara, translations);
 
   // ---------- 2.4 Checkpoints ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("2.4 Checkpoints", M.l, y);
+  const checkpointsHeading =
+    translations["2.4 Checkpoints"] || "2.4 Checkpoints";
+  doc.text(checkpointsHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage8(doc, y, "");
+  y = paraPage8(doc, y, "", translations);
 
   // Same 4-column table again under 2.4
   y = underlineRowFourColsTable(
@@ -2320,7 +3521,8 @@ function page8(doc, dynamic) {
     "DOCUMENT",
     "CONSTRUCTION PART:",
     "ACCOMPLISHMENT",
-    { header: true, size: 9 }
+    { header: true, size: 9 },
+    translations
   );
 
   y = underlineRowFourColsTable(
@@ -2330,14 +3532,13 @@ function page8(doc, dynamic) {
     documentVal,
     constructionVal,
     accomplishmentVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
-  y = paraPage8(
-    doc,
-    y,
-    "Control points are stated in the control plan prepared by the executing contractor."
-  );
+  const controlPointsStatedPara =
+    "Control points are stated in the control plan prepared by the executing contractor.";
+  y = paraPage8(doc, y, controlPointsStatedPara, translations);
 
   // Footer – logical page 8
   footer(doc, 7);
@@ -2345,9 +3546,10 @@ function page8(doc, dynamic) {
 
 // ===== Page 9 helpers =====
 
-function paraPage9(doc, y, text) {
+function paraPage9(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 1,
   });
@@ -2355,7 +3557,15 @@ function paraPage9(doc, y, text) {
 }
 
 // 3-column underlined row: ID | SPECIAL CONTROL | DESCRIPTION
-function underlineRowThreeColsSpecial(doc, y, col1, col2, col3, options = {}) {
+function underlineRowThreeColsSpecial(
+  doc,
+  y,
+  col1,
+  col2,
+  col3,
+  options = {},
+  translations = {}
+) {
   const col1W = 60; // ID
   const col2W = 180; // SPECIAL CONTROL
   const col3W = CONTENT_W - (col1W + col2W); // DESCRIPTION
@@ -2372,13 +3582,16 @@ function underlineRowThreeColsSpecial(doc, y, col1, col2, col3, options = {}) {
     .fontSize(size)
     .fillColor("black");
 
-  doc.text(col1, x1, y, { width: col1W - 4 });
+  const translatedCol1 = translations[col1] || col1;
+  doc.text(translatedCol1, x1, y, { width: col1W - 4 });
   const y1 = doc.y;
 
-  doc.text(col2, x2, y, { width: col2W - 4 });
+  const translatedCol2 = translations[col2] || col2;
+  doc.text(translatedCol2, x2, y, { width: col2W - 4 });
   const y2 = doc.y;
 
-  doc.text(col3, x3, y, { width: col3W - 4 });
+  const translatedCol3 = translations[col3] || col3;
+  doc.text(translatedCol3, x3, y, { width: col3W - 4 });
   const y3 = doc.y;
 
   const bottom = Math.max(y1, y2, y3) + 2;
@@ -2395,44 +3608,45 @@ function underlineRowThreeColsSpecial(doc, y, col1, col2, col3, options = {}) {
 
 // ===== PAGE 9 – 3. SPECIAL CONTROLS + 4. DOCUMENTATION =====
 
-function page9(doc, dynamic) {
+function page9(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // ---------- 3. SPECIAL CONTROLS (top-level section) ----------
-  y = drawSectionBar(doc, y, "3. SPECIAL CONTROLS");
+  y = drawSectionBar(doc, y, "3. SPECIAL CONTROLS", translations);
 
   // 3.1 General
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("3.1 General", M.l, y);
+  const general31Heading = translations["3.1 General"] || "3.1 General";
+  doc.text(general31Heading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage9(
-    doc,
-    y,
-    "There are no special controls assigned by the building designers, cf.  This construction section."
-  );
+  const noSpecialControlsPara =
+    "There are no special controls assigned by the building designers, cf.  This construction section.";
+  y = paraPage9(doc, y, noSpecialControlsPara, translations);
 
-  y = paraPage9(
-    doc,
-    y,
-    "Should there be special controls, they will be stated in section 3.2"
-  );
+  const specialControlsStatedPara =
+    "Should there be special controls, they will be stated in section 3.2";
+  y = paraPage9(doc, y, specialControlsStatedPara, translations);
 
   // 3.2 Special checkpoints
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("3.2 Special checkpoints", M.l, y);
+  const specialCheckpointsHeading =
+    translations["3.2 Special checkpoints"] || "3.2 Special checkpoints";
+  doc.text(specialCheckpointsHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage9(doc, y, "Cf. section 3.1, no special controls are required.");
+  const noSpecialControlsRequiredPara =
+    "Cf. section 3.1, no special controls are required.";
+  y = paraPage9(doc, y, noSpecialControlsRequiredPara, translations);
 
-  y = paraPage9(
-    doc,
-    y,
-    "If there are special checks, it will be stated below in the form, otherwise there will be none."
-  );
+  const specialChecksStatedPara =
+    "If there are special checks, it will be stated below in the form, otherwise there will be none.";
+  y = paraPage9(doc, y, specialChecksStatedPara, translations);
 
   // Data from Special Control points - IF Any
-  y = paraPage9(doc, y, "Data from Special Control points - IF Any");
+  const dataFromSpecialControlPara =
+    "Data from Special Control points - IF Any";
+  y = paraPage9(doc, y, dataFromSpecialControlPara, translations);
 
   // ID / SPECIAL CONTROL / DESCRIPTION header row (no data rows)
   y = underlineRowThreeColsSpecial(
@@ -2441,28 +3655,31 @@ function page9(doc, dynamic) {
     "ID",
     "SPECIAL CONTROL",
     "DESCRIPTION",
-    { bold: true, size: 9 }
+    { bold: true, size: 9 },
+    translations
   );
 
   y += 6;
 
   // ---------- 4. DOCUMENTATION (top-level section) ----------
-  y = drawSectionBar(doc, y, "4. DOCUMENTATION");
+  y = drawSectionBar(doc, y, "4. DOCUMENTATION", translations);
 
   // 4.1 General description of documentation
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("4.1 General description of documentation", M.l, y);
+  const generalDescriptionHeading =
+    translations["4.1 General description of documentation"] ||
+    "4.1 General description of documentation";
+  doc.text(generalDescriptionHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage9(
-    doc,
-    y,
+  const documentationControlPara =
     "The documentation of the control consists of this control plan and associated appendices for the present construction section. " +
-      "In addition, this also consists of an inspection report and associated appendices."
-  );
+    "In addition, this also consists of an inspection report and associated appendices.";
+  y = paraPage9(doc, y, documentationControlPara, translations);
 
   // "Document:" line
-  y = paraPage9(doc, y, "Document:");
+  const documentLabel = translations["Document:"] || "Document:";
+  y = paraPage9(doc, y, documentLabel, translations);
 
   // Table: LISTING | DOCUMENT | CONSTRUCTION PART: | ACCOMPLISHMENT
   // Reuse underlineRowFourColsTable from Page 5 (do not redefine it)
@@ -2473,7 +3690,8 @@ function page9(doc, dynamic) {
     "DOCUMENT",
     "CONSTRUCTION PART:",
     "ACCOMPLISHMENT",
-    { header: true, size: 9 }
+    { header: true, size: 9 },
+    translations
   );
 
   // Dynamic values for B3 and A5 (make them red so you know they are dynamic later)
@@ -2492,7 +3710,8 @@ function page9(doc, dynamic) {
     b3Document,
     constructionVal,
     specialVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
   // A5 row
@@ -2503,82 +3722,79 @@ function page9(doc, dynamic) {
     a5Document,
     constructionVal,
     specialVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
-  y = paraPage9(
-    doc,
-    y,
-    "The above is updated every time a change occurs in the execution."
-  );
+  const updatedEveryTimePara =
+    "The above is updated every time a change occurs in the execution.";
+  y = paraPage9(doc, y, updatedEveryTimePara, translations);
 
-  y = paraPage9(
-    doc,
-    y,
+  const documentationContainsPara =
     "Documentation contains the actual control result, but also contains a follow-up on the control, including an account of the " +
-      "points where there have been comments from the control in relation to how the comment has been followed up."
-  );
+    "points where there have been comments from the control in relation to how the comment has been followed up.";
+  y = paraPage9(doc, y, documentationContainsPara, translations);
 
   // 4.2 Documentation of general controls
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("4.2 Documentation of general controls", M.l, y);
+  const documentationGeneralHeading =
+    translations["4.2 Documentation of general controls"] ||
+    "4.2 Documentation of general controls";
+  doc.text(documentationGeneralHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage9(
-    doc,
-    y,
-    "The general control is documented in accordance with the requirements specified in the control plans."
-  );
+  const generalControlDocumentedPara =
+    "The general control is documented in accordance with the requirements specified in the control plans.";
+  y = paraPage9(doc, y, generalControlDocumentedPara, translations);
 
-  y = paraPage9(
-    doc,
-    y,
+  const documentationGeneralControlsPara =
     "Documentation of general controls consists of a completed control report, with all points clarified, " +
-      "approved and signed by the examiner. Deviations must be documented to be remedied by a " +
-      "deviation report, and the item in the control report cannot be approved until the deviation report has been completed."
-  );
+    "approved and signed by the examiner. Deviations must be documented to be remedied by a " +
+    "deviation report, and the item in the control report cannot be approved until the deviation report has been completed.";
+  y = paraPage9(doc, y, documentationGeneralControlsPara, translations);
 
-  y = paraPage9(
-    doc,
-    y,
+  const documentationKeptPara =
     "The documentation for the general control is kept with the contractor. Documentation is stored for at least 5 years after the " +
-      "occupancy permit."
-  );
+    "occupancy permit.";
+  y = paraPage9(doc, y, documentationKeptPara, translations);
 
   // 4.3 Documentation of special controls
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("4.3 Documentation of special controls", M.l, y);
+  const documentationSpecialHeading =
+    translations["4.3 Documentation of special controls"] ||
+    "4.3 Documentation of special controls";
+  doc.text(documentationSpecialHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage9(
-    doc,
-    y,
-    "In its documentation, the building designer has not required any special controls."
-  );
+  const noSpecialControlsRequiredDocPara =
+    "In its documentation, the building designer has not required any special controls.";
+  y = paraPage9(doc, y, noSpecialControlsRequiredDocPara, translations);
 
   // 4.4 Documentation of deviations and follow-up
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("4.4 Documentation of deviations and follow-up", M.l, y);
+  const documentationDeviationsHeading =
+    translations["4.4 Documentation of deviations and follow-up"] ||
+    "4.4 Documentation of deviations and follow-up";
+  doc.text(documentationDeviationsHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage9(
-    doc,
-    y,
+  const deviationsDetectedPara =
     "If, in the course of the general or special control, deviations are detected, this shall be noted in the " +
-      "control scheme for that control point in the static report."
-  );
+    "control scheme for that control point in the static report.";
+  y = paraPage9(doc, y, deviationsDetectedPara, translations);
 
   // 4.5 Checking Control Documentation
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("4.5 Checking Control Documentation", M.l, y);
+  const checkingControlDocHeading =
+    translations["4.5 Checking Control Documentation"] ||
+    "4.5 Checking Control Documentation";
+  doc.text(checkingControlDocHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage9(
-    doc,
-    y,
+  const controlDocumentationCollectedPara =
     "The control documentation is collected and reviewed by the inspector and it is ensured that all documents are present, as well " +
-      "as all controls are completed, dated and signed."
-  );
+    "as all controls are completed, dated and signed.";
+  y = paraPage9(doc, y, controlDocumentationCollectedPara, translations);
 
   // Footer – logical page 9
   footer(doc, 8);
@@ -2586,9 +3802,10 @@ function page9(doc, dynamic) {
 
 // ===== Page 10 helpers =====
 
-function paraPage10(doc, y, text) {
+function paraPage10(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 1,
   });
@@ -2597,11 +3814,11 @@ function paraPage10(doc, y, text) {
 
 // ===== PAGE 10 – 5. LISTINGS + 5.1 Scope of control =====
 
-function page10(doc, dynamic) {
+function page10(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // ---------- 5. LISTINGS (top-level section, blue bar) ----------
-  y = drawSectionBar(doc, y, "5. LISTINGS");
+  y = drawSectionBar(doc, y, "5. LISTINGS", translations);
 
   // 4-column table header
   y = underlineRowFourColsTable(
@@ -2611,7 +3828,8 @@ function page10(doc, dynamic) {
     "DOCUMENT",
     "CONSTRUCTION PART:",
     "ACCOMPLISHMENT",
-    { header: true, size: 9 }
+    { header: true, size: 9 },
+    translations
   );
 
   // Dynamic values for B2 / B3 / A5 (all in red for now)
@@ -2635,7 +3853,8 @@ function page10(doc, dynamic) {
     b2Document,
     constructionVal,
     specialVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
   // B3 row
@@ -2646,7 +3865,8 @@ function page10(doc, dynamic) {
     b3Document,
     constructionVal,
     specialVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
   // A5 row
@@ -2657,40 +3877,35 @@ function page10(doc, dynamic) {
     a5Document,
     constructionVal,
     specialVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
   // Text below table
-  y = paraPage10(
-    doc,
-    y,
-    "The naming of the documents above is determined by the building designer."
-  );
+  const namingDeterminedPara =
+    "The naming of the documents above is determined by the building designer.";
+  y = paraPage10(doc, y, namingDeterminedPara, translations);
 
-  y = paraPage10(
-    doc,
-    y,
-    "The above documents will be part of the overall static documentation for the section of this construction when the work is completed."
-  );
+  const aboveDocumentsPara =
+    "The above documents will be part of the overall static documentation for the section of this construction when the work is completed.";
+  y = paraPage10(doc, y, aboveDocumentsPara, translations);
 
-  y = paraPage10(
-    doc,
-    y,
-    "See also the table further down in the control plan under section 7.1."
-  );
+  const seeAlsoTablePara =
+    "See also the table further down in the control plan under section 7.1.";
+  y = paraPage10(doc, y, seeAlsoTablePara, translations);
 
   y += 4;
 
   // ---------- 5.1 Scope of control ----------
   doc.font("Helvetica-Bold").fontSize(10).fillColor(HEADING_COLOR);
-  doc.text("5.1 Scope of control", M.l, y);
+  const scopeOfControlHeading =
+    translations["5.1 Scope of control"] || "5.1 Scope of control";
+  doc.text(scopeOfControlHeading, M.l, y);
   y = doc.y + 6;
 
-  y = paraPage10(
-    doc,
-    y,
-    "The scope of controls is stated in the tables under section 7.1 and is determined on the basis of which (classes) the Structural Engineer has stated in the project material."
-  );
+  const scopeOfControlsPara =
+    "The scope of controls is stated in the tables under section 7.1 and is determined on the basis of which (classes) the Structural Engineer has stated in the project material.";
+  y = paraPage10(doc, y, scopeOfControlsPara, translations);
 
   // Footer – logical page 10
   footer(doc, 9);
@@ -2698,9 +3913,10 @@ function page10(doc, dynamic) {
 
 // ===== Page 11 helpers =====
 
-function paraPage11(doc, y, text) {
+function paraPage11(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 1,
   });
@@ -2727,25 +3943,30 @@ function getFilenameWithoutExtension(filename) {
 
 // ===== PAGE 11 – 6. CONTROL POINTS SELECTED =====
 
-async function page11(doc, dynamic) {
+async function page11(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // Top-level section bar
-  y = drawSectionBar(doc, y, "6. CONTROL POINTS SELECTED");
+  y = drawSectionBar(doc, y, "6. CONTROL POINTS SELECTED", translations);
 
   // "OVERVIEW:"
   doc.font("Helvetica-Bold").fontSize(9).fillColor("black");
-  doc.text("OVERVIEW:", M.l, y);
+  const overviewLabel = translations["OVERVIEW:"] || "OVERVIEW:";
+  doc.text(overviewLabel, M.l, y);
   y = doc.y + 6;
 
   // "DRAWINGS INDICATING SELECTED INSPECTION POINTS :"
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text("DRAWINGS INDICATING SELECTED INSPECTION POINTS :", M.l, y, {
+  const drawingsIndicatingLabel =
+    translations["DRAWINGS INDICATING SELECTED INSPECTION POINTS :"] ||
+    "DRAWINGS INDICATING SELECTED INSPECTION POINTS :";
+  doc.text(drawingsIndicatingLabel, M.l, y, {
     width: CONTENT_W,
   });
   y = doc.y + 6;
 
   // Get filename from gamma.drawing.mainDrawings[0]
+  // NOTE: drawingFileName should NOT be translated - it's a file name
   let drawingFileName = "File name";
   const gamma = dynamic.gamma || {};
   if (
@@ -2764,8 +3985,11 @@ async function page11(doc, dynamic) {
   }
 
   // DRAWING NAME : File name
+  // Label is translated, but drawingFileName itself is NOT translated
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text("DRAWING NAME : ", M.l, y, { continued: true });
+  const drawingNameLabel = translations["DRAWING NAME : "] || "DRAWING NAME : ";
+  doc.text(drawingNameLabel, M.l, y, { continued: true });
+  // drawingFileName is NOT translated - it's a file name
   doc.fillColor("black").text(drawingFileName, { continued: false });
   doc.fillColor("black");
   y = doc.y + 6;
@@ -2802,7 +4026,10 @@ async function page11(doc, dynamic) {
       console.error("Error displaying image in page 11:", error.message);
       // Fallback text if image fails to load
       doc.font("Helvetica").fontSize(9).fillColor("black");
-      doc.text("(Image could not be loaded)", M.l, y, {
+      const imageErrorText =
+        translations["(Image could not be loaded)"] ||
+        "(Image could not be loaded)";
+      doc.text(imageErrorText, M.l, y, {
         width: CONTENT_W,
       });
       doc.fillColor("black");
@@ -2810,7 +4037,8 @@ async function page11(doc, dynamic) {
     }
   } else {
     // No image available
-    const markedMainDrawing = "Marked main drawing .";
+    const markedMainDrawing =
+      translations["Marked main drawing ."] || "Marked main drawing .";
     doc.font("Helvetica").fontSize(9).fillColor("black");
     doc.text(markedMainDrawing, M.l, y, {
       width: CONTENT_W,
@@ -2820,22 +4048,20 @@ async function page11(doc, dynamic) {
   }
 
   // Paragraph: Above are points indicated... (below image)
-  y = paraPage11(
-    doc,
-    y,
-    "Above are points indicated where the executor intends to carry out inspections."
-  );
+  const abovePointsPara =
+    "Above are points indicated where the executor intends to carry out inspections.";
+  y = paraPage11(doc, y, abovePointsPara, translations);
 
   y += 4;
 
   // Final line in parentheses: (below image)
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(
-    "(If no comment is received on this within 8 days, this is considered approved)",
-    M.l,
-    y,
-    { width: CONTENT_W }
-  );
+  const noCommentPara =
+    translations[
+      "(If no comment is received on this within 8 days, this is considered approved)"
+    ] ||
+    "(If no comment is received on this within 8 days, this is considered approved)";
+  doc.text(noCommentPara, M.l, y, { width: CONTENT_W });
 
   // Footer – logical page 11
   footer(doc, 10);
@@ -2843,20 +4069,22 @@ async function page11(doc, dynamic) {
 
 // ===== Page 12 helpers =====
 
-function paraPage12(doc, y, text) {
+function paraPage12(doc, y, text, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text(text, M.l, y, {
+  const translatedText = translations[text] || text;
+  doc.text(translatedText, M.l, y, {
     width: CONTENT_W,
     lineGap: 1,
   });
   return doc.y + 4;
 }
 
-function bulletsPage12(doc, y, items) {
+function bulletsPage12(doc, y, items, translations = {}) {
   doc.font("Helvetica").fontSize(9).fillColor("black");
   let yy = y;
   items.forEach((txt) => {
-    doc.text("• " + txt, M.l, yy, {
+    const translatedTxt = translations[txt] || txt;
+    doc.text("• " + translatedTxt, M.l, yy, {
       width: CONTENT_W,
       lineGap: 1,
     });
@@ -2867,11 +4095,11 @@ function bulletsPage12(doc, y, items) {
 
 // ===== PAGE 12 – 7. STATIC CONTROLS (SCHEMATIC) =====
 
-function page12(doc, dynamic) {
+function page12(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // Top-level blue section bar
-  y = drawSectionBar(doc, y, "7. STATIC CONTROLS (SCHEMATIC)");
+  y = drawSectionBar(doc, y, "7. STATIC CONTROLS (SCHEMATIC)", translations);
 
   // 4-column table header: LISTING | DOCUMENT | CONSTRUCTION PART: | ACCOMPLISHMENT
   y = underlineRowFourColsTable(
@@ -2881,7 +4109,8 @@ function page12(doc, dynamic) {
     "DOCUMENT",
     "CONSTRUCTION PART:",
     "ACCOMPLISHMENT",
-    { header: true, size: 9 }
+    { header: true, size: 9 },
+    translations
   );
 
   // B2 row – dynamic (red)
@@ -2897,22 +4126,23 @@ function page12(doc, dynamic) {
     b2Document,
     constructionVal,
     specialVal,
-    { header: false, size: 9, valueColor: "black" }
+    { header: false, size: 9, valueColor: "black" },
+    translations
   );
 
   // Paragraph below the table
-  y = paraPage12(
-    doc,
-    y,
+  const controlCarriedOutPara =
     "In the form below, control has been carried out of the project material that has been handed out when awarding awards, and " +
-      "forms the basis for the intended and executed work, which is a dynamic process until delivery."
-  );
+    "forms the basis for the intended and executed work, which is a dynamic process until delivery.";
+  y = paraPage12(doc, y, controlCarriedOutPara, translations);
 
   y += 4;
 
   // "Standards and norms:"
   doc.font("Helvetica-Bold").fontSize(9).fillColor("black");
-  doc.text("Standards and norms:", M.l, y);
+  const standardsNormsLabel =
+    translations["Standards and norms:"] || "Standards and norms:";
+  doc.text(standardsNormsLabel, M.l, y);
   y = doc.y + 4;
 
   // Bullet list of standards
@@ -2920,7 +4150,7 @@ function page12(doc, dynamic) {
     "DS/EN 13670: Execution of concrete structures DI Denmark",
     "DS/EN 206: Concrete – Specification, Properties, Manufacture and Conformity DS1140 Load-Bearing Structures",
   ];
-  y = bulletsPage12(doc, y, standards);
+  y = bulletsPage12(doc, y, standards, translations);
 
   // Footer – logical page 12
   footer(doc, 11);
@@ -2951,7 +4181,7 @@ function getBColXs() {
 
 const B_COL_XS = getBColXs();
 
-function bHeaderRow(doc, y) {
+function bHeaderRow(doc, y, translations = {}) {
   const headers = [
     "POS",
     "CHECKING THE",
@@ -2968,7 +4198,8 @@ function bHeaderRow(doc, y) {
 
   let maxY = y;
   headers.forEach((text, idx) => {
-    doc.text(text, B_COL_XS[idx] + 2, y, {
+    const translatedText = translations[text] || text;
+    doc.text(translatedText, B_COL_XS[idx] + 2, y, {
       width: B_COL_WIDTHS[idx] - 4,
     });
     if (doc.y > maxY) maxY = doc.y;
@@ -2992,24 +4223,31 @@ function bHeaderRow(doc, y) {
  *   basis, method, scope, acceptance, timeControl
  * }
  */
-function bDataRow(doc, y, row) {
+function bDataRow(doc, y, row, translations = {}) {
   doc.font("Helvetica").fontSize(8).fillColor("black");
 
+  // Translate values if they're not numbers/dates
+  const translateValue = (value) => {
+    if (!value || typeof value !== "string") return value;
+    if (isNumberOrDate(value)) return value;
+    return translations[value] || value;
+  };
+
   const values = [
-    row.pos || "",
-    row.checkingThe || "",
-    row.subject || "",
-    row.constructionPart || "",
-    row.basis || "",
-    row.method || "",
-    row.scope || "",
-    row.acceptance || "",
-    row.timeControl || "",
+    row.pos || "", // pos is usually a number/ID, don't translate
+    translateValue(row.checkingThe || ""),
+    translateValue(row.subject || ""),
+    translateValue(row.constructionPart || ""),
+    translateValue(row.basis || ""),
+    translateValue(row.method || ""),
+    row.scope || "", // scope is usually a percentage, don't translate
+    translateValue(row.acceptance || ""),
+    translateValue(row.timeControl || ""),
   ];
 
   let maxY = y;
   values.forEach((text, idx) => {
-    doc.text(text, B_COL_XS[idx] + 2, y, {
+    doc.text(String(text), B_COL_XS[idx] + 2, y, {
       width: B_COL_WIDTHS[idx] - 4,
     });
     if (doc.y > maxY) maxY = doc.y;
@@ -3036,7 +4274,7 @@ function paraBx(doc, y, text) {
   return doc.y + 4;
 }
 
-function page13(doc, dynamic) {
+function page13(doc, dynamic, translations = {}) {
   let y = M.t + 25;
   let pageSuffix = "a"; // Start with 'a' for first page
   const footerHeight = 35;
@@ -3066,14 +4304,13 @@ function page13(doc, dynamic) {
   console.log("Page 13 - Normalized rows count:", normalizedRows.length);
 
   // Title with blue background + white text (only on first page)
-  y = drawSectionBar(
-    doc,
-    y,
-    "7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1"
-  );
+  const headingText =
+    translations["7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1"] ||
+    "7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1";
+  y = drawSectionBar(doc, y, headingText, translations);
 
   // Header row (POS / CHECKING THE / SUBJECT / ...)
-  y = bHeaderRow(doc, y);
+  y = bHeaderRow(doc, y, translations);
 
   // Data rows - only render if there are rows, with page break handling
   if (normalizedRows.length > 0) {
@@ -3085,7 +4322,7 @@ function page13(doc, dynamic) {
       // Check if we need a new page before drawing this row
       if (y + estimatedRowHeight > maxYForContent && index > 0) {
         // Add footer to current page
-        footer(doc, 12, pageSuffix);
+        footer(doc, 12, pageSuffix, translations);
 
         // Add new page
         doc.addPage();
@@ -3093,11 +4330,11 @@ function page13(doc, dynamic) {
         y = M.t + 25;
 
         // Re-add header on new page
-        y = bHeaderRow(doc, y);
+        y = bHeaderRow(doc, y, translations);
       }
 
       // Draw the row
-      y = bDataRow(doc, y, row);
+      y = bDataRow(doc, y, row, translations);
 
       // Safety check: if y exceeded page, PDFKit might have auto-paged
       if (y > PAGE.h - footerHeight) {
@@ -3118,10 +4355,10 @@ function page13(doc, dynamic) {
   y = doc.y + 4;*/
 
   // Footer – logical page 12 with suffix
-  footer(doc, 12, pageSuffix);
+  footer(doc, 12, pageSuffix, translations);
 }
 
-function page14(doc, dynamic) {
+function page14(doc, dynamic, translations = {}) {
   let y = M.t + 25;
   let pageSuffix = "a"; // Start with 'a' for first page
   const footerHeight = 35;
@@ -3161,14 +4398,14 @@ function page14(doc, dynamic) {
   console.log("Page 14 - Normalized rows count:", normalizedRows.length);
 
   // TITLE with blue background + white text (only on first page)
-  y = drawSectionBar(
-    doc,
-    y,
-    "7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2"
-  );
+  const headingText =
+    translations[
+      "7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2"
+    ] || "7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2";
+  y = drawSectionBar(doc, y, headingText, translations);
 
   // TABLE HEADER: POS / CHECKING THE / SUBJECT / ...
-  y = bHeaderRow(doc, y);
+  y = bHeaderRow(doc, y, translations);
 
   // DATA ROWS - only render if there are rows, with page break handling
   if (normalizedRows.length > 0) {
@@ -3180,7 +4417,7 @@ function page14(doc, dynamic) {
       // Check if we need a new page before drawing this row
       if (y + estimatedRowHeight > maxYForContent && index > 0) {
         // Add footer to current page
-        footer(doc, 13, pageSuffix);
+        footer(doc, 13, pageSuffix, translations);
 
         // Add new page
         doc.addPage();
@@ -3188,11 +4425,11 @@ function page14(doc, dynamic) {
         y = M.t + 25;
 
         // Re-add header on new page
-        y = bHeaderRow(doc, y);
+        y = bHeaderRow(doc, y, translations);
       }
 
       // Draw the row
-      y = bDataRow(doc, y, row);
+      y = bDataRow(doc, y, row, translations);
 
       // Safety check: if y exceeded page, PDFKit might have auto-paged
       // In that case, we need to handle it on the next iteration
@@ -3220,10 +4457,10 @@ function page14(doc, dynamic) {
   y = doc.y + 4;*/
 
   // FOOTER – logical page 13 with suffix
-  footer(doc, 13, pageSuffix);
+  footer(doc, 13, pageSuffix, translations);
 }
 
-function page15(doc, dynamic) {
+function page15(doc, dynamic, translations = {}) {
   let y = M.t + 25;
   let pageSuffix = "a"; // Start with 'a' for first page
   const footerHeight = 35;
@@ -3263,14 +4500,14 @@ function page15(doc, dynamic) {
   console.log("Page 15 - Normalized rows count:", normalizedRows.length);
 
   // TITLE with blue background + white text (only on first page)
-  y = drawSectionBar(
-    doc,
-    y,
-    "7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3"
-  );
+  const headingText =
+    translations[
+      "7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3"
+    ] || "7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3";
+  y = drawSectionBar(doc, y, headingText, translations);
 
   // TABLE HEADER (POS / CHECKING THE / SUBJECT / ...)
-  y = bHeaderRow(doc, y);
+  y = bHeaderRow(doc, y, translations);
 
   // DATA ROWS - only render if there are rows, with page break handling
   if (normalizedRows.length > 0) {
@@ -3282,7 +4519,7 @@ function page15(doc, dynamic) {
       // Check if we need a new page before drawing this row
       if (y + estimatedRowHeight > maxYForContent && index > 0) {
         // Add footer to current page
-        footer(doc, 14, pageSuffix);
+        footer(doc, 14, pageSuffix, translations);
 
         // Add new page
         doc.addPage();
@@ -3290,11 +4527,11 @@ function page15(doc, dynamic) {
         y = M.t + 25;
 
         // Re-add header on new page
-        y = bHeaderRow(doc, y);
+        y = bHeaderRow(doc, y, translations);
       }
 
       // Draw the row
-      y = bDataRow(doc, y, row);
+      y = bDataRow(doc, y, row, translations);
 
       // Safety check: if y exceeded page, PDFKit might have auto-paged
       if (y > PAGE.h - footerHeight) {
@@ -3321,13 +4558,16 @@ function page15(doc, dynamic) {
   y = doc.y + 4;*/
 
   // FOOTER – logical page 14 with suffix
-  footer(doc, 14, pageSuffix);
+  footer(doc, 14, pageSuffix, translations);
 }
-function page16(doc, dynamic) {
+function page16(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // TITLE with blue background + white text
-  y = drawSectionBar(doc, y, "7.4 RECEIPT CONTROL DELIVERIES B4");
+  const headingText =
+    translations["7.4 RECEIPT CONTROL DELIVERIES B4"] ||
+    "7.4 RECEIPT CONTROL DELIVERIES B4";
+  y = drawSectionBar(doc, y, headingText, translations);
 
   // Use only database records - no default rows
   const b5Rows = dynamic && Array.isArray(dynamic.b5Rows) ? dynamic.b5Rows : [];
@@ -3336,11 +4576,13 @@ function page16(doc, dynamic) {
   const ccValue = dynamic.gamma?.cc
     ? String(dynamic.gamma.cc).toLowerCase()
     : "";
+  const plannedSampleChecksText =
+    translations["Planned Sample Checks"] || "Planned Sample Checks";
   let dynamicScope = "";
   if (ccValue === "kk1" || ccValue === "kk2") {
-    dynamicScope = "10% Planned Sample Checks";
+    dynamicScope = `10% ${plannedSampleChecksText}`;
   } else if (ccValue === "kk3" || ccValue === "kk4") {
-    dynamicScope = "20% Planned Sample Checks";
+    dynamicScope = `20% ${plannedSampleChecksText}`;
   }
 
   // Normalize rows so all columns exist, and filter out completely empty rows
@@ -3362,12 +4604,12 @@ function page16(doc, dynamic) {
   console.log("Page 16 - Normalized rows count:", normalizedRows.length);
 
   // TABLE HEADER (POS / CHECKING THE / SUBJECT / ...)
-  y = bHeaderRow(doc, y);
+  y = bHeaderRow(doc, y, translations);
 
   // DATA ROWS - only render if there are rows
   if (normalizedRows.length > 0) {
     normalizedRows.forEach((row) => {
-      y = bDataRow(doc, y, row);
+      y = bDataRow(doc, y, row, translations);
     });
   }
 
@@ -3394,14 +4636,17 @@ function page16(doc, dynamic) {
   y = doc.y + 4;*/
 
   // FOOTER – logical page 16 (or whatever page number you want to show)
-  footer(doc, 15);
+  footer(doc, 15, "", translations);
 }
 
-function page17(doc, dynamic) {
+function page17(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // TITLE with blue background + white text
-  y = drawSectionBar(doc, y, "7.5 PERFORMANCE CONTROL; B5");
+  const headingText =
+    translations["7.5 PERFORMANCE CONTROL; B5"] ||
+    "7.5 PERFORMANCE CONTROL; B5";
+  y = drawSectionBar(doc, y, headingText, translations);
 
   // Use only database records - no default rows
   const b6Rows = dynamic && Array.isArray(dynamic.b6Rows) ? dynamic.b6Rows : [];
@@ -3410,11 +4655,13 @@ function page17(doc, dynamic) {
   const ccValue = dynamic.gamma?.cc
     ? String(dynamic.gamma.cc).toLowerCase()
     : "";
+  const plannedSampleChecksText =
+    translations["Planned Sample Checks"] || "Planned Sample Checks";
   let dynamicScope = "";
   if (ccValue === "kk1" || ccValue === "kk2") {
-    dynamicScope = "10% Planned Sample Checks";
+    dynamicScope = `10% ${plannedSampleChecksText}`;
   } else if (ccValue === "kk3" || ccValue === "kk4") {
-    dynamicScope = "20% Planned Sample Checks";
+    dynamicScope = `20% ${plannedSampleChecksText}`;
   }
 
   // Normalize rows so all columns exist, and filter out completely empty rows
@@ -3442,12 +4689,12 @@ function page17(doc, dynamic) {
   }
 
   // TABLE HEADER (POS / CHECKING THE / SUBJECT / ...)
-  y = bHeaderRow(doc, y);
+  y = bHeaderRow(doc, y, translations);
 
   // DATA ROWS - only render if there are rows
   if (normalizedRows.length > 0) {
     normalizedRows.forEach((row) => {
-      y = bDataRow(doc, y, row);
+      y = bDataRow(doc, y, row, translations);
     });
   } else {
     console.log("Page 17 - No rows to display, table will be empty");
@@ -3467,14 +4714,16 @@ function page17(doc, dynamic) {
   y = doc.y + 4;*/
 
   // FOOTER – logical page 17
-  footer(doc, 16);
+  footer(doc, 16, "", translations);
 }
 
-function page18(doc, dynamic) {
+function page18(doc, dynamic, translations = {}) {
   let y = M.t + 25;
 
   // TITLE with blue background + white text
-  y = drawSectionBar(doc, y, "7.6 FINAL INSPECTION B6");
+  const headingText =
+    translations["7.6 FINAL INSPECTION B6"] || "7.6 FINAL INSPECTION B6";
+  y = drawSectionBar(doc, y, headingText, translations);
 
   // Use only database records - no default rows
   const b7Rows = dynamic && Array.isArray(dynamic.b7Rows) ? dynamic.b7Rows : [];
@@ -3499,12 +4748,12 @@ function page18(doc, dynamic) {
   console.log("Page 18 - Normalized rows count:", normalizedRows.length);
 
   // TABLE HEADER (POS / CHECKING THE / SUBJECT / ...)
-  y = bHeaderRow(doc, y);
+  y = bHeaderRow(doc, y, translations);
 
   // DATA ROWS - only render if there are rows
   if (normalizedRows.length > 0) {
     normalizedRows.forEach((row) => {
-      y = bDataRow(doc, y, row);
+      y = bDataRow(doc, y, row, translations);
     });
   }
 
@@ -3522,7 +4771,7 @@ function page18(doc, dynamic) {
   y = doc.y + 4;*/
 
   // FOOTER – logical page 17 (last page)
-  footer(doc, 17);
+  footer(doc, 17, "", translations);
 }
 
 function page19(doc, dynamic) {
@@ -3574,51 +4823,56 @@ function page19(doc, dynamic) {
 }
 
 // -------------------- MAIN BUILDER --------------------
-async function buildStaticControlPlan(doc, dynamic, tableData = {}) {
+async function buildStaticControlPlan(
+  doc,
+  dynamic,
+  tableData = {},
+  translations = {}
+) {
   // Page 1
-  await page1(doc, dynamic);
+  await page1(doc, dynamic, translations);
 
   // Page 2
   doc.addPage();
-  page2(doc, dynamic);
+  page2(doc, dynamic, translations);
 
   // Page 3
   doc.addPage();
-  page3(doc, dynamic);
+  page3(doc, dynamic, translations);
 
   // Page 4
   doc.addPage();
-  page4(doc, dynamic);
+  page4(doc, dynamic, translations);
 
   // Page 5–12
   doc.addPage();
-  page5(doc, dynamic);
+  page5(doc, dynamic, translations);
   doc.addPage();
-  page6(doc, dynamic);
+  page6(doc, dynamic, translations);
   doc.addPage();
-  page7(doc, dynamic);
+  page7(doc, dynamic, translations);
   doc.addPage();
-  page8(doc, dynamic);
+  page8(doc, dynamic, translations);
   doc.addPage();
-  page9(doc, dynamic);
+  page9(doc, dynamic, translations);
   doc.addPage();
-  page10(doc, dynamic);
+  page10(doc, dynamic, translations);
   doc.addPage();
-  await page11(doc, dynamic);
+  await page11(doc, dynamic, translations);
   doc.addPage();
-  page12(doc, dynamic);
+  page12(doc, dynamic, translations);
   doc.addPage();
-  page13(doc, dynamic);
+  page13(doc, dynamic, translations);
   doc.addPage();
-  page14(doc, dynamic);
+  page14(doc, dynamic, translations);
   doc.addPage();
-  page15(doc, dynamic);
+  page15(doc, dynamic, translations);
   doc.addPage();
-  page16(doc, dynamic);
+  page16(doc, dynamic, translations);
   doc.addPage();
-  page17(doc, dynamic);
+  page17(doc, dynamic, translations);
   doc.addPage();
-  page18(doc, dynamic);
+  page18(doc, dynamic, translations);
 }
 
 // -------------------- ROUTE --------------------
@@ -3627,6 +4881,9 @@ app.get("/download", async (req, res) => {
     var subjectMatterId = "KP06";
     var projectId = "693d2acb1291ff43b9ea32a3";
     var companyId = "693d25ef252d1b388fff0648";
+
+    // Get target language from query parameter (optional)
+    const targetLang = req.query.target_lang || req.query.lang || "DA";
 
     // Check if database is connected
     if (!db) {
@@ -4243,6 +5500,27 @@ app.get("/download", async (req, res) => {
       dynamicData.b7Rows?.length || 0
     );
 
+    // Collect and translate texts for page 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, and 17 if target language is specified
+    let translations = {};
+    if (targetLang) {
+      console.log(`Translation requested for language: ${targetLang}`);
+      const page1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts =
+        collectPage1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts(
+          dynamicData
+        );
+      const textsArray = Object.keys(
+        page1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts
+      );
+      translations = await translateTexts(textsArray, targetLang);
+      console.log(
+        `Translation map created with ${
+          Object.keys(translations).length
+        } entries`
+      );
+    } else {
+      console.log("No target language specified, using original texts");
+    }
+
     const doc = new PDFDocument({
       size: [PAGE.w, PAGE.h],
       margins: M,
@@ -4266,7 +5544,7 @@ app.get("/download", async (req, res) => {
       B6: [],
     };
 
-    await buildStaticControlPlan(doc, dynamicData, tableData);
+    await buildStaticControlPlan(doc, dynamicData, tableData, translations);
 
     doc.end();
   } catch (error) {
@@ -4299,4 +5577,13 @@ async function startServer() {
   }
 }
 
-startServer();
+// startServer(); // Commented out - server is started in index.js
+
+// Export functions and constants for use in other files
+module.exports = {
+  buildStaticControlPlan,
+  translateTexts,
+  collectPage1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts,
+  PAGE,
+  M,
+};

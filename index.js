@@ -15,6 +15,24 @@ const axios = require("axios");
 // Import static report API
 const staticReportAPI = require("./static-report-api");
 
+// Import functions from extl.js for PDF generation
+const {
+  buildStaticControlPlan,
+  translateTexts,
+  collectPage1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts,
+  PAGE,
+  M,
+} = require("./extl");
+
+// Import functions from extl2.js for PDF generation
+const {
+  generateQualityAssuranceReport: generateQualityAssuranceReportExtl2,
+  translateTexts: translateTextsExtl2,
+  collectPage1And2And3And4And5And6Texts,
+  PAGE: PAGE_EXTL2,
+  M: M_EXTL2,
+} = require("./extl2");
+
 // PDF to PNG conversion function
 async function convertPdfToPng(pdfPath, outputDir) {
   console.log("nano testing");
@@ -148,83 +166,31 @@ app.get("/convert-pdf-to-png", async (req, res) => {
   }
 });
 
-// Try cloud MongoDB first, fallback to local MongoDB
-const cloudUri =
-  process.env.MONGODB_BASE_URI ||
-  "mongodb+srv://testusername:Mughees110@cluster0.nfgli.mongodb.net/construction_db?retryWrites=true&w=majority";
-const localUri = "mongodb://localhost:27017/mughees";
-let uri = cloudUri;
+// Connect to local MongoDB only
+const localUri = "mongodb://localhost:27017/construction_db";
+let uri = localUri;
 let client = new MongoClient(uri, {
-  serverSelectionTimeoutMS: 60000, // Increased timeout
-  connectTimeoutMS: 60000, // Increased timeout
-  socketTimeoutMS: 60000, // Increased timeout
+  serverSelectionTimeoutMS: 10000,
+  connectTimeoutMS: 10000,
+  socketTimeoutMS: 10000,
   maxPoolSize: 10,
   retryWrites: true,
   retryReads: true,
-  // Add connection pool options
   minPoolSize: 1,
   maxIdleTimeMS: 30000,
-  // Add heartbeat options
   heartbeatFrequencyMS: 10000,
 });
-const dbName = "mughees";
+const dbName = "construction_db";
 let db;
 
 // JWT Secret Key
 const JWT_SECRET = "your_jwt_secret_key";
 
-// Connect to MongoDB with retry logic and fallback
+// Connect to local MongoDB with retry logic
 async function connectToMongoDB() {
   const maxRetries = 3;
   let retryCount = 0;
 
-  // Try cloud MongoDB first
-  while (retryCount < maxRetries) {
-    try {
-      console.log(
-        `Attempting to connect to cloud MongoDB (attempt ${
-          retryCount + 1
-        }/${maxRetries})...`
-      );
-      uri = cloudUri;
-      const cloudClient = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 30000,
-        connectTimeoutMS: 30000,
-        socketTimeoutMS: 30000,
-        maxPoolSize: 10,
-        retryWrites: true,
-        retryReads: true,
-        minPoolSize: 1,
-        maxIdleTimeMS: 30000,
-        heartbeatFrequencyMS: 10000,
-      });
-
-      await cloudClient.connect();
-      console.log("Connected to cloud MongoDB successfully!");
-      client = cloudClient;
-      db = client.db(dbName);
-      return; // Success, exit the function
-    } catch (error) {
-      retryCount++;
-      console.error(
-        `Error connecting to cloud MongoDB (attempt ${retryCount}/${maxRetries}):`,
-        error.message
-      );
-
-      if (retryCount >= maxRetries) {
-        console.log("Cloud MongoDB connection failed, trying local MongoDB...");
-        break; // Try local MongoDB
-      }
-
-      // Wait before retrying (exponential backoff)
-      const waitTime = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
-      console.log(`Retrying in ${waitTime}ms...`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-  }
-
-  // Try local MongoDB as fallback
-  retryCount = 0;
   while (retryCount < maxRetries) {
     try {
       console.log(
@@ -256,7 +222,7 @@ async function connectToMongoDB() {
 
       if (retryCount >= maxRetries) {
         console.error(
-          "Failed to connect to both cloud and local MongoDB after all retry attempts"
+          "Failed to connect to local MongoDB after all retry attempts"
         );
         console.log("Starting server without database connection...");
         return; // Don't exit, let the server start without DB
@@ -461,6 +427,8 @@ app.post(
         cvr,
         contactPerson,
         contactPhone,
+        education,
+        experience,
       } = req.body;
 
       // Validate email format
@@ -721,6 +689,8 @@ app.post(
         contactPerson,
         contactPhone: contactPhone || "",
         cvr,
+        education: education || "",
+        experience: experience || "",
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         companyId,
         isProjectManager: standardizedPM,
@@ -5669,6 +5639,8 @@ app.post(
         userProfession,
         cvr,
         contactPerson,
+        education,
+        experience,
       } = req.body;
 
       const updateData = {};
@@ -5797,6 +5769,8 @@ app.post(
       if (type) updateData.type = type;
       if (cvr) updateData.cvr = cvr;
       if (contactPerson) updateData.contactPerson = contactPerson;
+      if (education !== undefined) updateData.education = education;
+      if (experience !== undefined) updateData.experience = experience;
 
       // First, get the user to find their username
       const user = await db
@@ -5856,6 +5830,8 @@ app.post(
         postalCode: updateData.postalCode,
         startDate: updateData.startDate,
         picture: updateData.picture,
+        education: updateData.education,
+        experience: updateData.experience,
       };
 
       // Define role-specific fields that should only update the specific user
@@ -10361,7 +10337,7 @@ app.post("/translate", async (req, res) => {
     const formData = new URLSearchParams();
     formData.append("auth_key", DEEPL_API_KEY);
     formData.append("target_lang", target_lang);
-    formData.append("source_lang", source_lang);
+    //formData.append("source_lang", source_lang);
 
     textsToTranslate.forEach((text) => formData.append("text", text));
 
@@ -14692,6 +14668,1019 @@ app.post(
     }
   }
 );
+
+app.post("/store-check-and-add-to-project", async (req, res) => {
+  try {
+    const { name, projectId } = req.body;
+
+    if (!name || !projectId) {
+      return res.status(400).json({ error: "name and projectId are required" });
+    }
+
+    if (!ObjectId.isValid(projectId)) {
+      return res.status(400).json({ error: "Invalid projectId" });
+    }
+
+    // Create check document in checks collection
+    const checkDocument = {
+      name,
+      createdAt: new Date(),
+    };
+
+    const checkResult = await db.collection("checks").insertOne(checkDocument);
+
+    if (!checkResult.insertedId) {
+      return res.status(500).json({ error: "Failed to create check" });
+    }
+
+    // Get the complete check document
+    const createdCheck = await db.collection("checks").findOne({
+      _id: checkResult.insertedId,
+    });
+
+    if (!createdCheck) {
+      return res
+        .status(500)
+        .json({ error: "Failed to retrieve created check" });
+    }
+
+    // Add the complete check document to project's checks array
+    const projectUpdateResult = await db.collection("projects").updateOne(
+      { _id: new ObjectId(projectId) },
+      {
+        $push: { checks: createdCheck },
+      }
+    );
+
+    if (projectUpdateResult.matchedCount === 0) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    // Remove the check document from checks collection (checks collection is for global checks only)
+    await db.collection("checks").deleteOne({
+      _id: checkResult.insertedId,
+    });
+
+    res.status(201).json({
+      message: "Check created and added to project successfully",
+      check: createdCheck,
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to create check and add to project" });
+  }
+});
+
+// Download static control plan PDF (from extl.js)
+app.get("/download-extl", async (req, res) => {
+  try {
+    // Get parameters from query string
+    const subjectMatterId = req.query.subjectMatterId;
+    const projectId = req.query.projectId;
+    const companyId = req.query.companyId;
+    const targetLang = req.query.target_lang;
+
+    // Log all received parameters
+    console.log("📥 download-extl - Received parameters:", {
+      subjectMatterId,
+      projectId,
+      companyId,
+      target_lang: targetLang,
+      allQueryParams: req.query,
+    });
+
+    // Validate required parameters
+    if (!projectId || !companyId || !subjectMatterId || !targetLang) {
+      return res.status(400).json({
+        error: "projectId and companyId are required query parameters",
+      });
+    }
+
+    // Check if database is connected
+    if (!db) {
+      return res.status(500).json({ error: "Database not connected" });
+    }
+
+    // Fetch company data
+    console.log("Fetching company with ID:", companyId);
+    const company = await db.collection("companies").findOne({
+      _id: new ObjectId(companyId),
+    });
+    console.log("Company found:", company ? "Yes" : "No");
+
+    // Fetch project data (with companyId filter)
+    console.log(
+      "Fetching project with ID:",
+      projectId,
+      "and companyId:",
+      companyId
+    );
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId),
+      companyId: companyId,
+    });
+    console.log("Project found:", project ? "Yes" : "No");
+
+    // Extract staticDocumentCheckList from professionAssociatedData
+    let b1Rows = [];
+    let b2Rows = [];
+    let b3Rows = [];
+
+    if (project && project.professionAssociatedData) {
+      const professionData = project.professionAssociatedData[subjectMatterId];
+      if (professionData && professionData.staticDocumentCheckList) {
+        const checklist = professionData.staticDocumentCheckList;
+
+        // Helper function to map checklist item to table row
+        const mapChecklistItemToRow = (item) => {
+          return {
+            pos: item.ItemId || item.pos || "",
+            checkingThe:
+              item.checkingThe ||
+              item["Control of"] ||
+              item["Contol of"] ||
+              item["CHECKING THE"] ||
+              "",
+            subject: item.Subject || item.subject || item["SUBJECT"] || "",
+            constructionPart:
+              item["Construction part"] ||
+              item.constructionPart ||
+              item["CONSTRUCTION PART"] ||
+              "",
+            basis: item.Basis || item.basis || "",
+            method:
+              item["Control method"] ||
+              item["Control methode"] ||
+              item["CONTROL METHOD"] ||
+              item.controlMethod ||
+              item.method ||
+              "",
+            scope:
+              item.Scope ||
+              item.scope ||
+              item.circumference ||
+              (item.extent ? `${item.extent * 100}%` : "") ||
+              "",
+            acceptance:
+              item["Acceptance criteria"] ||
+              item["Acceptance Criteria"] ||
+              item.acceptanceCriteria ||
+              item.acceptance ||
+              "",
+            timeControl:
+              item.Time ||
+              item.time ||
+              item["TIME CONTROL"] ||
+              item.timeControl ||
+              "",
+          };
+        };
+
+        // Filter, deduplicate, and sort B1 items
+        b1Rows = checklist
+          .filter(
+            (item) =>
+              item.DS_GroupId === "B1" &&
+              item.ItemId != null &&
+              item.ItemId !== ""
+          )
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+
+        // Filter, deduplicate, and sort B2 items
+        const b2Filtered = checklist.filter(
+          (item) =>
+            item.DS_GroupId === "B2" &&
+            item.ItemId != null &&
+            item.ItemId !== ""
+        );
+        b2Rows = b2Filtered
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+
+        // Filter, deduplicate, and sort B3 items
+        const b3Filtered = checklist.filter(
+          (item) =>
+            item.DS_GroupId === "B3" &&
+            item.ItemId != null &&
+            item.ItemId !== ""
+        );
+        b3Rows = b3Filtered
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+      }
+    }
+
+    // Fetch gamma data
+    let gammaResults = await db
+      .collection("gammas")
+      .find({
+        companyId: companyId,
+        $or: [
+          { projectsId: { $in: [projectId] } },
+          { projectsId: { $in: [new ObjectId(projectId)] } },
+        ],
+        "profession.SubjectMatterId": subjectMatterId,
+      })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .toArray();
+
+    let gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+
+    if (!gamma) {
+      gammaResults = await db
+        .collection("gammas")
+        .find({
+          companyId: companyId,
+          $or: [
+            { projectsId: { $in: [projectId] } },
+            { projectsId: { $in: [new ObjectId(projectId)] } },
+          ],
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+      gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+    }
+
+    // Fetch eurocode
+    const eurocodeRecord = await db
+      .collection("projectprofessioneurocodes")
+      .findOne({
+        projectId: projectId,
+        companyId: companyId,
+        subjectMatterId: subjectMatterId,
+      });
+    const eurocode =
+      eurocodeRecord?.euroCodes && eurocodeRecord.euroCodes.length > 0
+        ? String(eurocodeRecord.euroCodes[0])
+        : "Eurocode";
+
+    // Fetch user with role Main Contractor or Main Constructor
+    const mainUser = await db.collection("users").findOne({
+      projectsId: { $in: [projectId] },
+      role: { $in: ["Main Contractor", "Main Constructor"] },
+    });
+
+    // Fetch signatures
+    const signatures = await db
+      .collection("static report signatures")
+      .find({
+        projectId: projectId,
+        companyId: companyId,
+        subjectMatterId: subjectMatterId,
+      })
+      .sort({ signatureType: 1, createdAt: -1 })
+      .toArray();
+
+    const signatureByType = {};
+    signatures.forEach((sig) => {
+      if (sig.signatureType !== undefined && sig.signatureType !== null) {
+        signatureByType[sig.signatureType] = sig;
+      }
+    });
+
+    // Fetch controls data for pages 16, 17, 18
+    let b5Rows = [];
+    let b6Rows = [];
+    let b7Rows = [];
+
+    if (
+      eurocodeRecord &&
+      eurocodeRecord.euroCodes &&
+      eurocodeRecord.euroCodes.length > 0
+    ) {
+      try {
+        const projectEuroCodes = eurocodeRecord.euroCodes
+          .map((v) => String(v).trim())
+          .filter(Boolean);
+
+        const matchConditions = {
+          euroCodeStr: { $in: projectEuroCodes },
+          subjectMatterId: subjectMatterId,
+        };
+
+        const pipeline = [
+          { $addFields: { euroCodeStr: { $toString: "$euroCode" } } },
+          { $match: matchConditions },
+          { $unwind: { path: "$entries", includeArrayIndex: "entryIndex" } },
+          {
+            $project: {
+              _id: 0,
+              entry: "$entries",
+              documentId: "$_id",
+              subjectMatterId: 1,
+              euroCode: 1,
+              language: 1,
+              entryIndex: 1,
+            },
+          },
+        ];
+
+        const rows = await db
+          .collection("controls of static report")
+          .aggregate(pipeline)
+          .toArray();
+
+        let entries = rows.map((r) => ({
+          ...r.entry,
+          _id: `${r.documentId}_${r.entryIndex}`,
+          documentId: r.documentId,
+          subjectMatterId: r.subjectMatterId,
+          euroCode: r.euroCode,
+          language: r.language,
+          entryIndex: r.entryIndex,
+        }));
+
+        // Check for edited data
+        if (projectId) {
+          const editedControls = await db
+            .collection("editcontrols")
+            .find({
+              projectId: projectId,
+              subjectMatterId: subjectMatterId,
+            })
+            .toArray();
+
+          const editedDataMap = new Map();
+          editedControls.forEach((editedControl) => {
+            if (editedControl.editedFields && editedControl.editedFields.pos) {
+              const key = `${editedControl.projectId}_${editedControl.subjectMatterId}_${editedControl.editedFields.pos}`;
+              editedDataMap.set(key, editedControl.editedFields);
+            }
+          });
+
+          entries = entries.map((entry) => {
+            const key = `${projectId}_${subjectMatterId}_${entry.pos}`;
+            const editedData = editedDataMap.get(key);
+            if (editedData) {
+              return {
+                ...entry,
+                ...editedData,
+                _isEdited: true,
+              };
+            }
+            return entry;
+          });
+        }
+
+        const mapEntryToRow = (entry) => {
+          let scopeValue = "";
+          if (
+            entry.circumference !== undefined &&
+            entry.circumference !== null
+          ) {
+            scopeValue = `${entry.circumference * 100}%`;
+          } else if (entry.omfang !== undefined && entry.omfang !== null) {
+            scopeValue = `${entry.omfang * 100}%`;
+          } else if (entry.scope) {
+            scopeValue = entry.scope;
+          } else if (entry.Scope) {
+            scopeValue = entry.Scope;
+          } else if (entry.extent) {
+            scopeValue = `${entry.extent * 100}%`;
+          }
+
+          return {
+            pos: entry.pos || "",
+            checkingThe:
+              entry.checkingThe ||
+              entry.kontrolAf ||
+              entry["Control of"] ||
+              entry["Contol of"] ||
+              "",
+            subject: entry.subject || entry.emne || entry.Subject || "",
+            constructionPart:
+              entry.constructionPart ||
+              entry.konstruktionsdel ||
+              entry["Construction part"] ||
+              "",
+            basis: entry.basis || entry.grundlag || entry.Basis || "",
+            method:
+              entry.controlMethod ||
+              entry.kontrolMetode ||
+              entry["Control method"] ||
+              entry["Control methode"] ||
+              entry.method ||
+              "",
+            scope: scopeValue,
+            acceptance:
+              entry.acceptanceCriteria ||
+              entry.acceptkriterie ||
+              entry["Acceptance criteria"] ||
+              entry.acceptance ||
+              "",
+            timeControl:
+              entry.time || entry.tid || entry.Time || entry.timeControl || "",
+          };
+        };
+
+        b5Rows = entries
+          .filter(
+            (entry) =>
+              entry.pos &&
+              (entry.pos.startsWith("7.4") || entry.pos.startsWith("17.4"))
+          )
+          .sort((a, b) => (a.pos || "").localeCompare(b.pos || ""))
+          .map(mapEntryToRow);
+
+        b6Rows = entries
+          .filter(
+            (entry) =>
+              entry.pos &&
+              (entry.pos.startsWith("7.5") || entry.pos.startsWith("17.5"))
+          )
+          .sort((a, b) => (a.pos || "").localeCompare(b.pos || ""))
+          .map(mapEntryToRow);
+
+        b7Rows = entries
+          .filter(
+            (entry) =>
+              entry.pos &&
+              (entry.pos.startsWith("7.6") || entry.pos.startsWith("17.6"))
+          )
+          .sort((a, b) => (a.pos || "").localeCompare(b.pos || ""))
+          .map(mapEntryToRow);
+      } catch (error) {
+        console.error("Error fetching controls data:", error);
+      }
+    }
+
+    // Build company info string
+    let companyInfo = "";
+    if (company) {
+      const parts = [];
+      if (company.name) parts.push(`Name: ${company.name}`);
+      if (company.address) parts.push(`Address: ${company.address}`);
+      if (company.cvr) parts.push(`CVR: ${company.cvr}`);
+      if (company.contactPhone) parts.push(`Tel: ${company.contactPhone}`);
+      companyInfo = parts.join("\n");
+    } else {
+      companyInfo = "Own company Adress CVR and contact info.- company setup.";
+    }
+
+    // Fetch Independent Controller users
+    const projectObjectId = new ObjectId(projectId);
+    const independentControllers = await db
+      .collection("users")
+      .find({
+        role: "Independent Controller",
+        $or: [
+          { projectsId: { $in: [projectObjectId] } },
+          { projectsId: { $in: [projectId] } },
+        ],
+      })
+      .toArray();
+
+    // Build dynamic data object
+    const dynamicData = {
+      companyInfo: companyInfo,
+      projectName: project?.name || "Project name – project setup.",
+      constructionPart: gamma?.special ? String(gamma.special) : "Special text",
+      eurocode: eurocode,
+      xNumber: gamma?.x ? String(gamma.x) : "X number",
+      specialText: gamma?.special ? String(gamma.special) : "Special text",
+      kkx: gamma?.cc ? String(gamma.cc) : "KKX",
+      executionClass: gamma?.exc ? String(gamma.exc) : "EXCX",
+      selectDate: "[Select Date]",
+      project: project,
+      mainUser: mainUser,
+      signatures: signatureByType,
+      company: company,
+      gamma: gamma,
+      independentControllers: independentControllers,
+      b1Rows: b1Rows,
+      b2Rows: b2Rows,
+      b3Rows: b3Rows,
+      b5Rows: b5Rows,
+      b6Rows: b6Rows,
+      b7Rows: b7Rows,
+    };
+
+    // Collect and translate texts if target language is specified
+    let translations = {};
+    if (targetLang) {
+      console.log(`Translation requested for language: ${targetLang}`);
+      const page1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts =
+        collectPage1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts(
+          dynamicData
+        );
+      const textsArray = Object.keys(
+        page1And2And3And4And5And6And7And8And9And10And11And12And13And14And15And16And17Texts
+      );
+      translations = await translateTexts(textsArray, targetLang);
+      console.log(
+        `Translation map created with ${
+          Object.keys(translations).length
+        } entries`
+      );
+    }
+
+    // Create PDF document
+    const doc = new PDFDocument({
+      size: [PAGE.w, PAGE.h],
+      margins: M,
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=static-control-plan.pdf"
+    );
+
+    doc.pipe(res);
+
+    const tableData = {
+      B1: [],
+      B2: [],
+      B3: [],
+      B4: [],
+      B5: [],
+      B6: [],
+    };
+
+    await buildStaticControlPlan(doc, dynamicData, tableData, translations);
+
+    doc.end();
+  } catch (error) {
+    console.error("Error generating PDF:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to generate PDF", details: error.message });
+  }
+});
+
+// Download quality assurance report PDF (from extl2.js)
+app.get("/download-extl2", async (req, res) => {
+  try {
+    // Get parameters from query string
+    const subjectMatterId = req.query.subjectMatterId;
+    const projectId = req.query.projectId;
+    const companyId = req.query.companyId;
+    const targetLang = req.query.target_lang;
+
+    // Log all received parameters
+    console.log("📥 download-extl2 - Received parameters:", {
+      subjectMatterId,
+      projectId,
+      companyId,
+      target_lang: targetLang,
+      allQueryParams: req.query,
+    });
+
+    // Validate required parameters
+    if (!projectId || !companyId || !subjectMatterId || !targetLang) {
+      return res.status(400).json({
+        error:
+          "projectId and companyId subjectMatterId are required query parameters",
+      });
+    }
+
+    // Check if database is connected
+    if (!db) {
+      return res.status(500).json({ error: "Database not connected" });
+    }
+
+    // Fetch company data
+    console.log("Fetching company with ID:", companyId);
+    const company = await db.collection("companies").findOne({
+      _id: new ObjectId(companyId),
+    });
+    console.log("Company found:", company ? "Yes" : "No");
+
+    // Fetch project data
+    console.log("Fetching project with ID:", projectId);
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId),
+    });
+    console.log("Project found:", project ? "Yes" : "No");
+
+    // Fetch profession group from inputs collection
+    console.log(
+      "Fetching profession group for SubjectMatterId:",
+      subjectMatterId
+    );
+    const inputDoc = await db.collection("inputs").findOne({
+      SubjectMatterId: subjectMatterId,
+    });
+    const professionGroup = inputDoc?.GroupName || "From project setup";
+    console.log("Profession Group:", professionGroup);
+
+    // Format prepared date from project createdAt
+    const preparedDate = project?.createdAt
+      ? new Date(project.createdAt).toLocaleDateString("en-GB")
+      : "";
+
+    // Project ID is the _id of the project record
+    const projectIdValue = project?._id ? project._id.toString() : projectId;
+    const projectObjectId = new ObjectId(projectId);
+
+    // Fetch Main Contractor/Customer user
+    const mainContractor = await db.collection("users").findOne({
+      role: { $in: ["Main Contractor", "Main Constructor"] },
+      $or: [
+        { projectsId: projectObjectId },
+        { projectsId: projectId },
+        { projectsId: { $in: [projectObjectId, projectId] } },
+      ],
+    });
+    console.log("Main Contractor found:", mainContractor ? "Yes" : "No");
+
+    // Fetch Construction Manager user (with subjectMatterId check)
+    const constructionManagers = await db
+      .collection("users")
+      .find({
+        role: "Construction Manager",
+        $or: [
+          { projectsId: projectObjectId },
+          { projectsId: projectId },
+          { projectsId: { $in: [projectObjectId, projectId] } },
+        ],
+      })
+      .toArray();
+
+    let constructionManager = null;
+    if (constructionManagers.length > 0) {
+      constructionManager =
+        constructionManagers.find((user) => {
+          if (user.userProfession && Array.isArray(user.userProfession)) {
+            return user.userProfession.some(
+              (prof) => prof.SubjectMatterId === subjectMatterId
+            );
+          }
+          if (user.profession && user.profession.SubjectMatterId) {
+            return user.profession.SubjectMatterId === subjectMatterId;
+          }
+          return true;
+        }) || constructionManagers[0];
+    }
+    console.log(
+      "Construction Manager found:",
+      constructionManager ? "Yes" : "No"
+    );
+
+    // Fetch Safety Coordinator user (with subjectMatterId check)
+    const safetyCoordinators = await db
+      .collection("users")
+      .find({
+        role: "Safety Coordinator",
+        $or: [
+          { projectsId: projectObjectId },
+          { projectsId: projectId },
+          { projectsId: { $in: [projectObjectId, projectId] } },
+        ],
+      })
+      .toArray();
+
+    let safetyCoordinator = null;
+    if (safetyCoordinators.length > 0) {
+      safetyCoordinator =
+        safetyCoordinators.find((user) => {
+          if (user.userProfession && Array.isArray(user.userProfession)) {
+            return user.userProfession.some(
+              (prof) => prof.SubjectMatterId === subjectMatterId
+            );
+          }
+          if (user.profession && user.profession.SubjectMatterId) {
+            return user.profession.SubjectMatterId === subjectMatterId;
+          }
+          return true;
+        }) || safetyCoordinators[0];
+    }
+    console.log("Safety Coordinator found:", safetyCoordinator ? "Yes" : "No");
+
+    // Fetch certificate schemes
+    const schemes = await db
+      .collection("schemes")
+      .find({
+        companyId: companyId,
+        $or: [
+          { projectsId: projectObjectId },
+          { projectsId: projectId },
+          { projectsId: { $in: [projectObjectId, projectId] } },
+        ],
+      })
+      .toArray();
+    console.log("Schemes found:", schemes.length);
+
+    // Fetch Advisor users by type
+    const advisorUsers = await db
+      .collection("users")
+      .find({
+        role: "Advisor",
+        $or: [
+          { projectsId: projectObjectId },
+          { projectsId: projectId },
+          { projectsId: { $in: [projectObjectId, projectId] } },
+        ],
+        type: {
+          $in: [
+            "Architecture",
+            "Engineer",
+            "Fire",
+            "Acoustics",
+            "Technical Subject",
+          ],
+        },
+      })
+      .toArray();
+    console.log("Advisor users found:", advisorUsers.length);
+
+    // Group advisors by type
+    const advisorsByType = {
+      Architecture: [],
+      Engineer: [],
+      Fire: [],
+      Acoustics: [],
+      "Technical Subject": [],
+    };
+
+    advisorUsers.forEach((advisor) => {
+      const advisorType = advisor.type;
+      if (advisorsByType[advisorType]) {
+        advisorsByType[advisorType].push(advisor);
+      }
+    });
+
+    // Get the first scheme or use empty values
+    const scheme = schemes.length > 0 ? schemes[0] : null;
+
+    // Fetch documents for page 6
+    const documents = await db
+      .collection("documents")
+      .find({
+        projectId: projectId,
+      })
+      .sort({ uploadedAt: -1 })
+      .toArray();
+    console.log("Documents found:", documents.length);
+
+    // Fetch draws for page 6
+    const draws = await db
+      .collection("draws")
+      .find({
+        $or: [
+          { projectsId: projectObjectId },
+          { projectsId: projectId },
+          { projectsId: { $in: [projectObjectId, projectId] } },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+    console.log("Draws found:", draws.length);
+
+    // Fetch users for page 8
+    // 1. Sub Contractor users
+    const subContractors = await db
+      .collection("users")
+      .find({
+        role: "Sub Contractor",
+        companyId: companyId,
+        $or: [
+          { projectsId: projectObjectId },
+          { projectsId: projectId },
+          { projectsId: { $in: [projectObjectId, projectId] } },
+        ],
+      })
+      .toArray();
+    console.log("Sub Contractors found:", subContractors.length);
+
+    // 2. Project Manager users
+    const projectManagers = await db
+      .collection("users")
+      .find({
+        $or: [
+          { isProjectManager: "yes" },
+          { isProjectManager: "Yes" },
+          { isProjectManager: true },
+          { "isProjectManager._id": "yes" },
+          { "isProjectManager.name": "Yes" },
+        ],
+        companyId: companyId,
+        projectsId: { $in: [projectObjectId, projectId] },
+        userRole: "Project Manager",
+      })
+      .toArray();
+    console.log("Project Managers found:", projectManagers.length);
+
+    // 4. Independent Controller users
+    const independentControllers = await db
+      .collection("users")
+      .find({
+        role: "Independent Controller",
+        companyId: companyId,
+        $or: [
+          { projectsId: projectObjectId },
+          { projectsId: projectId },
+          { projectsId: { $in: [projectObjectId, projectId] } },
+        ],
+      })
+      .toArray();
+    console.log(
+      "Independent Controllers found:",
+      independentControllers.length
+    );
+
+    // Fetch Worker users for page 9
+    const workers = await db
+      .collection("users")
+      .find({
+        role: "Worker",
+        companyId: companyId,
+        projectsId: { $in: [projectObjectId, projectId] },
+      })
+      .toArray();
+    console.log("Workers found:", workers.length);
+
+    // Fetch supervision checklist records for page 11
+    const supervisionChecklist = await db
+      .collection("project-supervision-check-list")
+      .find({
+        projectId: projectObjectId,
+      })
+      .toArray();
+    console.log(
+      "Supervision checklist records found:",
+      supervisionChecklist.length
+    );
+
+    // Fetch quality assurance signature for page 11
+    const qualityAssuranceSignature = await db
+      .collection("quality assurance signature")
+      .findOne({
+        projectId: projectId,
+        subjectMatterId: subjectMatterId,
+      });
+    console.log(
+      "Quality assurance signature found:",
+      qualityAssuranceSignature ? "Yes" : "No"
+    );
+
+    // Helper function to format date
+    const formatDate = (date) => {
+      if (!date) return "";
+      try {
+        return new Date(date).toLocaleDateString("en-GB");
+      } catch {
+        return "";
+      }
+    };
+
+    // Build dynamic data object
+    const dynamicData = {
+      company: company,
+      professionGroup: professionGroup,
+      preparedDate: preparedDate,
+      projectId: projectIdValue,
+      project: project,
+      subjectMatterId: subjectMatterId,
+      projectDate: preparedDate,
+      caseId: projectIdValue,
+      constructionCaseName1: project?.name || "",
+      constructionCaseCvrNo: project?.cvr || "",
+      constructionCaseAddress1: project?.address || "",
+      constructionCasePostcode1:
+        project?.postalCode && project?.city
+          ? `${project.postalCode} ${project.city}`
+          : project?.postalCode || project?.city || "",
+      constructionCaseContactPerson: project?.contactPerson || "",
+      constructionCaseStartingDate: project?.startDate
+        ? formatDate(project.startDate)
+        : "",
+      constructionCaseDeadline: project?.endDate
+        ? formatDate(project.endDate)
+        : "",
+      constructionCaseTelephone: project?.contactPhone || "",
+      constructionCaseEmail: project?.email || "",
+      mainContractorStartingDate: project?.startDate
+        ? formatDate(project.startDate)
+        : "",
+      mainContractorName:
+        mainContractor?.name || mainContractor?.username || "",
+      mainContractorCvrNo: mainContractor?.cvr || "",
+      mainContractorAddress: mainContractor?.address || "",
+      mainContractorPostcode:
+        mainContractor?.postalCode && mainContractor?.city
+          ? `${mainContractor.postalCode} ${mainContractor.city}`
+          : mainContractor?.postalCode || mainContractor?.city || "",
+      mainContractorTelephone: mainContractor?.phone || "",
+      mainContractorEmail:
+        mainContractor?.email || mainContractor?.username || "",
+      constructionManagerDate: constructionManager?.createdAt
+        ? formatDate(constructionManager.createdAt)
+        : "",
+      constructionManagerName:
+        constructionManager?.name || constructionManager?.username || "",
+      constructionManagerTelephone: constructionManager?.phone || "",
+      constructionManagerEmail:
+        constructionManager?.email || constructionManager?.username || "",
+      safetyCoordinatorDate: safetyCoordinator?.createdAt
+        ? formatDate(safetyCoordinator.createdAt)
+        : "",
+      safetyCoordinatorName:
+        safetyCoordinator?.name || safetyCoordinator?.username || "",
+      safetyCoordinatorTelephone: safetyCoordinator?.phone || "",
+      safetyCoordinatorEmail:
+        safetyCoordinator?.email || safetyCoordinator?.username || "",
+      certificationDate: scheme?.startDate ? formatDate(scheme.startDate) : "",
+      certificationScheme: scheme?.item || "",
+      certificationLevel: scheme?.level || "",
+      professionGroupDate: preparedDate,
+      professionGroupName: professionGroup,
+      advisorsByType: advisorsByType,
+      documents: documents,
+      draws: draws,
+      subContractors: subContractors,
+      projectManagers: projectManagers,
+      independentControllers: independentControllers,
+      workers: workers,
+      supervisionChecklist: supervisionChecklist,
+      qualityAssuranceSignature: qualityAssuranceSignature,
+    };
+
+    console.log("Dynamic data being passed to PDF generator:", {
+      companyName: company?.name || "Not found",
+      professionGroup: professionGroup,
+      preparedDate: preparedDate,
+      projectId: projectIdValue,
+      hasCompanyLogo: !!(
+        company?.picture?.s3Location ||
+        company?.picture?.s3location ||
+        company?.picture?.location ||
+        company?.picture?.url
+      ),
+    });
+
+    // Collect and translate texts if target language is specified
+    let translations = {};
+    if (targetLang) {
+      console.log(`Translation requested for language: ${targetLang}`);
+      const page1And2And3And4And5And6Texts =
+        collectPage1And2And3And4And5And6Texts(dynamicData);
+      const textsArray = Object.keys(page1And2And3And4And5And6Texts);
+      translations = await translateTextsExtl2(textsArray, targetLang);
+      console.log(
+        `Translation map created with ${
+          Object.keys(translations).length
+        } entries`
+      );
+    } else {
+      console.log("No target language specified, using original texts");
+    }
+
+    // Set response headers
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=quality-assurance-report.pdf"
+    );
+
+    // Generate PDF
+    await generateQualityAssuranceReportExtl2(dynamicData, res, translations);
+  } catch (error) {
+    console.error("Error generating PDF:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to generate PDF", details: error.message });
+  }
+});
+
 app.post(
   "/update-check/:id",
   upload.fields([
@@ -15727,7 +16716,11 @@ app.post(
 
       updateData.picture = picture2;
       // If an image is uploaded, include its path in the update
-      if (req.files["picture"] && req.files["picture"].length > 0) {
+      if (
+        req.files &&
+        req.files["picture"] &&
+        req.files["picture"].length > 0
+      ) {
         updateData.picture = {
           ...req.files["picture"][0], // Captures ALL file information including S3 details
           uploadedAt: new Date(),
@@ -15737,6 +16730,7 @@ app.post(
 
       // Handle annotated image
       if (
+        req.files &&
         req.files["annotatedImage"] &&
         req.files["annotatedImage"].length > 0
       ) {
@@ -15749,7 +16743,11 @@ app.post(
       }
 
       // Handle original PDF
-      if (req.files["originalPdf"] && req.files["originalPdf"].length > 0) {
+      if (
+        req.files &&
+        req.files["originalPdf"] &&
+        req.files["originalPdf"].length > 0
+      ) {
         const file = req.files["originalPdf"][0];
         updateData.originalPdf = {
           ...file,
@@ -15759,7 +16757,11 @@ app.post(
       }
 
       // Handle annotated PDF
-      if (req.files["annotatedPdf"] && req.files["annotatedPdf"].length > 0) {
+      if (
+        req.files &&
+        req.files["annotatedPdf"] &&
+        req.files["annotatedPdf"].length > 0
+      ) {
         const file = req.files["annotatedPdf"][0];
         updateData.annotatedPdf = {
           ...file,
@@ -15769,7 +16771,11 @@ app.post(
       }
 
       // Handle multiple annotated PDFs
-      if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
+      if (
+        req.files &&
+        req.files["annotatedPdfs"] &&
+        req.files["annotatedPdfs"].length > 0
+      ) {
         updateData.annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
           ...file,
           uploadedAt: new Date(),
@@ -15779,6 +16785,7 @@ app.post(
 
       // Handle general pictures
       if (
+        req.files &&
         req.files["generalPictures"] &&
         req.files["generalPictures"].length > 0
       ) {
@@ -15792,7 +16799,11 @@ app.post(
       }
 
       // Handle mark pictures
-      if (req.files["markPictures"] && req.files["markPictures"].length > 0) {
+      if (
+        req.files &&
+        req.files["markPictures"] &&
+        req.files["markPictures"].length > 0
+      ) {
         updateData.markPictures = req.files["markPictures"].map((file) => ({
           ...file,
           uploadedAt: new Date(),
