@@ -1,5 +1,90 @@
 const fs = require("fs");
 const path = require("path");
+
+// Polyfill browser APIs for Node.js environment (required by pdf-parse v2+)
+if (typeof global.DOMMatrix === 'undefined') {
+  global.DOMMatrix = class DOMMatrix {
+    constructor(init) {
+      this.a = 1;
+      this.b = 0;
+      this.c = 0;
+      this.d = 1;
+      this.e = 0;
+      this.f = 0;
+      if (init) {
+        if (typeof init === 'string') {
+          // Parse matrix string
+        } else if (Array.isArray(init)) {
+          this.a = init[0] || 1;
+          this.b = init[1] || 0;
+          this.c = init[2] || 0;
+          this.d = init[3] || 1;
+          this.e = init[4] || 0;
+          this.f = init[5] || 0;
+        }
+      }
+    }
+    multiply(other) {
+      return new DOMMatrix([
+        this.a * other.a + this.c * other.b,
+        this.b * other.a + this.d * other.b,
+        this.a * other.c + this.c * other.d,
+        this.b * other.c + this.d * other.d,
+        this.a * other.e + this.c * other.f + this.e,
+        this.b * other.e + this.d * other.f + this.f
+      ]);
+    }
+    translate(x, y) {
+      return this.multiply(new DOMMatrix([1, 0, 0, 1, x, y]));
+    }
+    scale(x, y) {
+      return this.multiply(new DOMMatrix([x, 0, 0, y || x, 0, 0]));
+    }
+    rotate(angle) {
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return this.multiply(new DOMMatrix([cos, sin, -sin, cos, 0, 0]));
+    }
+  };
+}
+
+if (typeof global.ImageData === 'undefined') {
+  global.ImageData = class ImageData {
+    constructor(data, width, height) {
+      this.data = data || new Uint8ClampedArray(width * height * 4);
+      this.width = width || 0;
+      this.height = height || 0;
+    }
+  };
+}
+
+if (typeof global.Path2D === 'undefined') {
+  global.Path2D = class Path2D {
+    constructor(path) {
+      this.commands = [];
+      if (path) {
+        // Simple path parsing if needed
+      }
+    }
+    moveTo(x, y) {
+      this.commands.push({ type: 'moveTo', x, y });
+    }
+    lineTo(x, y) {
+      this.commands.push({ type: 'lineTo', x, y });
+    }
+    rect(x, y, width, height) {
+      this.commands.push({ type: 'rect', x, y, width, height });
+    }
+    arc(x, y, radius, startAngle, endAngle, anticlockwise) {
+      this.commands.push({ type: 'arc', x, y, radius, startAngle, endAngle, anticlockwise });
+    }
+    closePath() {
+      this.commands.push({ type: 'closePath' });
+    }
+  };
+}
+
+// Now require pdf-parse after polyfills are set up
 const pdfParseLib = require("pdf-parse");
 const { PDFDocument } = require("pdf-lib");
 
