@@ -167,7 +167,7 @@ app.get("/convert-pdf-to-png", async (req, res) => {
 });
 
 // Connect to local MongoDB only
-const localUri = "mongodb://localhost:27017/construction_db";
+const localUri = "mongodb://localhost:27017/mughees";
 let uri = localUri;
 let client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 10000,
@@ -180,7 +180,7 @@ let client = new MongoClient(uri, {
   maxIdleTimeMS: 30000,
   heartbeatFrequencyMS: 10000,
 });
-const dbName = "construction_db";
+const dbName = "mughees";
 let db;
 
 // JWT Secret Key
@@ -2443,6 +2443,190 @@ app.get("/get-gammas", async (req, res) => {
     res.status(200).json(controls);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch gammas" });
+  }
+});
+
+// Get drawing from gamma annotatedPdfs for static report submission
+app.get("/get-gamma-drawing", async (req, res) => {
+  try {
+    const { subjectMatterId, projectId, companyId } = req.query;
+
+    if (!subjectMatterId || !projectId) {
+      return res.status(400).json({
+        error: "Missing required parameters: subjectMatterId and projectId",
+      });
+    }
+
+    console.log("=== GET GAMMA DRAWING ===");
+    console.log("SubjectMatterId:", subjectMatterId);
+    console.log("ProjectId:", projectId);
+    console.log("CompanyId:", companyId);
+
+    // Build query to find gamma record
+    const query = {};
+    if (companyId && companyId !== "null") {
+      query.companyId = companyId;
+    }
+    if (projectId && projectId !== "null") {
+      query.projectsId = { $in: [projectId] };
+    }
+    query["profession.SubjectMatterId"] = subjectMatterId;
+
+    // Find the most recent gamma record
+    const gamma = await db
+      .collection("gammas")
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .toArray();
+
+    if (!gamma || gamma.length === 0) {
+      console.log("No gamma found for the given criteria");
+      return res.status(404).json({
+        error:
+          "No gamma record found for the given subjectMatterId and projectId",
+      });
+    }
+
+    const gammaRecord = gamma[0];
+    console.log("Gamma found:", gammaRecord._id);
+
+    // Check if annotatedPdfs exists and has at least one item
+    if (
+      !gammaRecord.annotatedPdfs ||
+      !Array.isArray(gammaRecord.annotatedPdfs) ||
+      gammaRecord.annotatedPdfs.length === 0
+    ) {
+      console.log("No annotatedPdfs found in gamma record");
+      return res.status(404).json({
+        error: "No annotatedPdfs found in the gamma record",
+      });
+    }
+
+    const firstAnnotatedPdf = gammaRecord.annotatedPdfs[0];
+    const imageUrl =
+      firstAnnotatedPdf.s3Location ||
+      firstAnnotatedPdf.s3location ||
+      firstAnnotatedPdf.location;
+
+    if (!imageUrl) {
+      console.log("No s3Location found in annotatedPdfs[0]");
+      return res.status(404).json({
+        error: "No s3Location found in annotatedPdfs[0]",
+      });
+    }
+
+    console.log("Image URL found:", imageUrl);
+
+    // Fetch the image
+    let imageBuffer;
+    try {
+      const imageResponse = await axios.get(imageUrl, {
+        responseType: "arraybuffer",
+        timeout: 30000,
+      });
+      imageBuffer = Buffer.from(imageResponse.data);
+      console.log("Image fetched successfully, size:", imageBuffer.length);
+    } catch (error) {
+      console.error("Error fetching image:", error.message);
+      return res.status(500).json({
+        error: "Failed to fetch image from s3Location",
+        details: error.message,
+      });
+    }
+
+    // Convert image to PDF using pdfkit
+    const PDFDocument = require("pdfkit");
+    const pdfDoc = new PDFDocument({ autoFirstPage: false });
+    const pdfChunks = [];
+
+    // Set up event listeners before adding content
+    const pdfPromise = new Promise((resolve, reject) => {
+      pdfDoc.on("data", (chunk) => pdfChunks.push(chunk));
+      pdfDoc.on("end", () => {
+        resolve();
+      });
+      pdfDoc.on("error", (error) => {
+        reject(error);
+      });
+    });
+
+    // Add a page with the image
+    pdfDoc.addPage();
+
+    // Get image dimensions (approximate, or use default A4)
+    const pageWidth = pdfDoc.page.width;
+    const pageHeight = pdfDoc.page.height;
+
+    // Calculate image dimensions to fit the page
+    // For now, we'll use the full page size
+    pdfDoc.image(imageBuffer, {
+      fit: [pageWidth - 40, pageHeight - 40], // Leave 20px margin on each side
+      align: "center",
+      valign: "center",
+    });
+
+    pdfDoc.end();
+
+    // Wait for PDF to be generated
+    await pdfPromise;
+
+    const pdfBuffer = Buffer.concat(pdfChunks);
+    console.log("PDF generated, size:", pdfBuffer.length);
+
+    // Generate a unique filename
+    const timestamp = Date.now();
+    const filename = `gamma-drawing-${subjectMatterId}-${timestamp}.pdf`;
+    const filepath = path.join(__dirname, "uploads", filename);
+
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(__dirname, "uploads");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Save PDF to local uploads folder
+    fs.writeFileSync(filepath, pdfBuffer);
+    console.log("PDF saved to:", filepath);
+
+    // Create drawing object structure matching the draws collection format
+    const drawingObject = {
+      _id: `gamma-drawing-${gammaRecord._id}`,
+      name: `Gamma Drawing - ${subjectMatterId}`,
+      drawingName:
+        firstAnnotatedPdf.originalname ||
+        firstAnnotatedPdf.original ||
+        filename,
+      companyId: companyId || gammaRecord.companyId,
+      projectsId: projectId,
+      mainDrawings: [
+        {
+          filename: filename,
+          originalname: firstAnnotatedPdf.originalname || filename,
+          original: firstAnnotatedPdf.original || filename,
+          mimetype: "application/pdf",
+          size: pdfBuffer.length,
+          s3Location: `${
+            process.env.BASE_URL || "http://localhost:3000"
+          }/uploads/${filename}`,
+          path: filepath,
+          stored: filename,
+          uploadedAt: new Date(),
+          fileType: "main-drawing",
+        },
+      ],
+      childDrawings: [],
+      createdAt: new Date(),
+      source: "gamma-annotatedPdfs",
+    };
+
+    res.status(200).json(drawingObject);
+  } catch (error) {
+    console.error("Error in get-gamma-drawing:", error);
+    res.status(500).json({
+      error: "Failed to get gamma drawing",
+      details: error.message,
+    });
   }
 });
 

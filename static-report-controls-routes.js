@@ -492,13 +492,48 @@ function createStaticReportControlsRoutes(db) {
         });
       }
 
-      // Check if already approved
+      // Check existing approval to determine current status
       const existingApproval = await db
         .collection("approved control plan")
         .findOne({
           projectId: projectId,
           subjectMatterId: subjectMatterId,
         });
+
+      let nextStatus;
+      const currentStatus = existingApproval?.status || null;
+
+      // Determine next status based on current status
+      if (!currentStatus) {
+        // Initial state -> Send to independent controller
+        nextStatus = "Send to independent controller";
+      } else if (currentStatus === "Send to independent controller") {
+        // Send to independent controller -> Send to static engineer
+        nextStatus = "Send to static engineer";
+      } else if (currentStatus === "Send to static engineer") {
+        // Send to static engineer -> approved
+        nextStatus = "approved";
+      } else if (currentStatus === "approved") {
+        // Already approved, return error
+        return res.status(400).json({
+          success: false,
+          message: "Control plan is already approved",
+        });
+      } else {
+        // Unknown status, default to first step
+        nextStatus = "Send to independent controller";
+      }
+
+      const updateData = {
+        status: nextStatus,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Only set approvedBy and approvedAt when status is "approved"
+      if (nextStatus === "approved") {
+        updateData.approvedBy = approvedBy || "unknown";
+        updateData.approvedAt = new Date().toISOString();
+      }
 
       if (existingApproval) {
         // Update existing approval
@@ -508,41 +543,35 @@ function createStaticReportControlsRoutes(db) {
             subjectMatterId: subjectMatterId,
           },
           {
-            $set: {
-              status: "approved",
-              approvedBy: approvedBy || "unknown",
-              approvedAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
+            $set: updateData,
           }
         );
         console.log(
-          `✅ Control plan approval updated for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
+          `✅ Control plan status updated to "${nextStatus}" for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
         );
       } else {
         // Create new approval
         await db.collection("approved control plan").insertOne({
           projectId: projectId,
           subjectMatterId: subjectMatterId,
-          status: "approved",
-          approvedBy: approvedBy || "unknown",
-          approvedAt: new Date().toISOString(),
+          ...updateData,
           createdAt: new Date().toISOString(),
         });
         console.log(
-          `✅ Control plan approved for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
+          `✅ Control plan status set to "${nextStatus}" for projectId: ${projectId}, subjectMatterId: ${subjectMatterId}`
         );
       }
 
       return res.status(200).json({
         success: true,
-        message: "Control plan approved successfully",
+        message: `Control plan status updated to "${nextStatus}"`,
+        status: nextStatus,
       });
     } catch (error) {
       console.error("❌ Error approving control plan:", error);
       return res.status(500).json({
         success: false,
-        message: "Failed to approve control plan",
+        message: "Failed to update control plan status",
         error: error.message,
       });
     }
@@ -563,19 +592,20 @@ function createStaticReportControlsRoutes(db) {
       const approval = await db.collection("approved control plan").findOne({
         projectId: projectId,
         subjectMatterId: subjectMatterId,
-        status: "approved",
       });
 
       if (approval) {
         return res.status(200).json({
           success: true,
-          isApproved: true,
+          isApproved: approval.status === "approved",
+          status: approval.status || null,
           approval: approval,
         });
       } else {
         return res.status(200).json({
           success: true,
           isApproved: false,
+          status: null,
           message: "Control plan not approved yet",
         });
       }

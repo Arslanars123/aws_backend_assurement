@@ -1,12 +1,84 @@
 // static-control-report.js
 // Run with: node static-control-report.js
-// Requires: npm install express pdfkit
+// Requires: npm install express pdfkit mongodb
 
 const express = require("express");
 const PDFDocument = require("pdfkit");
+const { MongoClient, ObjectId } = require("mongodb");
+const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
+
+// -------------------- DATABASE CONNECTION --------------------
+const localUri = "mongodb://localhost:27017/mughees";
+let uri = localUri;
+let client = new MongoClient(uri, {
+  serverSelectionTimeoutMS: 60000,
+  connectTimeoutMS: 60000,
+  socketTimeoutMS: 60000,
+  maxPoolSize: 10,
+  retryWrites: true,
+  retryReads: true,
+  minPoolSize: 1,
+  maxIdleTimeMS: 30000,
+  heartbeatFrequencyMS: 10000,
+});
+const dbName = "mughees";
+let db;
+
+// Connect to MongoDB - Local only
+async function connectToMongoDB() {
+  const maxRetries = 3;
+  let retryCount = 0;
+
+  // Connect to local MongoDB only
+  while (retryCount < maxRetries) {
+    try {
+      console.log(
+        `Attempting to connect to local MongoDB (attempt ${
+          retryCount + 1
+        }/${maxRetries})...`
+      );
+      uri = localUri;
+      const localClient = new MongoClient(uri, {
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+        socketTimeoutMS: 10000,
+        maxPoolSize: 10,
+        retryWrites: true,
+        retryReads: true,
+      });
+
+      await localClient.connect();
+      console.log("Connected to local MongoDB successfully!");
+      client = localClient;
+      db = client.db(dbName);
+      return; // Success, exit the function
+    } catch (error) {
+      retryCount++;
+      console.error(
+        `Error connecting to local MongoDB (attempt ${retryCount}/${maxRetries}):`,
+        error.message
+      );
+
+      if (retryCount >= maxRetries) {
+        console.error(
+          "Failed to connect to local MongoDB after all retry attempts"
+        );
+        console.log("Starting server without database connection...");
+        return; // Don't exit, let the server start without DB
+      }
+
+      // Wait before retrying
+      const waitTime = 2000;
+      console.log(`Retrying in ${waitTime}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  }
+}
 
 /**
  * Page + layout constants (A4)
@@ -128,12 +200,23 @@ function footer(doc, logicalPageNumber) {
   );
 }
 
+// Helper function to fetch image from URL
+async function fetchImageBuffer(url) {
+  try {
+    const response = await axios.get(url, { responseType: "arraybuffer" });
+    return Buffer.from(response.data, "binary");
+  } catch (error) {
+    console.error("Error fetching image:", url, error.message);
+    throw error;
+  }
+}
+
 /**
  * Main generator for STATIC CONTROL REPORT
  * @param {object} dynamic - dynamic data (company, project, tables, etc.)
  * @param {Writable} outputStream - Express res or any writable stream
  */
-function generateStaticControlReport(dynamic = {}, outputStream) {
+async function generateStaticControlReport(dynamic = {}, outputStream) {
   if (!outputStream || typeof outputStream.write !== "function") {
     throw new Error("outputStream (Writable) is required");
   }
@@ -151,7 +234,7 @@ function generateStaticControlReport(dynamic = {}, outputStream) {
   // So we draw page1 on the initial page (no addPage() before page1).
 
   // PAGE 1 – Cover / Executing party, Static Control Report, Eurocodes
-  page1(doc, dynamic); // will design this page in next steps
+  await page1(doc, dynamic); // will design this page in next steps
 
   // PAGE 2 – STATIC INSPECTION REPORT + Construction case + Signing
   doc.addPage({ size: "A4", margin: 0 });
@@ -165,7 +248,7 @@ function generateStaticControlReport(dynamic = {}, outputStream) {
   doc.addPage({ size: "A4", margin: 0 });
   page4(doc, dynamic);
 
-  // PAGE 5 – 1. GENERALLY
+  // PAGE 5 – 1. GENERALLY (with pagination support)
   doc.addPage({ size: "A4", margin: 0 });
   page5(doc, dynamic);
 
@@ -175,15 +258,15 @@ function generateStaticControlReport(dynamic = {}, outputStream) {
 
   // PAGE 7 – 3. LIST OF SELECTED CONSTRUCTION AND EXECUTION CLASSES, 4. DOCUMENTATION SPECIAL CONTROLS, 5. FOLLOW-UP
   doc.addPage({ size: "A4", margin: 0 });
-  page7(doc, dynamic);
+  await page7(doc, dynamic);
 
   // PAGE 8 – 6. CONTROL POINTS SELECTED IN THE CONTROL PLAN
   doc.addPage({ size: "A4", margin: 0 });
-  page8(doc, dynamic);
+  await page8(doc, dynamic);
 
   // PAGE 9 – 7. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHE (B1–B3 intro/tables)
   doc.addPage({ size: "A4", margin: 0 });
-  page9(doc, dynamic);
+  await page9(doc, dynamic);
 
   // PAGE 10 – 7.4–7.6 tables (B4–B6)
   doc.addPage({ size: "A4", margin: 0 });
@@ -262,24 +345,56 @@ function generateStaticControlReport(dynamic = {}, outputStream) {
 
 // PAGE 1 – Executing party, Static Control Report, Eurocodes (COVER)
 // PAGE 1 – Cover: Executing party, Static Control Report, EU standards
-function page1(doc, dynamic) {
-  // Dynamic fields (wire from project setup later)
+async function page1(doc, dynamic) {
+  // Get company data
+  const company = dynamic.company || {};
   const companyName =
-    dynamic.companyName ||
-    "Own company Adress CVR and contact info. - company setup.";
+    company.name || "Own company Adress CVR and contact info. - company setup.";
+  const postCity =
+    company.postalCode && company.city
+      ? `${company.postalCode} ${company.city}`
+      : company.postalCode || company.city || "";
+  const address = company.address || "";
+  const cvr = company.cvr || "";
+  const telephone = company.contactPhone || "";
+  const mail = company.email || "";
 
-  const postCity = dynamic.postCity || "";
-  const address = dynamic.address || "";
-  const cvr = dynamic.cvr || "";
-  const telephone = dynamic.telephone || "";
-  const mail = dynamic.mail || "";
+  // Get project data
+  const project = dynamic.project || {};
+  const projectName = project.name || "Project name project setup.";
 
-  const projectName = dynamic.projectName || "Project name project setup.";
-  const specialText = dynamic.specialText || "Special text";
-  const documentId = dynamic.documentId || "B3.X - number";
-  const documentIdExtra = dynamic.documentIdExtra || "Special text";
+  // Get gamma data for specialText and documentId
+  const gamma = dynamic.gamma || {};
+  const specialText = gamma.special ? String(gamma.special) : "Special text";
+  const xNumber = gamma.x ? String(gamma.x) : "X number";
+  const documentId = `B3.${xNumber}`;
+  const documentIdExtra = specialText;
 
-  let y = M.t;
+  let y = M.t + 10;
+
+  // -------------------------------------------------------
+  // 0) Add mainlg.jpg image at the top left
+  // -------------------------------------------------------
+  try {
+    const mainlgPath = path.join(__dirname, "mainlg.jpg");
+    if (fs.existsSync(mainlgPath)) {
+      // Image dimensions
+      const imageWidth = 150; // Fixed width for the logo
+      const imageHeight = 60; // Fixed height for the logo
+
+      // Position at top left
+      doc.image(mainlgPath, M.l, y, {
+        fit: [imageWidth, imageHeight],
+        align: "left",
+      });
+    } else {
+      console.log("mainlg.jpg not found at:", mainlgPath);
+    }
+  } catch (error) {
+    console.error("Error loading mainlg.jpg:", error.message);
+  }
+
+  y = y + 70; // Add spacing after main logo
 
   // -------------------------------------------------------
   // 1) "Executing party" + plain company detail (NO BOX) + logo box
@@ -351,22 +466,68 @@ function page1(doc, dynamic) {
   const logoBoxX = M.l + infoW + 10;
   const logoBoxY = y;
 
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor(BORDER_COLOR)
-    .rect(logoBoxX, logoBoxY, logoBoxWidth, logoBoxHeight)
-    .stroke()
-    .restore();
+  // Try to load and display company image
+  try {
+    const companyImageUrl =
+      company.picture?.s3Location ||
+      company.picture?.s3location ||
+      company.picture?.location ||
+      company.picture?.url ||
+      "";
 
-  doc
-    .font("Helvetica")
-    .fontSize(9)
-    .fillColor("black")
-    .text("Company logo", logoBoxX, logoBoxY + logoBoxHeight / 2 - 5, {
-      width: logoBoxWidth,
-      align: "center",
-    });
+    if (companyImageUrl) {
+      console.log("Page 1 - Fetching company image from:", companyImageUrl);
+      const imgBuffer = await fetchImageBuffer(companyImageUrl);
+      console.log(
+        "Page 1 - Company image buffer fetched, size:",
+        imgBuffer.length
+      );
+
+      // Display company image
+      doc.image(imgBuffer, logoBoxX, logoBoxY, {
+        fit: [logoBoxWidth, logoBoxHeight],
+        align: "left",
+      });
+      console.log("Page 1 - Company image displayed successfully");
+    } else {
+      // Fallback: draw empty box with text
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(BORDER_COLOR)
+        .rect(logoBoxX, logoBoxY, logoBoxWidth, logoBoxHeight)
+        .stroke()
+        .restore();
+
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor("black")
+        .text("Company logo", logoBoxX, logoBoxY + logoBoxHeight / 2 - 5, {
+          width: logoBoxWidth,
+          align: "center",
+        });
+    }
+  } catch (error) {
+    console.error("Page 1 - Error loading company image:", error.message);
+    // Fallback: draw empty box with text
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(BORDER_COLOR)
+      .rect(logoBoxX, logoBoxY, logoBoxWidth, logoBoxHeight)
+      .stroke()
+      .restore();
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black")
+      .text("Company logo", logoBoxX, logoBoxY + logoBoxHeight / 2 - 5, {
+        width: logoBoxWidth,
+        align: "center",
+      });
+  }
 
   const headerBottom = Math.max(lineY, logoBoxY + logoBoxHeight);
   y = headerBottom + 40;
@@ -534,50 +695,82 @@ function page1(doc, dynamic) {
 // PAGE 2 – STATIC INSPECTION REPORT + construction case, signing
 // PAGE 2 – STATIC INSPECTION REPORT + CONSTRUCTION CASE + SIGNING
 function page2(doc, dynamic) {
-  // --------- dynamic placeholders ----------
-  const constructionPart = dynamic.constructionPart || "Special text"; // from project setup
+  // Get gamma data
+  const gamma = dynamic.gamma || {};
+  const constructionPart = gamma.special
+    ? String(gamma.special)
+    : "Special text";
 
-  const eurocodeText =
-    dynamic.eurocodeText || "mentioned number and name of the Eurocode."; // dynamic later
+  // Get eurocode
+  const eurocode =
+    dynamic.eurocode || "mentioned number and name of the Eurocode.";
 
-  const projectNameId =
-    dynamic.projectNameId || "Project name/ID – Project setup.";
+  // Get project and mainUser data
+  const project = dynamic.project || {};
+  const mainUser = dynamic.mainUser || {};
+  const company = dynamic.company || {};
+
+  // Project data
+  const projectNameId = project.name || "Project name/ID – Project setup.";
   const mainContractorCustomer =
-    dynamic.mainContractorCustomer ||
-    "Main Contractor/Custumer – Project setup.";
-  const idCaseNo = dynamic.idCaseNo || "ID/Case no. – Project setup.";
-  const nameLine = dynamic.caseName || "Name – Project setup.";
-  const addressLine = dynamic.caseAddress || "Address – Project setup.";
-  const postCityLine = dynamic.postCityLine || "Post no./City – Project setup.";
-  const cvrNoLine = dynamic.cvrNoLine || "CVR no. – Project setup.";
+    mainUser.name || "Main Contractor/Custumer – Project setup.";
+  const idCaseNo =
+    project.caseNumber ||
+    project.case_number ||
+    project.projectNumber ||
+    "ID/Case no. – Project setup.";
+  const nameLine = project.name || "Name – Project setup.";
+  const addressLine = project.address || "Address – Project setup.";
+  const postCityLine =
+    project.postalCode && project.city
+      ? `${project.postalCode} ${project.city}`
+      : project.postalCode || project.city || "Post no./City – Project setup.";
+  const cvrNoLine = project.cvr || "CVR no. – Project setup.";
   const contactPerson =
-    dynamic.contactPerson || "Contact person – Project setup.";
-  const emailLine = dynamic.emailLine || "e-mail – Project setup.";
-  const projectStartup =
-    dynamic.projectStartup || "Project Start-up – Project setup.";
-  const companyContact =
-    dynamic.companyContact || "Company Contact – Project setup.";
+    project.contactPerson || "Contact person – Project setup.";
+  const emailLine = mainUser.email || "e-mail – Project setup.";
+
+  // Format project date
+  const projectStartup = project.createdAt
+    ? new Date(project.createdAt).toLocaleDateString("en-GB")
+    : project.startup || "Project Start-up – Project setup.";
+  const companyContact = company.name || "Company Contact – Project setup.";
 
   const documentType = dynamic.documentType || "STATIC INSPECTION REPORT";
-  const documentVersion = dynamic.documentVersion || "1";
-  const constructionClass = dynamic.constructionClass || "KK3";
+  const documentVersion = gamma.currentVersion || "1";
+  const constructionClass = gamma.cc ? String(gamma.cc) : "KK3";
 
-  // Signing section dynamic text
-  const preparedRole = dynamic.preparedRole || "Prepared/approved by:";
-  const preparedEnterprise = dynamic.preparedEnterprise || "Enterprise";
-  const preparedAdminOrg =
-    dynamic.preparedAdminOrg || "Admin – company organization";
-  const preparedOwnCompanyOrg =
-    dynamic.preparedOwnCompanyOrg || "Own company – company organization";
+  // Signing section - get signatures
+  const signatures = dynamic.signatures || {};
+  const companyName = company.name || "company organization";
 
-  const ocEnterprise = dynamic.ocEnterprise || "Enterprise";
+  // Helper function to format date
+  const formatDate = (date) => {
+    if (!date) return "[Select Date]";
+    try {
+      return new Date(date).toLocaleDateString("en-GB");
+    } catch {
+      return "[Select Date]";
+    }
+  };
+
+  // Get signature data
+  const sig1 = signatures[1] || signatures["1"];
+  const sig2 = signatures[2] || signatures["2"];
+  const sig3 = signatures[3] || signatures["3"];
+
+  const preparedRole = "Prepared/approved by:";
+  const preparedEnterprise = "Enterprise";
+  const preparedAdminOrg = sig1?.name || "Admin – company organization";
+  const preparedOwnCompanyOrg = companyName;
+
+  const ocEnterprise = "Enterprise";
   const ocProjectManagerOrg =
-    dynamic.ocProjectManagerOrg || "Project manager – company organization";
-  const ocOwnCompanyOrg =
-    dynamic.ocOwnCompanyOrg || "Own company – company organization";
+    sig2?.name || "Project manager – company organization";
+  const ocOwnCompanyOrg = companyName;
 
-  const icEnterprise = dynamic.icEnterprise || "Enterprise";
-  const icOrg = dynamic.icOrg || "company organization";
+  const icEnterprise = "Enterprise";
+  const icOrg = sig3?.name || "company organization";
 
   let y = M.t;
 
@@ -615,7 +808,7 @@ function page2(doc, dynamic) {
   );
   y = doc.y + 4;
 
-  doc.text(`Eurocode  ${eurocodeText}`, M.l, y, {
+  doc.text(`Eurocode  ${eurocode}`, M.l, y, {
     width: CONTENT_W,
     align: "left",
   });
@@ -762,7 +955,13 @@ function page2(doc, dynamic) {
   const sigColW = CONTENT_W / 3;
   const sigRowH = 16;
 
-  function drawSignatureTable(roleText, enterpriseText, orgLeft, orgRight) {
+  function drawSignatureTable(
+    roleText,
+    enterpriseText,
+    orgLeft,
+    orgRight,
+    signatureDate
+  ) {
     doc.font("Helvetica").fontSize(9).fillColor("black");
 
     // Row 1: Signed | Role | Enterprise
@@ -793,10 +992,10 @@ function page2(doc, dynamic) {
       .stroke()
       .restore();
 
-    // Row 2: [Select Date] | OrgLeft | OrgRight
+    // Row 2: Date | OrgLeft | OrgRight
     rowY += sigRowH;
 
-    doc.text("[Select Date]", sigTableX, rowY, {
+    doc.text(signatureDate || "[Select Date]", sigTableX, rowY, {
       width: sigColW,
       align: "left",
     });
@@ -825,23 +1024,34 @@ function page2(doc, dynamic) {
   }
 
   // 1) Prepared/approved by
+  const sig1Date = formatDate(sig1?.createdAt || sig1?.signatureDate);
   drawSignatureTable(
     preparedRole,
     preparedEnterprise,
     preparedAdminOrg,
-    preparedOwnCompanyOrg
+    preparedOwnCompanyOrg,
+    sig1Date
   );
 
   // 2) Own control (OC)
+  const sig2Date = formatDate(sig2?.createdAt || sig2?.signatureDate);
   drawSignatureTable(
     "Own control (OC)",
     ocEnterprise,
     ocProjectManagerOrg,
-    ocOwnCompanyOrg
+    ocOwnCompanyOrg,
+    sig2Date
   );
 
   // 3) Independent Controller (IC)
-  drawSignatureTable("Independent Controller (IC)", icEnterprise, icOrg, "");
+  const sig3Date = formatDate(sig3?.createdAt || sig3?.signatureDate);
+  drawSignatureTable(
+    "Independent Controller (IC)",
+    icEnterprise,
+    icOrg,
+    "",
+    sig3Date
+  );
 
   // FOOTER: logical page 1 of 24 (this is Side 1 af 24 in your Danish footer)
   footer(doc, 1);
@@ -1185,7 +1395,16 @@ function page4(doc, dynamic) {
 // PAGE 5 – 1. GENERALLY
 // PAGE 5 – 1. GENERALLY (Side 4 af 24)
 function page5(doc, dynamic) {
-  const specialText = dynamic.specialText || "Special text";
+  // Get gamma data for specialText
+  const gamma = dynamic.gamma || {};
+  const specialText = gamma.special ? String(gamma.special) : "Special text";
+
+  // Get company name
+  const company = dynamic.company || {};
+  const companyName = company.name || "From Company organisation";
+
+  // Get independent controllers
+  const independentControllers = dynamic.independentControllers || [];
 
   const BLUE = HEADING_COLOR; // #003b71
   const PARA = "#3a3a3a";
@@ -1333,9 +1552,9 @@ function page5(doc, dynamic) {
 
   y += headH;
 
-  // row 1
+  // row 1: Own Controller - show company name
   cell(tX + 0, y, c1, rowH, "Own Controller", { fs: 9.2, color: PARA });
-  cell(tX + c1, y, c2, rowH, "From Company organisation", {
+  cell(tX + c1, y, c2, rowH, companyName, {
     fs: 9.2,
     color: RED,
   });
@@ -1348,9 +1567,12 @@ function page5(doc, dynamic) {
 
   y += rowH;
 
-  // row 2
-  cell(tX + 0, y, c1, rowH, "Independent controller", { fs: 9.2, color: PARA });
-  cell(tX + c1, y, c2, rowH, "From Company organisation", {
+  // row 2: Independent Controller - show company name (only one row)
+  cell(tX + 0, y, c1, rowH, "Independent controller", {
+    fs: 9.2,
+    color: PARA,
+  });
+  cell(tX + c1, y, c2, rowH, companyName, {
     fs: 9.2,
     color: RED,
   });
@@ -1360,8 +1582,9 @@ function page5(doc, dynamic) {
     fs: 9.2,
     color: RED,
   });
+  y += rowH;
 
-  y += rowH + 14;
+  y += 14;
 
   // -------------------------------
   // 1.4
@@ -1405,50 +1628,153 @@ function page5(doc, dynamic) {
 
   y += t2HeadH;
 
-  cell(t2X + 0, y, tc1, t2RowH, "Independet controler name IF any", {
-    color: RED,
-    fs: 10,
-  });
-  cell(t2X + tc1, y, tc2, t2RowH, "", { fs: 10 });
-  cell(t2X + tc1 + tc2, y, tc3, t2RowH, "Independet control.", {
-    color: PARA,
-    fs: 10,
-  });
+  // Pagination variables
+  const basePageNumber = 4;
+  let pagesCreated = 0;
+  let controllerIndex = 0;
+  const footerHeight = 35;
+  const minSpaceForRow = t2RowH + 4;
+  const maxYForContent = PAGE.h - M.b - footerHeight;
 
-  y += t2RowH + 14;
+  // Store initial y position to check if sections 1.5 and 1.6 fit on first page
+  const initialYForTable = y;
 
-  // -------------------------------
-  // 1.5
-  // -------------------------------
-  h("1.5  Explanation of the use of assistant inspectors");
-  p(
-    "Where co-inspectors have been used, these are listed under section 1.4.",
-    10
-  );
-  p(
-    "For practical reasons, an assistant inspector is most often used, as this is the optimal workflow in the executing company's process for independent control.",
-    10
-  );
-  p(
-    "If an inspector makes use of co-inspectors, he or she follows up on the inspection carried out by co-inspectors and ensures that the inspection has been carried out sensibly by checking the documentation for the inspection and signs this as the responsible inspector.",
-    10
-  );
-  p(
-    "The responsibility for the independent verification lies with the appointed independent auditor, who ensures that the overall documentation is consistent.",
-    16
-  );
+  // Draw Independent Controller names with pagination support
+  while (
+    controllerIndex < independentControllers.length ||
+    pagesCreated === 0
+  ) {
+    // Check if we need a new page (except for the first iteration)
+    if (pagesCreated > 0) {
+      // Add footer to current page
+      const currentPageNumber = parseFloat(
+        (basePageNumber + (pagesCreated - 1) * 0.1).toFixed(1)
+      );
+      footer(doc, currentPageNumber);
 
-  // -------------------------------
-  // 1.6
-  // -------------------------------
-  h("1.6 Significant deviations");
-  p(
-    "If there are deviations, these will be registered separately and be included in the contract under clause: B7\nA so-called deviation note will be prepared separately.",
-    0
-  );
+      // Add new page
+      doc.addPage({ size: "A4", margin: 0 });
+      y = M.t;
 
-  // Footer – Side 4 af 24
-  footer(doc, 4);
+      // Re-add section heading and table header on continuation pages
+      h("1.4  Inspectors associated with");
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9.5)
+        .fillColor(PARA)
+        .text(
+          "There are the following inspectors on the specific project:",
+          M.l,
+          y,
+          {
+            width: CONTENT_W,
+            align: "left",
+          }
+        );
+      y = doc.y + 8;
+
+      // Re-add table header
+      cell(t2X + 0, y, tc1, t2HeadH, "NAME", { fill: LIGHT_GREY, fs: 9 });
+      cell(t2X + tc1, y, tc2, t2HeadH, "COMPANY", { fill: LIGHT_GREY, fs: 9 });
+      cell(t2X + tc1 + tc2, y, tc3, t2HeadH, "INSPECTOR TYPE", {
+        fill: LIGHT_GREY,
+        fs: 9,
+      });
+      y += t2HeadH;
+    }
+
+    // Draw controllers that fit on current page
+    let rowsDrawnOnThisPage = 0;
+    while (controllerIndex < independentControllers.length) {
+      // Check if we have enough space for another row
+      if (y + minSpaceForRow > maxYForContent && rowsDrawnOnThisPage > 0) {
+        break; // Need new page
+      }
+
+      const controller = independentControllers[controllerIndex];
+      const controllerName =
+        controller.name ||
+        controller.username ||
+        "Independet controler name IF any";
+      cell(t2X + 0, y, tc1, t2RowH, controllerName, {
+        color: RED,
+        fs: 10,
+      });
+      cell(t2X + tc1, y, tc2, t2RowH, "", { fs: 10 });
+      cell(t2X + tc1 + tc2, y, tc3, t2RowH, "Independet control.", {
+        color: PARA,
+        fs: 10,
+      });
+      y += t2RowH;
+      controllerIndex++;
+      rowsDrawnOnThisPage++;
+    }
+
+    // If no controllers and first page, show fallback row
+    if (independentControllers.length === 0 && pagesCreated === 0) {
+      cell(t2X + 0, y, tc1, t2RowH, "Independet controler name IF any", {
+        color: RED,
+        fs: 10,
+      });
+      cell(t2X + tc1, y, tc2, t2RowH, "", { fs: 10 });
+      cell(t2X + tc1 + tc2, y, tc3, t2RowH, "Independet control.", {
+        color: PARA,
+        fs: 10,
+      });
+      y += t2RowH;
+    }
+
+    pagesCreated++;
+
+    // If we've displayed all controllers, break
+    if (controllerIndex >= independentControllers.length) {
+      break;
+    }
+  }
+
+  // Only show sections 1.5 and 1.6 on the first page (if they fit)
+  const spaceNeededForSections = 120; // Estimated space needed for 1.5 and 1.6
+
+  if (pagesCreated === 1 && y + spaceNeededForSections <= maxYForContent) {
+    y += 14;
+
+    // -------------------------------
+    // 1.5
+    // -------------------------------
+    h("1.5  Explanation of the use of assistant inspectors");
+    p(
+      "Where co-inspectors have been used, these are listed under section 1.4.",
+      10
+    );
+    p(
+      "For practical reasons, an assistant inspector is most often used, as this is the optimal workflow in the executing company's process for independent control.",
+      10
+    );
+    p(
+      "If an inspector makes use of co-inspectors, he or she follows up on the inspection carried out by co-inspectors and ensures that the inspection has been carried out sensibly by checking the documentation for the inspection and signs this as the responsible inspector.",
+      10
+    );
+    p(
+      "The responsibility for the independent verification lies with the appointed independent auditor, who ensures that the overall documentation is consistent.",
+      16
+    );
+
+    // -------------------------------
+    // 1.6
+    // -------------------------------
+    h("1.6 Significant deviations");
+    p(
+      "If there are deviations, these will be registered separately and be included in the contract under clause: B7\nA so-called deviation note will be prepared separately.",
+      0
+    );
+  }
+
+  // Footer with decimal page number
+  const currentPageNumber =
+    pagesCreated === 1
+      ? basePageNumber
+      : parseFloat((basePageNumber + (pagesCreated - 1) * 0.1).toFixed(1));
+  footer(doc, currentPageNumber);
 }
 
 // PAGE 6 – 2. DOCUMENTATION OF GENERAL CONTROLS
@@ -1832,17 +2158,54 @@ function page6(doc, dynamic) {
 
 // PAGE 7 – 3.1, 4, 5 sections
 // PAGE 7 – 3 + 4 + 5 sections  (Side 6 af 24)
-function page7(doc, dynamic) {
+async function page7(doc, dynamic) {
   const BLUE = HEADING_COLOR;
   const GREY_TXT = "#5a5a5a";
   const LIGHT_LINE = "#bfbfbf";
   const TABLE_HEAD_BG = LIGHT_GREY;
   const RED = "#cc0000";
 
-  const constructionPart = dynamic.constructionPart || "Special text";
-  const docId = dynamic.documentId || "B3.Xnumber";
-  const constructionClass = dynamic.constructionClass || "KK3";
-  const executionClass = dynamic.executionClass || "EXC3";
+  // Get gamma data
+  const gamma = dynamic.gamma || {};
+  const xNumber = gamma.x ? String(gamma.x) : "X number";
+  const constructionClass = gamma.cc ? String(gamma.cc) : "KK3";
+  const executionClass = gamma.exc ? String(gamma.exc) : "EXC3";
+  const docId = `B3.${xNumber}`;
+
+  // Debug logging
+  console.log("Page 7 - Gamma data:", {
+    x: gamma.x,
+    cc: gamma.cc,
+    exc: gamma.exc,
+    constructionClass,
+    executionClass,
+    docId,
+  });
+
+  // Get special controls and deviations
+  const specialControls = dynamic.specialControls || [];
+  const deviations = dynamic.deviations || [];
+
+  // Debug logging
+  console.log("Page 7 - Special controls count:", specialControls.length);
+  console.log("Page 7 - Deviations count:", deviations.length);
+  if (specialControls.length > 0) {
+    console.log("Page 7 - First special control:", {
+      _id: specialControls[0]._id,
+      comment: specialControls[0].comment,
+      projectManager: specialControls[0].projectManager,
+    });
+  }
+  if (deviations.length > 0) {
+    console.log("Page 7 - First deviation:", {
+      _id: deviations[0]._id,
+      comment: deviations[0].comment,
+      submittedDate: deviations[0].submittedDate,
+      hasImage: !!(
+        deviations[0].annotatedPdfs && deviations[0].annotatedPdfs.length > 0
+      ),
+    });
+  }
 
   let y = M.t;
 
@@ -1852,7 +2215,7 @@ function page7(doc, dynamic) {
     .fontSize(8.5)
     .fillColor(GREY_TXT)
     .text(
-      "− EXC3: The design is of great importance for the safety of a load-bearing structure",
+      `− ${executionClass}: The design is of great importance for the safety of a load-bearing structure`,
       M.l,
       y,
       { width: CONTENT_W, align: "left" }
@@ -1954,7 +2317,7 @@ function page7(doc, dynamic) {
   const c3 = CONTENT_W * 0.17;
   const c4 = CONTENT_W - (c1 + c2 + c3);
 
-  const headH = 16;
+  const headH = 24; // Increased from 16 to accommodate text better
   const rowH = 18;
 
   cell(tX, y, c1, headH, "CONSTRUCTION PART", {
@@ -1975,6 +2338,7 @@ function page7(doc, dynamic) {
 
   y += headH;
 
+  // Use dynamic data from gamma
   cell(tX, y, c1, rowH, docId, { color: RED });
   cell(tX + c1, y, c2, rowH, "Static Control Report:");
   cell(tX + c1 + c2, y, c3, rowH, constructionClass, {
@@ -2057,35 +2421,95 @@ function page7(doc, dynamic) {
   const s3 = CONTENT_W * 0.46;
   const s4 = CONTENT_W - (s1 + s2 + s3);
 
-  cell(tX, y, s1, headH, "CONTROL ID", { fill: TABLE_HEAD_BG, bold: true });
-  cell(tX + s1, y, s2, headH, "SPECIAL CONTROL", {
+  // Make header height taller to fit "SPECIAL CONTROL" text on two lines
+  const specialHeadH = 24; // Increased from 16 to accommodate two lines
+
+  cell(tX, y, s1, specialHeadH, "CONTROL ID", {
     fill: TABLE_HEAD_BG,
     bold: true,
   });
-  cell(tX + s1 + s2, y, s3, headH, "DESCRIPTION", {
+  cell(tX + s1, y, s2, specialHeadH, "SPECIAL CONTROL", {
     fill: TABLE_HEAD_BG,
     bold: true,
   });
-  cell(tX + s1 + s2 + s3, y, s4, headH, "MADE BY:", {
+  cell(tX + s1 + s2, y, s3, specialHeadH, "DESCRIPTION", {
+    fill: TABLE_HEAD_BG,
+    bold: true,
+  });
+  cell(tX + s1 + s2 + s3, y, s4, specialHeadH, "MADE BY:", {
     fill: TABLE_HEAD_BG,
     bold: true,
   });
 
-  y += headH;
+  y += specialHeadH;
 
-  cell(tX, y, s1, rowH, "If any special\ncontrols", { color: RED });
-  cell(tX + s1, y, s2, rowH, "Show them here\nin overview", { color: RED });
-  cell(
-    tX + s1 + s2,
-    y,
-    s3,
-    rowH,
-    "AND AS A SUBLEMENTERY IN THE BUTTON OF THE REPORT.",
-    { color: RED }
-  );
-  cell(tX + s1 + s2 + s3, y, s4, rowH, "");
+  // Pagination variables for entire page
+  const footerHeight = 35;
+  const maxYForContent = PAGE.h - M.b - footerHeight;
+  const basePageNumber = 6;
+  let pageNum = 0;
 
-  y += rowH + 14;
+  // Display special control records with pagination check
+  if (specialControls.length > 0) {
+    for (const control of specialControls) {
+      // Check if we need a new page before drawing this row
+      if (y + rowH > maxYForContent) {
+        // Add footer to current page
+        const currentPageNumber = parseFloat((6 + pageNum * 0.1).toFixed(1));
+        footer(doc, currentPageNumber);
+
+        // Add new page
+        doc.addPage({ size: "A4", margin: 0 });
+        y = M.t;
+        pageNum++;
+
+        // Re-add section 4 heading on continuation pages
+        y = drawSectionBar(doc, y, "4. DOCUMENTATION SPECIAL CONTROLS");
+        y -= 2;
+
+        // Re-add 4.2 heading
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9.5)
+          .fillColor(BLUE)
+          .text("4.2 Special control points", M.l, y, { width: CONTENT_W });
+        y = doc.y + 8;
+
+        // Re-add table header (use specialHeadH for consistency)
+        cell(tX, y, s1, specialHeadH, "CONTROL ID", {
+          fill: TABLE_HEAD_BG,
+          bold: true,
+        });
+        cell(tX + s1, y, s2, specialHeadH, "SPECIAL CONTROL", {
+          fill: TABLE_HEAD_BG,
+          bold: true,
+        });
+        cell(tX + s1 + s2, y, s3, specialHeadH, "DESCRIPTION", {
+          fill: TABLE_HEAD_BG,
+          bold: true,
+        });
+        cell(tX + s1 + s2 + s3, y, s4, specialHeadH, "MADE BY:", {
+          fill: TABLE_HEAD_BG,
+          bold: true,
+        });
+        y += specialHeadH;
+      }
+
+      const controlId = control._id ? String(control._id) : "";
+      const comment = control.comment || "";
+      const projectManagerName = control.projectManager?.name || "";
+
+      cell(tX, y, s1, rowH, controlId, { color: RED });
+      cell(tX + s1, y, s2, rowH, "", {}); // Empty second column
+      cell(tX + s1 + s2, y, s3, rowH, comment, { color: RED });
+      cell(tX + s1 + s2 + s3, y, s4, rowH, projectManagerName, {});
+
+      y += rowH;
+    }
+  }
+  // No fallback text - just leave table empty if no records
+
+  y += 14;
 
   // --- section 5 bar ---
   y = drawSectionBar(doc, y, "5. FOLLOW-UP ON DEVIATIONS");
@@ -2129,14 +2553,17 @@ function page7(doc, dynamic) {
   );
   y = doc.y + 6;
 
-  // --- deviations table (3 cols, big body area) ---
+  // Continue using same pagination variables (pageNum, basePageNumber, footerHeight, maxYForContent)
+
+  // --- deviations table (3 cols) ---
   const d1 = CONTENT_W * 0.22;
   const d2 = CONTENT_W * 0.46;
   const d3 = CONTENT_W - (d1 + d2);
 
   const devHeadH = 16;
-  const devBodyH = 160;
+  const devRowH = 60; // Height for each deviation row (enough for image)
 
+  // Draw table header
   cell(tX, y, d1, devHeadH, "DEVIATION ID", {
     fill: TABLE_HEAD_BG,
     bold: true,
@@ -2152,68 +2579,206 @@ function page7(doc, dynamic) {
 
   y += devHeadH;
 
-  // body outline + vertical lines
-  doc
-    .save()
-    .lineWidth(0.6)
-    .strokeColor(LIGHT_LINE)
-    .rect(tX, y, CONTENT_W, devBodyH)
-    .stroke()
-    .restore();
-  doc
-    .save()
-    .lineWidth(0.6)
-    .strokeColor(LIGHT_LINE)
-    .moveTo(tX + d1, y)
-    .lineTo(tX + d1, y + devBodyH)
-    .stroke()
-    .restore();
-  doc
-    .save()
-    .lineWidth(0.6)
-    .strokeColor(LIGHT_LINE)
-    .moveTo(tX + d1 + d2, y)
-    .lineTo(tX + d1 + d2, y + devBodyH)
-    .stroke()
-    .restore();
+  // Draw deviations with pagination
+  if (deviations.length > 0) {
+    for (const deviation of deviations) {
+      // Check if we need a new page before drawing this row
+      if (y + devRowH > maxYForContent) {
+        // Add footer to current page
+        const currentPageNumber = parseFloat(
+          (basePageNumber + pageNum * 0.1).toFixed(1)
+        );
+        footer(doc, currentPageNumber);
 
-  // top texts in body (red)
-  doc.font("Helvetica").fontSize(8.5).fillColor(RED);
-  doc.text("div_0x     [Select Date]", tX + 6, y + 6, { width: d1 - 12 });
-  doc.text("Show an overwiev of the deviations", tX + d1 + 6, y + 6, {
-    width: d2 - 12,
-  });
-  doc.text("Link.", tX + d1 + d2 + 6, y + 6, { width: d3 - 12 });
+        // Add new page
+        doc.addPage({ size: "A4", margin: 0 });
+        y = M.t;
+        pageNum++;
 
-  y += devBodyH + 10;
+        // Re-add section 5 heading on continuation pages
+        y = drawSectionBar(doc, y, "5. FOLLOW-UP ON DEVIATIONS");
+        y -= 2;
 
-  doc
-    .font("Helvetica")
-    .fontSize(8.2)
-    .fillColor(GREY_TXT)
-    .text(
-      "The above is updated every time a deviation occurs in the execution.",
-      M.l,
-      y,
-      {
-        width: CONTENT_W,
+        // Re-add section 5 intro text
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9.5)
+          .fillColor(BLUE)
+          .text("5.1 Handling of any deviations", M.l, y, {
+            width: CONTENT_W - 40,
+            align: "left",
+          });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9.5)
+          .fillColor("black")
+          .text("B7", M.l, y, { width: CONTENT_W, align: "right" });
+        y = doc.y + 6;
+
+        doc
+          .font("Helvetica")
+          .fontSize(8.5)
+          .fillColor(GREY_TXT)
+          .text(
+            "It is the Contractor's responsibility that the corrective action is carried out, and then that the independent\ninspector re-checks the deviations that may have occurred during the process.",
+            M.l,
+            y,
+            { width: CONTENT_W, lineGap: 2 }
+          );
+        y = doc.y + 6;
+
+        doc.text(
+          "The list below shows in writing the registered deviations. If the list is empty, no one is registered.",
+          M.l,
+          y,
+          { width: CONTENT_W }
+        );
+        y = doc.y + 6;
+
+        // Re-add table header on continuation pages
+        cell(tX, y, d1, devHeadH, "DEVIATION ID", {
+          fill: TABLE_HEAD_BG,
+          bold: true,
+        });
+        cell(tX + d1, y, d2, devHeadH, "DESCRIPTION", {
+          fill: TABLE_HEAD_BG,
+          bold: true,
+        });
+        cell(tX + d1 + d2, y, d3, devHeadH, "LOCALIZATION PHOTO/TEXT", {
+          fill: TABLE_HEAD_BG,
+          bold: true,
+        });
+        y += devHeadH;
       }
-    );
 
-  // Footer – Side 6 af 24
-  footer(doc, 6);
+      // Format deviation ID and date
+      const deviationId = deviation._id ? String(deviation._id) : "";
+      const submittedDate = deviation.submittedDate
+        ? new Date(deviation.submittedDate).toLocaleDateString("en-GB")
+        : "";
+      const deviationIdText = `${deviationId}${
+        submittedDate ? `     ${submittedDate}` : ""
+      }`;
+
+      const comment = deviation.comment || "";
+
+      // Draw row cells
+      cell(tX, y, d1, devRowH, deviationIdText, { color: RED });
+      cell(tX + d1, y, d2, devRowH, comment, { color: RED });
+
+      // Draw image in third column if available
+      const imageUrl =
+        deviation.annotatedPdfs && deviation.annotatedPdfs.length > 0
+          ? deviation.annotatedPdfs[0].s3Location ||
+            deviation.annotatedPdfs[0].s3location ||
+            deviation.annotatedPdfs[0].location ||
+            ""
+          : "";
+
+      if (imageUrl) {
+        try {
+          const imgBuffer = await fetchImageBuffer(imageUrl);
+          // Calculate image dimensions to fit in cell
+          const imageWidth = d3 - 12;
+          const imageHeight = devRowH - 8;
+          doc.image(imgBuffer, tX + d1 + d2 + 6, y + 4, {
+            fit: [imageWidth, imageHeight],
+            align: "left",
+          });
+        } catch (error) {
+          console.error("Error loading deviation image:", error.message);
+          doc
+            .font("Helvetica")
+            .fontSize(8.5)
+            .fillColor(RED)
+            .text("Image not available", tX + d1 + d2 + 6, y + 6, {
+              width: d3 - 12,
+            });
+        }
+      } else {
+        doc
+          .font("Helvetica")
+          .fontSize(8.5)
+          .fillColor(RED)
+          .text("Link.", tX + d1 + d2 + 6, y + 6, { width: d3 - 12 });
+      }
+
+      // Draw cell borders
+      doc
+        .save()
+        .lineWidth(0.6)
+        .strokeColor(LIGHT_LINE)
+        .rect(tX, y, CONTENT_W, devRowH)
+        .stroke()
+        .restore();
+      doc
+        .save()
+        .lineWidth(0.6)
+        .strokeColor(LIGHT_LINE)
+        .moveTo(tX + d1, y)
+        .lineTo(tX + d1, y + devRowH)
+        .stroke()
+        .restore();
+      doc
+        .save()
+        .lineWidth(0.6)
+        .strokeColor(LIGHT_LINE)
+        .moveTo(tX + d1 + d2, y)
+        .lineTo(tX + d1 + d2, y + devRowH)
+        .stroke()
+        .restore();
+
+      y += devRowH;
+    }
+  }
+  // No fallback text - just leave table empty if no records
+
+  // Show bottom text on last page if it fits
+  if (y + 20 <= maxYForContent) {
+    y += 10;
+    doc
+      .font("Helvetica")
+      .fontSize(8.2)
+      .fillColor(GREY_TXT)
+      .text(
+        "The above is updated every time a deviation occurs in the execution.",
+        M.l,
+        y,
+        {
+          width: CONTENT_W,
+        }
+      );
+  }
+
+  // Footer with decimal page number
+  const currentPageNumber =
+    pageNum === 0
+      ? basePageNumber
+      : parseFloat((basePageNumber + pageNum * 0.1).toFixed(1));
+  footer(doc, currentPageNumber);
 }
 
 // PAGE 8 – 6. CONTROL POINTS SELECTED IN THE CONTROL PLAN
 // PAGE 8 – 6. CONTROL POINTS SELECTED IN THE CONTROL PLAN (Side 7 af 24)
-function page8(doc, dynamic) {
+async function page8(doc, dynamic) {
   const BLUE = HEADING_COLOR;
   const GREY = "#5a5a5a";
   const LINE = "#bfbfbf";
   const RED = "#cc0000";
 
-  const drawingName = dynamic.drawingName || "File name.";
-  // optional: dynamic.drawingImagePath (local path) OR dynamic.drawingImageBuffer (Buffer)
+  // Get gamma data
+  const gamma = dynamic.gamma || {};
+  const annotatedPdf =
+    gamma.annotatedPdfs && gamma.annotatedPdfs.length > 0
+      ? gamma.annotatedPdfs[0]
+      : null;
+
+  const drawingName = annotatedPdf?.filename || "File name.";
+  const imageUrl =
+    annotatedPdf?.s3Location ||
+    annotatedPdf?.s3location ||
+    annotatedPdf?.location ||
+    null;
 
   let y = M.t;
 
@@ -2284,19 +2849,32 @@ function page8(doc, dynamic) {
     .stroke()
     .restore();
 
-  // placeholder red text
-  doc
-    .font("Helvetica")
-    .fontSize(8.5)
-    .fillColor(RED)
-    .text("marked main drawing", boxX + 6, boxY + 6);
-
-  // Optional draw image inside the box (if you have it later)
-  // if (dynamic.drawingImagePath) {
-  //   doc.image(dynamic.drawingImagePath, boxX + 10, boxY + 20, { fit: [boxW - 20, boxH - 30] });
-  // } else if (dynamic.drawingImageBuffer) {
-  //   doc.image(dynamic.drawingImageBuffer, boxX + 10, boxY + 20, { fit: [boxW - 20, boxH - 30] });
-  // }
+  // Draw image if available
+  if (imageUrl) {
+    try {
+      const imgBuffer = await fetchImageBuffer(imageUrl);
+      // Draw image inside the box with padding
+      doc.image(imgBuffer, boxX + 10, boxY + 10, {
+        fit: [boxW - 20, boxH - 20],
+        align: "center",
+      });
+    } catch (error) {
+      console.error("Error loading main drawing image:", error.message);
+      // Fallback: show placeholder text if image fails to load
+      doc
+        .font("Helvetica")
+        .fontSize(8.5)
+        .fillColor(RED)
+        .text("marked main drawing", boxX + 6, boxY + 6);
+    }
+  } else {
+    // No image available - show placeholder text
+    doc
+      .font("Helvetica")
+      .fontSize(8.5)
+      .fillColor(RED)
+      .text("marked main drawing", boxX + 6, boxY + 6);
+  }
 
   y = boxY + boxH + 16;
 
@@ -2565,7 +3143,7 @@ function page9(doc, dynamic) {
 
 // PAGE 10 – 7.4–7.6 B4–B6 tables
 // PAGE 9 – 7. CONTROL CARRIED OUT ... (B1/B2/B3 tables)  (Side 8 af 24)
-function page9(doc, dynamic) {
+async function page9(doc, dynamic) {
   const BLUE = HEADING_COLOR;
   const GREY = "#5a5a5a";
   const LINE = "#d9d9d9";
@@ -2581,7 +3159,143 @@ function page9(doc, dynamic) {
   );
   y += 6;
 
+  // Fetch static document checklist data
+  let checklistItems = [];
+  let approvalStatus = {};
+  let submittedChecklistIds = [];
+
+  try {
+    const { project, subjectMatterId, projectId, companyId } = dynamic;
+
+    if (project && subjectMatterId && project.professionAssociatedData) {
+      const professionData = project.professionAssociatedData[subjectMatterId];
+
+      if (professionData && professionData.staticDocumentCheckList) {
+        checklistItems = professionData.staticDocumentCheckList;
+
+        // Get checklist IDs for status checking
+        const checklistIds = checklistItems.map((item) => item._id.toString());
+
+        if (checklistIds.length > 0 && db) {
+          // Query database for approval status (same logic as API)
+          const queries = [
+            {
+              projectId: projectId,
+              "profession.SubjectMatterId": subjectMatterId,
+            },
+            {
+              projectId: projectId,
+              "profession._id": subjectMatterId,
+            },
+            ...(subjectMatterId &&
+            subjectMatterId.length === 24 &&
+            /^[0-9a-fA-F]{24}$/.test(subjectMatterId)
+              ? [
+                  {
+                    projectId: projectId,
+                    "profession._id": new ObjectId(subjectMatterId),
+                  },
+                ]
+              : []),
+          ];
+
+          let submittedEntries = [];
+          for (let i = 0; i < queries.length; i++) {
+            try {
+              const result = await db
+                .collection("staticDocumentChecklistProjectAndProfessionWise")
+                .find(queries[i])
+                .toArray();
+
+              if (result.length > 0) {
+                submittedEntries = result;
+                break;
+              }
+            } catch (error) {
+              console.log(`Query ${i + 1} failed:`, error.message);
+            }
+          }
+
+          // Create maps of submitted IDs and approval status
+          submittedChecklistIds = submittedEntries.map((entry) =>
+            entry.staticDocumentCheckListId.toString()
+          );
+
+          submittedEntries.forEach((entry) => {
+            approvalStatus[entry.staticDocumentCheckListId.toString()] = {
+              approvedBy: entry.approvedBy || false,
+              approvedDate: entry.approvedDate || null,
+              submittedDate:
+                entry.submittedDate || entry.submissionCreatedDate || null,
+              selectedDate: entry.selectedDate || entry.date || null,
+              comment: entry.comment || null,
+              notes: entry.notes || null, // Notes from approval
+            };
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching checklist data:", error);
+  }
+
+  // Group items by DS_GroupId (B1, B2, B3)
+  const b1Items = checklistItems.filter((item) => item.DS_GroupId === "B1");
+  const b2Items = checklistItems.filter((item) => item.DS_GroupId === "B2");
+  const b3Items = checklistItems.filter((item) => item.DS_GroupId === "B3");
+
+  // Helper function to format date
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return "";
+    }
+  };
+
+  // Helper function to get status text
+  const getStatusText = (itemId) => {
+    const status = approvalStatus[itemId];
+    if (status && status.approvedBy) {
+      return "Approved";
+    } else if (submittedChecklistIds.includes(itemId)) {
+      return "Submitted";
+    }
+    return "Pending";
+  };
+
+  // Helper function to get status color
+  const getStatusColor = (itemId) => {
+    const status = approvalStatus[itemId];
+    if (status && status.approvedBy) {
+      return GREEN;
+    } else if (submittedChecklistIds.includes(itemId)) {
+      return "#FFA500"; // Orange
+    }
+    return GREY;
+  };
+
   const drawHeading = (left, rightLabel) => {
+    // Check if we need a new page before drawing heading (need space for heading + table header)
+    const footerHeight = 30;
+    const maxYForContent = PAGE.h - M.b - footerHeight;
+    const headingHeight = 50; // Approximate height for heading + underline + spacing
+
+    if (y + headingHeight > maxYForContent) {
+      // Add footer to current page
+      footer(doc, 8);
+
+      // Add new page
+      doc.addPage({ size: "A4", margin: 0 });
+      y = M.t;
+    }
+
     doc
       .font("Helvetica-Bold")
       .fontSize(9.5)
@@ -2612,8 +3326,8 @@ function page9(doc, dynamic) {
     y += 8;
   };
 
-  const drawTable = (rows) => {
-    // column positions (no vertical borders; only row separators like PDF)
+  // Helper function to draw table header (returns new y position)
+  const drawTableHeader = (startY) => {
     const x = M.l;
     const wPOS = 40;
     const wDATE = 80;
@@ -2622,8 +3336,7 @@ function page9(doc, dynamic) {
     const wNOTE = 95;
     const wCTRL = CONTENT_W - (wPOS + wDATE + wDESC + wSTATUS + wNOTE);
 
-    // header
-    const headerY = y;
+    const headerY = startY;
     doc.font("Helvetica-Bold").fontSize(7.2).fillColor(BLUE);
     doc.text("POS.", x, headerY, { width: wPOS });
     doc.text("DATE", x + wPOS, headerY, { width: wDATE });
@@ -2639,54 +3352,113 @@ function page9(doc, dynamic) {
       { width: wCTRL }
     );
 
-    y = headerY + 14;
+    let newY = headerY + 14;
     doc
       .save()
       .lineWidth(0.8)
       .strokeColor(LINE)
-      .moveTo(M.l, y)
-      .lineTo(M.l + CONTENT_W, y)
+      .moveTo(M.l, newY)
+      .lineTo(M.l + CONTENT_W, newY)
       .stroke()
       .restore();
-    y += 6;
+    newY += 6;
+    return newY;
+  };
+
+  const drawTable = (items) => {
+    if (!items || items.length === 0) {
+      return;
+    }
+
+    // column positions (no vertical borders; only row separators like PDF)
+    const x = M.l;
+    const wPOS = 40;
+    const wDATE = 80;
+    const wDESC = 170;
+    const wSTATUS = 70;
+    const wNOTE = 95;
+    const wCTRL = CONTENT_W - (wPOS + wDATE + wDESC + wSTATUS + wNOTE);
+
+    // Calculate available space for content (page height - margins - footer space)
+    const footerHeight = 30;
+    const maxYForContent = PAGE.h - M.b - footerHeight;
+    const rowH = 22;
+    const minSpaceForRow = rowH + 10; // Row height + some padding
+
+    // Draw initial header
+    y = drawTableHeader(y);
 
     // rows
-    doc.font("Helvetica").fontSize(7.2).fillColor(GREY);
+    doc.font("Helvetica").fontSize(7.2);
 
-    const rowH = 22;
-    rows.forEach((r) => {
+    items.forEach((item, index) => {
+      // Check if we need a new page before drawing this row
+      if (y + minSpaceForRow > maxYForContent && index > 0) {
+        // Add footer to current page
+        footer(doc, 8);
+
+        // Add new page
+        doc.addPage({ size: "A4", margin: 0 });
+        y = M.t;
+
+        // Re-add header on new page
+        y = drawTableHeader(y);
+      }
+
       const rowTop = y;
+      const itemId = item._id ? item._id.toString() : "";
+      const status = approvalStatus[itemId] || {};
+      const isSubmitted = submittedChecklistIds.includes(itemId);
+      const statusText = getStatusText(itemId);
+      const statusColor = getStatusColor(itemId);
+      // Use approvedDate if approved, otherwise use selectedDate or submittedDate
+      const dateText = status.approvedDate
+        ? formatDate(status.approvedDate)
+        : status.selectedDate
+        ? formatDate(status.selectedDate)
+        : status.submittedDate
+        ? formatDate(status.submittedDate)
+        : "";
 
-      doc.fillColor(GREY).text(r.pos, x, rowTop, { width: wPOS });
-      doc
-        .fillColor(GREY)
-        .text("[Select Date]", x + wPOS, rowTop, { width: wDATE });
+      // POS (ItemId)
+      doc.fillColor(GREY).text(item.ItemId || "", x, rowTop, { width: wPOS });
 
-      doc.fillColor(GREY).text(r.desc, x + wPOS + wDATE, rowTop, {
+      // DATE
+      doc.fillColor(GREY).text(dateText, x + wPOS, rowTop, { width: wDATE });
+
+      // DESCRIPTION (Contol of or Subject)
+      const desc = item["Contol of"] || item.Subject || "";
+      doc.fillColor(GREY).text(desc, x + wPOS + wDATE, rowTop, {
         width: wDESC,
         lineGap: 1,
       });
 
+      // STATUS
       doc
-        .fillColor(GREY)
-        .text("Approved", x + wPOS + wDATE + wDESC, rowTop, { width: wSTATUS });
-      doc
-        .fillColor(GREY)
-        .text("No comments", x + wPOS + wDATE + wDESC + wSTATUS, rowTop, {
-          width: wNOTE,
+        .fillColor(statusColor)
+        .text(statusText, x + wPOS + wDATE + wDESC, rowTop, {
+          width: wSTATUS,
         });
 
+      // NOTE - Use notes (from approval) if available, otherwise use comment (from submission)
+      const noteText = status.notes || status.comment || "No comments";
       doc
         .fillColor(GREY)
-        .text(
-          "Independent control of self-\nmonitoring.",
-          x + wPOS + wDATE + wDESC + wSTATUS + wNOTE,
-          rowTop,
-          {
-            width: wCTRL,
-            lineGap: 1,
-          }
-        );
+        .text(noteText, x + wPOS + wDATE + wDESC + wSTATUS, rowTop, {
+          width: wNOTE,
+          lineGap: 1,
+        });
+
+      // CONTROL/ID
+      const controlText =
+        item["Independent      inspektion"] ||
+        "Independent control of self-\nmonitoring.";
+      doc
+        .fillColor(GREY)
+        .text(controlText, x + wPOS + wDATE + wDESC + wSTATUS + wNOTE, rowTop, {
+          width: wCTRL,
+          lineGap: 1,
+        });
 
       // row separator
       y = rowTop + rowH;
@@ -2704,97 +3476,64 @@ function page9(doc, dynamic) {
     y += 10;
   };
 
-  // --- 7.1 ---
-  drawHeading("7.1 Verification of the basis for execution from design", "B1");
-
-  doc
-    .font("Helvetica")
-    .fontSize(7.2)
-    .fillColor(RED)
-    .text(
-      "B1 – b4 is fixed descriptions. Change date, status, show notes. Show control id.",
-      M.l,
-      y,
-      { width: CONTENT_W }
+  // --- 7.1 B1 ---
+  if (b1Items.length > 0) {
+    drawHeading(
+      "7.1 Verification of the basis for execution from design",
+      "B1"
     );
-  y = doc.y + 8;
+    drawTable(b1Items);
+  }
 
-  drawTable([
-    { pos: "7.1.1", desc: "Self-monitoring" },
-    { pos: "7.1.2", desc: "Follow-up on project\nmaterial" },
-    { pos: "7.1.3", desc: "Information" },
-    { pos: "7.1.4", desc: "Buildability" },
-    { pos: "7.1.5", desc: "Materials" },
-  ]);
+  // --- 7.2 B2 ---
+  if (b2Items.length > 0) {
+    drawHeading(
+      "7.2 Verification of the basis for execution of the work",
+      "B2"
+    );
+    drawTable(b2Items);
+  }
 
-  // --- 7.2 ---
-  drawHeading("7.2 Verification of the basis for execution of the work", "B2");
+  // --- 7.3 B3 ---
+  if (b3Items.length > 0) {
+    // heading with green dot
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9.5)
+      .fillColor(BLUE)
+      .text("7.3 Checking documentation of materials and products", M.l, y, {
+        width: CONTENT_W - 60,
+        align: "left",
+      });
 
-  drawTable([
-    { pos: "7.2.1", desc: "Working drawings,\ninstructions, self-control" },
-    {
-      pos: "7.2.2",
-      desc: "Working drawings,\ninstructions and assembly\nguides for buildability",
-    },
-    { pos: "7.2.3", desc: "Health and safety rules" },
-    { pos: "7.2.4", desc: "Comprehension" },
-    { pos: "7.2.5", desc: "Coordination" },
-    { pos: "7.2.6", desc: "Interfaces" },
-  ]);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9.5)
+      .fillColor("black")
+      .text("B3", M.l, y, {
+        width: CONTENT_W - 18,
+        align: "right",
+      });
 
-  // --- 7.3 ---
-  // heading with green dot
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(9.5)
-    .fillColor(BLUE)
-    .text("7.3 Checking documentation of materials and products", M.l, y, {
-      width: CONTENT_W - 60,
-      align: "left",
-    });
+    // green dot
+    const dotX = M.l + CONTENT_W - 8;
+    const dotY = y + 6;
+    doc.save().fillColor(GREEN).circle(dotX, dotY, 4).fill().restore();
 
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(9.5)
-    .fillColor("black")
-    .text("B3", M.l, y, {
-      width: CONTENT_W - 18,
-      align: "right",
-    });
+    y = doc.y + 6;
 
-  // green dot
-  const dotX = M.l + CONTENT_W - 8;
-  const dotY = y + 6;
-  doc.save().fillColor(GREEN).circle(dotX, dotY, 4).fill().restore();
+    doc
+      .save()
+      .lineWidth(0.8)
+      .strokeColor("#999")
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 8;
 
-  y = doc.y + 6;
-
-  doc
-    .save()
-    .lineWidth(0.8)
-    .strokeColor("#999")
-    .moveTo(M.l, y)
-    .lineTo(M.l + CONTENT_W, y)
-    .stroke()
-    .restore();
-  y += 8;
-
-  drawTable([
-    { pos: "7.3.1", desc: "Purchased materials and\nproducts" },
-    {
-      pos: "7.3.2",
-      desc: "Materials and products\nmeet requirements in\nproject material",
-    },
-    { pos: "7.3.3", desc: "Specific materials." },
-    {
-      pos: "7.3.4",
-      desc: "Additional components\nsuch as. pre-produced\nproducts to be included in\nthe construction",
-    },
-    {
-      pos: "7.3.5",
-      desc: "Selected parts covered by\nharmonised standard, etc.",
-    },
-  ]);
+    drawTable(b3Items);
+  }
 
   // Footer – Side 8 af 24
   footer(doc, 8);
@@ -6830,17 +7569,237 @@ function page25(doc, dynamic) {
 -------------------------------------------------------------------*/
 
 // Download route – generates and streams the Static Control Report
-app.get("/download", (req, res) => {
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader(
-    "Content-Disposition",
-    'attachment; filename="static-control-report.pdf"'
-  );
+app.get("/download", async (req, res) => {
+  try {
+    // Get parameters from query string
+    var subjectMatterId = req.query.subjectMatterId || "KP06";
+    var projectId = req.query.projectId || "693d2acb1291ff43b9ea32a3";
+    var companyId = req.query.companyId || "693d25ef252d1b388fff0648";
+    const targetLang = req.query.target_lang || req.query.lang || "EN";
 
-  // Later you can build this dynamic object from MongoDB / other APIs
-  const dynamic = {};
+    // Log all received parameters
+    console.log("📥 download-extl3 - Received parameters:", {
+      subjectMatterId,
+      projectId,
+      companyId,
+      target_lang: targetLang,
+      allQueryParams: req.query,
+    });
 
-  generateStaticControlReport(dynamic, res);
+    // Validate required parameters
+    if (!projectId || !companyId || !subjectMatterId) {
+      return res.status(400).json({
+        error:
+          "projectId, companyId, and subjectMatterId are required query parameters",
+      });
+    }
+
+    // Check if database is connected
+    if (!db) {
+      return res.status(500).json({ error: "Database not connected" });
+    }
+
+    // Fetch company data if companyId is provided
+    let company = null;
+    if (companyId) {
+      console.log("Fetching company with ID:", companyId);
+      company = await db.collection("companies").findOne({
+        _id: new ObjectId(companyId),
+      });
+      console.log("Company found:", company ? "Yes" : "No");
+      if (company) {
+        console.log("Company data:", {
+          name: company.name,
+          address: company.address,
+          cvr: company.cvr,
+          contactPhone: company.contactPhone,
+        });
+      }
+    }
+
+    // Fetch project data if projectId is provided
+    let project = null;
+    if (projectId && companyId) {
+      console.log(
+        "Fetching project with ID:",
+        projectId,
+        "and companyId:",
+        companyId
+      );
+      project = await db.collection("projects").findOne({
+        _id: new ObjectId(projectId),
+        companyId: companyId,
+      });
+      console.log("Project found:", project ? "Yes" : "No");
+      if (project) {
+        console.log("Project name:", project.name);
+      }
+    }
+
+    // Fetch gamma data - get the most recent one
+    console.log("Fetching gamma with:", {
+      companyId,
+      projectId,
+      subjectMatterId,
+    });
+    let gammaResults = await db
+      .collection("gammas")
+      .find({
+        companyId: companyId,
+        $or: [
+          { projectsId: { $in: [projectId] } },
+          { projectsId: { $in: [new ObjectId(projectId)] } },
+        ],
+        "profession.SubjectMatterId": subjectMatterId,
+      })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .toArray();
+
+    let gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+
+    // If no gamma found with subjectMatterId, try without it
+    if (!gamma) {
+      console.log("Gamma not found with subjectMatterId, trying without it...");
+      gammaResults = await db
+        .collection("gammas")
+        .find({
+          companyId: companyId,
+          $or: [
+            { projectsId: { $in: [projectId] } },
+            { projectsId: { $in: [new ObjectId(projectId)] } },
+          ],
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+      gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+    }
+    console.log("Gamma found:", gamma ? "Yes" : "No");
+
+    // Fetch eurocode from projectprofessioneurocodes
+    console.log("Fetching eurocode...");
+    const eurocodeRecord = await db
+      .collection("projectprofessioneurocodes")
+      .findOne({
+        projectId: projectId,
+        companyId: companyId,
+        subjectMatterId: subjectMatterId,
+      });
+    const eurocode =
+      eurocodeRecord?.euroCodes && eurocodeRecord.euroCodes.length > 0
+        ? String(eurocodeRecord.euroCodes[0])
+        : "mentioned number and name of the Eurocode.";
+    console.log("Eurocode found:", eurocode);
+
+    // Fetch user with role Main Contractor or Main Constructor
+    console.log("Fetching Main Contractor/Constructor...");
+    const mainUser = await db.collection("users").findOne({
+      projectsId: { $in: [projectId] },
+      role: { $in: ["Main Contractor", "Main Constructor"] },
+    });
+    console.log("Main user found:", mainUser ? "Yes" : "No");
+
+    // Fetch signatures from static report signatures
+    console.log("Fetching signatures...");
+    const signatures = await db
+      .collection("static report signatures")
+      .find({
+        projectId: projectId,
+        companyId: companyId,
+        subjectMatterId: subjectMatterId,
+      })
+      .sort({ signatureType: 1, createdAt: -1 })
+      .toArray();
+    console.log("Signatures found:", signatures.length);
+
+    // Organize signatures by signatureType
+    const signatureByType = {};
+    signatures.forEach((sig) => {
+      if (sig.signatureType !== undefined && sig.signatureType !== null) {
+        signatureByType[sig.signatureType] = sig;
+        console.log(
+          `Signature found - Type: ${sig.signatureType}, Name: ${sig.name}`
+        );
+      }
+    });
+
+    // Fetch Independent Controller users for the project
+    console.log("Fetching Independent Controller users...");
+    const projectObjectId = new ObjectId(projectId);
+    const independentControllers = await db
+      .collection("users")
+      .find({
+        role: "Independent Controller",
+        $or: [
+          { projectsId: { $in: [projectObjectId] } },
+          { projectsId: { $in: [projectId] } },
+        ],
+      })
+      .toArray();
+
+    console.log(
+      `Found ${independentControllers.length} Independent Controller users for project ${projectId}`
+    );
+
+    // Fetch specialcontrol records
+    console.log("Fetching specialcontrol records...");
+    const specialControls = await db
+      .collection("specialcontrol")
+      .find({
+        projectsId: { $in: [projectId, projectObjectId] },
+      })
+      .toArray();
+    console.log("Special controls found:", specialControls.length);
+
+    // Fetch deviations records
+    console.log("Fetching deviations records...");
+    const deviations = await db
+      .collection("deviations")
+      .find({
+        "profession.SubjectMatterId": subjectMatterId,
+        projectsId: { $in: [projectId, projectObjectId] },
+        type: "Static Report",
+      })
+      .toArray();
+    console.log("Deviations found:", deviations.length);
+
+    // Build dynamic object from database data
+    const dynamic = {
+      company: company,
+      project: project,
+      gamma: gamma,
+      eurocode: eurocode,
+      mainUser: mainUser,
+      signatures: signatureByType,
+      independentControllers: independentControllers,
+      specialControls: specialControls,
+      deviations: deviations,
+      companyInfo: company
+        ? `${company.name || ""}\n${company.address || ""}\nCVR: ${
+            company.cvr || ""
+          }\n${company.contactPhone || ""}`
+        : "",
+      projectName: project ? project.name : "",
+      constructionPart: gamma?.special ? String(gamma.special) : "Special text",
+      specialText: gamma?.special ? String(gamma.special) : "Special text",
+      documentType: "STATIC INSPECTION REPORT",
+      subjectMatterId: subjectMatterId,
+      projectId: projectId,
+      companyId: companyId,
+    };
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="static-control-report.pdf"'
+    );
+
+    await generateStaticControlReport(dynamic, res);
+  } catch (error) {
+    console.error("Error generating PDF:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Simple home route
@@ -6851,8 +7810,19 @@ app.get("/", (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(
-    `Static Control Report server running at http://localhost:${PORT}`
-  );
+async function startServer() {
+  // Connect to MongoDB before starting server
+  await connectToMongoDB();
+
+  app.listen(PORT, () => {
+    console.log(
+      `Static Control Report server running at http://localhost:${PORT}`
+    );
+  });
+}
+
+// Initialize and start server
+startServer().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
 });
