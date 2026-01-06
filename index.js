@@ -179,7 +179,7 @@ app.get("/convert-pdf-to-png", async (req, res) => {
 });
 
 // Connect to MongoDB - use environment variable or default
-const defaultUri = "mongodb://127.0.0.1:27031/construction_db";
+const defaultUri = "mongodb://127.0.0.1:27017/construction_db";
 const localUri = process.env.MONGODB_URI || defaultUri;
 let uri = localUri;
 
