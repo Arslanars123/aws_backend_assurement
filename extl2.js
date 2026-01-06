@@ -10,7 +10,7 @@ const fs = require("fs");
 const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // -------------------- DATABASE CONNECTION --------------------
 const localUri = "mongodb://localhost:27017/mughees";
@@ -7880,10 +7880,12 @@ app.get("/download", async (req, res) => {
   }
 });
 
-// Start server - Commented out - server is started in index.js
-// app.listen(PORT, () => {
-//   console.log(`Server running at http://localhost:${PORT}`);
-// });
+// Start server - Only start if running directly (not when required as a module)
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}
 
 // Export functions and constants for use in other files
 module.exports = {

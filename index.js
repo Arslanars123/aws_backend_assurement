@@ -33,10 +33,22 @@ const {
   M: M_EXTL2,
 } = require("./extl2");
 
+// Import functions from extl3.js for PDF generation
+const {
+  generateStaticControlReport,
+  createStaticControlReportRoutes,
+} = require("./extl3");
+
 // PDF to PNG conversion function
 async function convertPdfToPng(pdfPath, outputDir) {
   console.log("nano testing");
   try {
+    // Check if PDF file exists before trying to convert
+    if (!fs.existsSync(pdfPath)) {
+      console.warn(`PDF file not found for conversion: ${pdfPath}`);
+      return null;
+    }
+
     const { fromPath } = require("pdf2pic");
     const options = {
       density: 300,
@@ -166,21 +178,28 @@ app.get("/convert-pdf-to-png", async (req, res) => {
   }
 });
 
-// Connect to local MongoDB only
-const localUri = "mongodb://localhost:27017/mughees";
+// Connect to MongoDB - use environment variable or default
+const defaultUri = "mongodb://127.0.0.1:27031/construction_db";
+const localUri = process.env.MONGODB_URI || defaultUri;
 let uri = localUri;
+
+// Extract database name from URI
+const uriParts = localUri.split('/');
+const dbName = uriParts[uriParts.length - 1] || "construction_db";
+
 let client = new MongoClient(uri, {
-  serverSelectionTimeoutMS: 10000,
-  connectTimeoutMS: 10000,
-  socketTimeoutMS: 10000,
-  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 30000,
+  connectTimeoutMS: 30000,
+  socketTimeoutMS: 0, // No timeout for operations
+  maxPoolSize: 50, // Increase pool size for better concurrency
   retryWrites: true,
   retryReads: true,
-  minPoolSize: 1,
+  minPoolSize: 5, // Keep minimum connections alive
   maxIdleTimeMS: 30000,
   heartbeatFrequencyMS: 10000,
+  directConnection: false, // Allow connection through SSH tunnel
+  compressors: ['zlib'], // Enable compression for faster data transfer
 });
-const dbName = "mughees";
 let db;
 
 // JWT Secret Key
@@ -194,35 +213,37 @@ async function connectToMongoDB() {
   while (retryCount < maxRetries) {
     try {
       console.log(
-        `Attempting to connect to local MongoDB (attempt ${
+        `Attempting to connect to MongoDB at ${uri} (attempt ${
           retryCount + 1
         }/${maxRetries})...`
       );
       uri = localUri;
       const localClient = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 10000,
-        connectTimeoutMS: 10000,
-        socketTimeoutMS: 10000,
-        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 30000,
+        connectTimeoutMS: 30000,
+        socketTimeoutMS: 0, // No timeout for operations
+        maxPoolSize: 50, // Increase pool size
         retryWrites: true,
         retryReads: true,
+        minPoolSize: 5, // Keep minimum connections alive
+        compressors: ['zlib'], // Enable compression
       });
 
       await localClient.connect();
-      console.log("Connected to local MongoDB successfully!");
+      console.log(`Connected to MongoDB successfully! Database: ${dbName}`);
       client = localClient;
       db = client.db(dbName);
       return; // Success, exit the function
     } catch (error) {
       retryCount++;
       console.error(
-        `Error connecting to local MongoDB (attempt ${retryCount}/${maxRetries}):`,
+        `Error connecting to MongoDB (attempt ${retryCount}/${maxRetries}):`,
         error.message
       );
 
       if (retryCount >= maxRetries) {
         console.error(
-          "Failed to connect to local MongoDB after all retry attempts"
+          "Failed to connect to MongoDB after all retry attempts"
         );
         console.log("Starting server without database connection...");
         return; // Don't exit, let the server start without DB
@@ -271,6 +292,9 @@ async function startServer() {
     // Register RP1 PDF routes
     const createRP1PdfRoutes = require("./routes/rp1-pdf-routes");
     app.use("/", createRP1PdfRoutes(db));
+
+    // Register static control report PDF routes (extl3)
+    app.use("/", createStaticControlReportRoutes(db));
 
     // Register KS report routes after database connection is established
     const createKsReportRoutes = require("./ks-report-routes");
@@ -328,6 +352,20 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// Global unhandled error handlers
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+  // Don't exit in production, let the process manager handle it
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
 
 startServer();
 
@@ -2430,18 +2468,33 @@ app.post("/get-inputs-by-subject-matter-id", async (req, res) => {
 app.get("/get-gammas", async (req, res) => {
   try {
     const { companyId, projectId, point } = req.query;
+    console.log('🔍 [Backend] /get-gammas request:');
+    console.log('   companyId:', companyId);
+    console.log('   projectId:', projectId);
+    console.log('   point:', point);
+    
     const query = addFilters({}, companyId, projectId);
+    console.log('   Query after addFilters:', JSON.stringify(query, null, 2));
 
     if (point) {
       query.point = point;
     }
+    
     const controls = await db
       .collection("gammas")
       .find(query)
       .sort({ createdAt: -1 })
       .toArray();
+    
+    console.log('📊 [Backend] Found', controls.length, 'gamma documents');
+    if (controls.length > 0) {
+      console.log('   First gamma projectsId:', controls[0].projectsId);
+      console.log('   First gamma profession.SubjectMatterId:', controls[0].profession?.SubjectMatterId);
+    }
+    
     res.status(200).json(controls);
   } catch (error) {
+    console.error('❌ [Backend] Error in /get-gammas:', error);
     res.status(500).json({ error: "Failed to fetch gammas" });
   }
 });
@@ -2507,12 +2560,17 @@ app.get("/get-gamma-drawing", async (req, res) => {
     const imageUrl =
       firstAnnotatedPdf.s3Location ||
       firstAnnotatedPdf.s3location ||
-      firstAnnotatedPdf.location;
+      firstAnnotatedPdf.location ||
+      (firstAnnotatedPdf.filename
+        ? `${process.env.BASE_URL || "http://localhost:3000"}/uploads/${firstAnnotatedPdf.filename}`
+        : null);
 
     if (!imageUrl) {
-      console.log("No s3Location found in annotatedPdfs[0]");
+      console.log("No s3Location or filename found in annotatedPdfs[0]");
+      console.log("Available fields:", Object.keys(firstAnnotatedPdf));
       return res.status(404).json({
-        error: "No s3Location found in annotatedPdfs[0]",
+        error: "No s3Location or filename found in annotatedPdfs[0]",
+        availableFields: Object.keys(firstAnnotatedPdf),
       });
     }
 
@@ -3061,7 +3119,17 @@ app.get("/get-global-professions", async (req, res) => {
 
 app.get("/get-company-professions", async (req, res) => {
   try {
+    if (!db) {
+      console.error("Database not connected");
+      return res.status(503).json({ error: "Database not available" });
+    }
+
     const { companyId, projectId, SubjectMatterId } = req.query;
+
+    // Validate companyId is provided
+    if (!companyId || companyId === "null" || companyId === "undefined") {
+      return res.status(400).json({ error: "companyId is required" });
+    }
 
     const query = {};
 
@@ -3083,9 +3151,16 @@ app.get("/get-company-professions", async (req, res) => {
       .collection("professions")
       .find(query)
       .toArray();
-    res.status(200).json(professions);
+    
+    // Always return an array, even if empty, to ensure consistent response format
+    res.status(200).json(Array.isArray(professions) ? professions : []);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch professions" });
+    console.error("Error fetching professions:", error);
+    // Return consistent error format
+    res.status(500).json({ 
+      error: "Failed to fetch professions", 
+      message: error.message || "Unknown error occurred"
+    });
   }
 });
 
@@ -8577,6 +8652,11 @@ app.post(
 );
 app.get("/get-projects", async (req, res) => {
   try {
+    if (!db) {
+      console.error("Database not connected");
+      return res.status(503).json({ error: "Database not available" });
+    }
+
     const { companyId } = req.query;
 
     const query =
@@ -8586,7 +8666,8 @@ app.get("/get-projects", async (req, res) => {
 
     res.status(200).json(projects);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch projects" });
+    console.error("Error fetching projects:", error);
+    res.status(500).json({ error: "Failed to fetch projects", message: error.message });
   }
 });
 
@@ -10468,7 +10549,20 @@ const CACHE_FILE = path.join(process.cwd(), "cache.json");
 // Read cache file
 function readCache() {
   if (!fs.existsSync(CACHE_FILE)) return {};
-  return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+  try {
+    const content = fs.readFileSync(CACHE_FILE, "utf8").trim();
+    if (!content) return {};
+    return JSON.parse(content);
+  } catch (error) {
+    console.error("Error reading cache file, returning empty cache:", error.message);
+    // If cache is corrupted, return empty object and optionally reset the file
+    try {
+      fs.writeFileSync(CACHE_FILE, "{}");
+    } catch (writeError) {
+      // Ignore write errors
+    }
+    return {};
+  }
 }
 
 // Write cache file
@@ -10476,16 +10570,74 @@ function writeCache(cache) {
   fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
 }
 
+// Custom Danish translation overrides
+// These translations take precedence over cache and DeepL API
+// Note: Matching is case-insensitive
+const DANISH_CUSTOM_TRANSLATIONS = {
+  "Created at": "Oprettet den",
+  "Created:": "Oprettet den", // Variant with colon
+  "City": "By",
+  "View profession": "Vis profession",
+  "View": "Vis",
+  "Static controlplan": "Statisk kontrolplan",
+  "Scope": "Omfang",
+  "Approved": "Godkendt",
+  "Item": "Certifikater (Items)",
+  "Add Levels": "Tilføj niveauer",
+  "Part name": "Parts nr.",
+  "Submit": "Tilføj",
+  "Independent controller": "Uafhængig kontrol",
+  "Independet controller": "Uafhængig kontrol", // Typo variant
+  "Safety manager": "Sikkerhedskoordinator",
+  "Drawing": "Drawing", // Keep English (GB translation)
+  "Delete": "SLET",
+  "Approve": "Godkend",
+};
+
+// Create a case-insensitive lookup map for Danish translations
+const DANISH_CUSTOM_TRANSLATIONS_LOWER = {};
+for (const [key, value] of Object.entries(DANISH_CUSTOM_TRANSLATIONS)) {
+  DANISH_CUSTOM_TRANSLATIONS_LOWER[key.toLowerCase()] = value;
+}
+
+// Helper function to get custom Danish translation (case-insensitive)
+function getCustomDanishTranslation(text) {
+  if (!text) return null;
+  return DANISH_CUSTOM_TRANSLATIONS_LOWER[text.toLowerCase()] || null;
+}
+
 app.post("/translate", async (req, res) => {
+  // Track if response has been sent to prevent double-sending
+  let responseSent = false;
+  
+  const sendResponse = (status, data) => {
+    if (!responseSent) {
+      responseSent = true;
+      if (status === 200) {
+        res.json(data);
+      } else {
+        res.status(status).json(data);
+      }
+    }
+  };
+
   try {
     const { texts, target_lang, source_lang = "EN" } = req.body;
 
+    // Validate input
     if (!texts || !Array.isArray(texts) || texts.length === 0) {
-      return res.status(400).json({ error: "Texts array is required" });
+      return sendResponse(400, { error: "Texts array is required" });
     }
 
     if (!target_lang) {
-      return res.status(400).json({ error: "target_lang is required" });
+      return sendResponse(400, { error: "target_lang is required" });
+    }
+
+    // Limit batch size to prevent timeouts
+    const MAX_BATCH_SIZE = 100;
+    const textsToProcess = texts.slice(0, MAX_BATCH_SIZE);
+    if (texts.length > MAX_BATCH_SIZE) {
+      console.warn(`Translation batch size limited from ${texts.length} to ${MAX_BATCH_SIZE}`);
     }
 
     const cache = readCache();
@@ -10494,13 +10646,34 @@ app.post("/translate", async (req, res) => {
     // Check cache for each text
     const textsToTranslate = [];
 
-    texts.forEach((text) => {
+    textsToProcess.forEach((text) => {
+      // Skip empty texts
+      if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        results.push({
+          original: text || '',
+          translated: text || '',
+          fromCache: true,
+        });
+        return;
+      }
+
       const key = `${text}_${source_lang}_${target_lang}`;
+
+      // First check custom Danish translations (highest priority, case-insensitive)
+      if (target_lang === "DA") {
+        const customTranslation = getCustomDanishTranslation(text);
+        if (customTranslation) {
+          results.push({
+            original: text,
+            translated: customTranslation,
+            fromCache: false, // Mark as custom override, not from cache
+          });
+          return; // Skip to next text
+        }
+      }
 
       if (cache[key]) {
         // Cached translation found
-
-        console.log("cache");
         results.push({
           original: text,
           translated: cache[key],
@@ -10514,7 +10687,7 @@ app.post("/translate", async (req, res) => {
 
     // If all translations exist in cache → return immediately
     if (textsToTranslate.length === 0) {
-      return res.json(results);
+      return sendResponse(200, results);
     }
 
     // Prepare form data for DeepL API
@@ -10525,36 +10698,87 @@ app.post("/translate", async (req, res) => {
 
     textsToTranslate.forEach((text) => formData.append("text", text));
 
-    // Call DeepL API
-    const response = await axios.post(DEEPL_API_URL, formData, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
+    // Call DeepL API with timeout
+    let deepLResponse;
+    try {
+      deepLResponse = await axios.post(DEEPL_API_URL, formData, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 30000, // 30 second timeout
+      });
+    } catch (deepLError) {
+      console.error("DeepL API error:", deepLError.message);
+      
+      // If DeepL fails, return original texts for texts that need translation
+      textsToTranslate.forEach((text) => {
+        results.push({
+          original: text,
+          translated: text, // Return original if translation fails
+          fromCache: false,
+        });
+      });
+      
+      return sendResponse(200, results); // Return partial results with originals
+    }
+
+    // Validate DeepL response structure
+    if (!deepLResponse || !deepLResponse.data || !deepLResponse.data.translations) {
+      console.error("Invalid DeepL API response structure");
+      
+      // Return original texts if response is invalid
+      textsToTranslate.forEach((text) => {
+        results.push({
+          original: text,
+          translated: text,
+          fromCache: false,
+        });
+      });
+      
+      return sendResponse(200, results);
+    }
 
     // Store new translations + push to results
-    response.data.translations.forEach((t, index) => {
-      const original = textsToTranslate[index];
-      const key = `${original}_${source_lang}_${target_lang}`;
+    try {
+      deepLResponse.data.translations.forEach((t, index) => {
+        const original = textsToTranslate[index];
+        if (!original) return; // Skip if index is out of bounds
+        
+        const key = `${original}_${source_lang}_${target_lang}`;
+        const translated = t.text || original;
 
-      // Save into cache
-      cache[key] = t.text;
+        // Save into cache
+        cache[key] = translated;
 
-      results.push({
-        original,
-        translated: t.text,
-        fromCache: false,
+        results.push({
+          original,
+          translated,
+          fromCache: false,
+        });
       });
-    });
-    console.log("first time");
-    // Update cache file
-    writeCache(cache);
 
-    res.json(results);
+      // Update cache file (handle errors gracefully)
+      try {
+        writeCache(cache);
+      } catch (cacheError) {
+        console.error("Cache write error (non-fatal):", cacheError.message);
+        // Continue even if cache write fails
+      }
+
+      return sendResponse(200, results);
+    } catch (processingError) {
+      console.error("Error processing translations:", processingError.message);
+      // Return what we have so far
+      return sendResponse(200, results);
+    }
   } catch (error) {
-    console.error("Translation error:", error);
-    res.status(500).json({
-      error: "Translation failed",
-      message: error.message,
-    });
+    console.error("Translation endpoint error:", error);
+    
+    // Ensure we always send a response
+    if (!responseSent) {
+      sendResponse(500, {
+        error: "Translation failed",
+        message: error.message || "Unknown error",
+      });
+    }
   }
 });
 
@@ -15865,6 +16089,342 @@ app.get("/download-extl2", async (req, res) => {
   }
 });
 
+// Download static control report PDF (from extl3.js)
+app.get("/download-extl3", async (req, res) => {
+  try {
+    // Get parameters from query string
+    const subjectMatterId = req.query.subjectMatterId;
+    const projectId = req.query.projectId;
+    const companyId = req.query.companyId;
+    const targetLang = req.query.target_lang || req.query.lang || "EN";
+
+    // Log all received parameters
+    console.log("📥 download-extl3 - Received parameters:", {
+      subjectMatterId,
+      projectId,
+      companyId,
+      target_lang: targetLang,
+      allQueryParams: req.query,
+    });
+
+    // Validate required parameters
+    if (!projectId || !companyId || !subjectMatterId) {
+      return res.status(400).json({
+        error:
+          "projectId, companyId, and subjectMatterId are required query parameters",
+      });
+    }
+
+    // Check if database is connected
+    if (!db) {
+      return res.status(500).json({ error: "Database not connected" });
+    }
+
+    // Fetch company data
+    console.log("Fetching company with ID:", companyId);
+    const company = await db.collection("companies").findOne({
+      _id: new ObjectId(companyId),
+    });
+    console.log("Company found:", company ? "Yes" : "No");
+
+    // Fetch project data
+    console.log("Fetching project with ID:", projectId);
+    const project = await db.collection("projects").findOne({
+      _id: new ObjectId(projectId),
+      companyId: companyId,
+    });
+    console.log("Project found:", project ? "Yes" : "No");
+
+    // Fetch gamma data - get the most recent one
+    let gammaResults = await db
+      .collection("gammas")
+      .find({
+        companyId: companyId,
+        $or: [
+          { projectsId: { $in: [projectId] } },
+          { projectsId: { $in: [new ObjectId(projectId)] } },
+        ],
+        "profession.SubjectMatterId": subjectMatterId,
+      })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .toArray();
+
+    let gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+
+    // If no gamma found with subjectMatterId, try without it
+    if (!gamma) {
+      gammaResults = await db
+        .collection("gammas")
+        .find({
+          companyId: companyId,
+          $or: [
+            { projectsId: { $in: [projectId] } },
+            { projectsId: { $in: [new ObjectId(projectId)] } },
+          ],
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+      gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+    }
+    console.log("Gamma found:", gamma ? "Yes" : "No");
+
+    // Fetch eurocode from projectprofessioneurocodes
+    const eurocodeRecord = await db
+      .collection("projectprofessioneurocodes")
+      .findOne({
+        projectId: projectId,
+        companyId: companyId,
+        subjectMatterId: subjectMatterId,
+      });
+    const eurocode =
+      eurocodeRecord?.euroCodes && eurocodeRecord.euroCodes.length > 0
+        ? String(eurocodeRecord.euroCodes[0])
+        : "mentioned number and name of the Eurocode.";
+    console.log("Eurocode:", eurocode);
+
+    // Fetch user with role Main Contractor or Main Constructor
+    const projectObjectId = new ObjectId(projectId);
+    const mainUser = await db.collection("users").findOne({
+      projectsId: { $in: [projectId, projectObjectId] },
+      role: { $in: ["Main Contractor", "Main Constructor"] },
+    });
+    console.log("Main User found:", mainUser ? "Yes" : "No");
+
+    // Fetch signatures from static report signatures
+    const signatures = await db
+      .collection("static report signatures")
+      .find({
+        projectId: projectId,
+        companyId: companyId,
+        subjectMatterId: subjectMatterId,
+      })
+      .sort({ signatureType: 1, createdAt: -1 })
+      .toArray();
+
+    // Organize signatures by signatureType
+    const signatureByType = {};
+    signatures.forEach((sig) => {
+      if (sig.signatureType !== undefined && sig.signatureType !== null) {
+        signatureByType[sig.signatureType] = sig;
+      }
+    });
+    console.log("Signatures found:", Object.keys(signatureByType).length);
+
+    // Fetch Independent Controller users for the project
+    const independentControllers = await db
+      .collection("users")
+      .find({
+        role: "Independent Controller",
+        $or: [
+          { projectsId: { $in: [projectObjectId] } },
+          { projectsId: { $in: [projectId] } },
+        ],
+      })
+      .toArray();
+    console.log("Independent Controllers found:", independentControllers.length);
+
+    // Fetch specialcontrol records
+    const specialControls = await db
+      .collection("specialcontrol")
+      .find({
+        projectsId: { $in: [projectId, projectObjectId] },
+      })
+      .toArray();
+    console.log("Special Controls found:", specialControls.length);
+
+    // Fetch deviations records
+    const deviations = await db
+      .collection("deviations")
+      .find({
+        "profession.SubjectMatterId": subjectMatterId,
+        projectsId: { $in: [projectId, projectObjectId] },
+        type: "Static Report",
+      })
+      .toArray();
+    console.log("Deviations found:", deviations.length);
+
+    // Extract staticDocumentCheckList from professionAssociatedData
+    let b1Rows = [];
+    let b2Rows = [];
+    let b3Rows = [];
+
+    if (project && project.professionAssociatedData) {
+      const professionData = project.professionAssociatedData[subjectMatterId];
+      if (professionData && professionData.staticDocumentCheckList) {
+        const checklist = professionData.staticDocumentCheckList;
+
+        // Helper function to map checklist item to table row
+        const mapChecklistItemToRow = (item) => {
+          return {
+            pos: item.ItemId || item.pos || "",
+            checkingThe:
+              item.checkingThe ||
+              item["Control of"] ||
+              item["Contol of"] ||
+              item["CHECKING THE"] ||
+              "",
+            subject: item.Subject || item.subject || item["SUBJECT"] || "",
+            constructionPart:
+              item["Construction part"] ||
+              item.constructionPart ||
+              item["CONSTRUCTION PART"] ||
+              "",
+            basis: item.Basis || item.basis || "",
+            method:
+              item["Control method"] ||
+              item["Control methode"] ||
+              item["CONTROL METHOD"] ||
+              item.controlMethod ||
+              item.method ||
+              "",
+            scope:
+              item.Scope ||
+              item.scope ||
+              item.circumference ||
+              (item.extent ? `${item.extent * 100}%` : "") ||
+              "",
+            acceptance:
+              item["Acceptance criteria"] ||
+              item["Acceptance Criteria"] ||
+              item.acceptanceCriteria ||
+              item.acceptance ||
+              "",
+            timeControl:
+              item.Time ||
+              item.time ||
+              item["TIME CONTROL"] ||
+              item.timeControl ||
+              "",
+          };
+        };
+
+        // Filter, deduplicate, and sort B1 items
+        b1Rows = checklist
+          .filter(
+            (item) =>
+              item.DS_GroupId === "B1" &&
+              item.ItemId != null &&
+              item.ItemId !== ""
+          )
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+
+        // Filter, deduplicate, and sort B2 items
+        const b2Filtered = checklist.filter(
+          (item) =>
+            item.DS_GroupId === "B2" &&
+            item.ItemId != null &&
+            item.ItemId !== ""
+        );
+        b2Rows = b2Filtered
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+
+        // Filter, deduplicate, and sort B3 items
+        const b3Filtered = checklist.filter(
+          (item) =>
+            item.DS_GroupId === "B3" &&
+            item.ItemId != null &&
+            item.ItemId !== ""
+        );
+        b3Rows = b3Filtered
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+      }
+    }
+    console.log("B1 rows:", b1Rows.length, "B2 rows:", b2Rows.length, "B3 rows:", b3Rows.length);
+
+    // Build dynamic object from database data
+    const dynamicData = {
+      company: company,
+      project: project,
+      gamma: gamma,
+      eurocode: eurocode,
+      mainUser: mainUser,
+      signatures: signatureByType,
+      independentControllers: independentControllers,
+      specialControls: specialControls,
+      deviations: deviations,
+      // B1, B2, B3 rows for pages 20, 21, 22
+      b1Rows: b1Rows,
+      b2Rows: b2Rows,
+      b3Rows: b3Rows,
+      companyInfo: company
+        ? `${company.name || ""}\n${company.address || ""}\nCVR: ${
+            company.cvr || ""
+          }\n${company.contactPhone || ""}`
+        : "",
+      projectName: project ? project.name : "",
+      constructionPart: gamma?.special ? String(gamma.special) : "Special text",
+      specialText: gamma?.special ? String(gamma.special) : "Special text",
+      documentType: "STATIC INSPECTION REPORT",
+      subjectMatterId: subjectMatterId,
+      projectId: projectId,
+      companyId: companyId,
+      db: db, // Pass db through dynamic object so page9 can access it
+    };
+
+    console.log("Dynamic data being passed to PDF generator:", {
+      companyName: company?.name || "Not found",
+      projectName: project?.name || "Not found",
+      subjectMatterId: subjectMatterId,
+      hasGamma: !!gamma,
+      hasEurocode: !!eurocode,
+      signaturesCount: Object.keys(signatureByType).length,
+    });
+
+    // Set response headers
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=static-control-report.pdf"
+    );
+
+    // Generate PDF
+    await generateStaticControlReport(dynamicData, res, targetLang);
+  } catch (error) {
+    console.error("Error generating PDF:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to generate PDF", details: error.message });
+  }
+});
+
 app.post(
   "/update-check/:id",
   upload.fields([
@@ -16533,9 +17093,33 @@ app.post(
     { name: "annotatedPdf", maxCount: 1 },
     { name: "annotatedPdfs", maxCount: 10 },
   ]),
+  // Error handler for multer (must be before route handler)
+  (err, req, res, next) => {
+    if (err) {
+      console.error("❌ Multer error in /store-gamma:", err);
+      res.status(400).json({
+        error: "File upload error",
+        details: err.message,
+        code: err.code
+      });
+      return;
+    }
+    next();
+  },
   async (req, res) => {
+    // Ensure response is always JSON
+    res.setHeader('Content-Type', 'application/json');
+    
     try {
-      // Receive the new fields - use req.fields for multipart form data
+      // Multer puts form fields in req.body, not req.fields
+      // Log request data for debugging
+      console.log('Store-gamma request received');
+      console.log('req.body keys:', Object.keys(req.body || {}));
+      console.log('req.files keys:', Object.keys(req.files || {}));
+      console.log('companyId:', req.body?.companyId);
+      console.log('projectsId:', req.body?.projectsId);
+      
+      // Receive the new fields - multer puts form data in req.body
       const {
         profession,
         item,
@@ -16556,27 +17140,49 @@ app.post(
         generalPictureDescriptions,
         markPictureDescriptions,
         markPictureIndices,
-      } = req.fields || req.body; // Handle both multipart and JSON
+      } = req.body; // Multer puts form fields in req.body
 
-      const parsedProfessions =
-        typeof profession === "string" ? JSON.parse(profession) : profession;
+      // Parse profession field safely
+      let parsedProfessions = null;
+      try {
+        if (profession) {
+          parsedProfessions =
+            typeof profession === "string" ? JSON.parse(profession) : profession;
+        }
+      } catch (e) {
+        console.error("Error parsing profession:", e);
+        console.error("Profession value:", profession);
+        return res.status(400).json({ error: "Invalid profession JSON", details: e.message });
+      }
 
       // Only parse independentController if it exists (not null/undefined)
       let parsedIndependentController = null;
       if (independentController) {
-        parsedIndependentController =
-          typeof independentController === "string"
-            ? JSON.parse(independentController)
-            : independentController;
+        try {
+          parsedIndependentController =
+            typeof independentController === "string"
+              ? JSON.parse(independentController)
+              : independentController;
+        } catch (e) {
+          console.error("Error parsing independentController:", e);
+          console.error("independentController value:", independentController);
+          // Continue without independentController if parsing fails
+        }
       }
 
       // Only parse onController if it exists (not null/undefined)
       let parsedOnController = null;
       if (onController) {
-        parsedOnController =
-          typeof onController === "string"
-            ? JSON.parse(onController)
-            : onController;
+        try {
+          parsedOnController =
+            typeof onController === "string"
+              ? JSON.parse(onController)
+              : onController;
+        } catch (e) {
+          console.error("Error parsing onController:", e);
+          console.error("onController value:", onController);
+          // Continue without onController if parsing fails
+        }
       }
 
       // Parse drawing field - similar to deviations
@@ -16605,12 +17211,34 @@ app.post(
         req.files["annotatedImage"] &&
         req.files["annotatedImage"].length > 0
       ) {
-        const file = req.files["annotatedImage"][0];
-        annotatedImage = {
-          ...file,
-          uploadedAt: new Date(),
-          fileType: "annotated-image",
-        };
+        try {
+          const file = req.files["annotatedImage"][0];
+          // Verify file exists if it has a path (multer provides path property)
+          // But don't fail if file doesn't exist - it might be on S3 only
+          if (file.path) {
+            try {
+              // Try to resolve path if it's relative
+              const filePath = path.isAbsolute(file.path) 
+                ? file.path 
+                : path.resolve(process.cwd(), file.path);
+              
+              if (!fs.existsSync(filePath)) {
+                console.warn(`⚠️ Annotated image file not found: ${filePath}, but continuing (may be on S3)`);
+              }
+            } catch (pathError) {
+              console.warn(`⚠️ Error checking annotated image path: ${pathError.message}`);
+            }
+          }
+          
+          annotatedImage = {
+            ...file,
+            uploadedAt: new Date(),
+            fileType: "annotated-image",
+          };
+        } catch (fileError) {
+          console.error("Error processing annotated image:", fileError);
+          // Continue without annotated image
+        }
       }
 
       // Handle original PDF
@@ -16638,11 +17266,36 @@ app.post(
       // Handle multiple annotated PDFs
       let annotatedPdfs = [];
       if (req.files["annotatedPdfs"] && req.files["annotatedPdfs"].length > 0) {
-        annotatedPdfs = req.files["annotatedPdfs"].map((file) => ({
-          ...file,
-          uploadedAt: new Date(),
-          fileType: "annotated-pdf",
-        }));
+        annotatedPdfs = req.files["annotatedPdfs"]
+          .filter((file) => {
+            // Verify file exists if it has a path (but don't fail if it doesn't - may be on S3)
+            if (file.path) {
+              try {
+                const filePath = path.isAbsolute(file.path) 
+                  ? file.path 
+                  : path.resolve(process.cwd(), file.path);
+                
+                if (!fs.existsSync(filePath)) {
+                  console.warn(`⚠️ Annotated PDF file not found: ${filePath}, but continuing (may be on S3)`);
+                }
+              } catch (pathError) {
+                console.warn(`⚠️ Error checking annotated PDF path: ${pathError.message}`);
+              }
+            }
+            return true; // Always include file even if path check fails
+          })
+          .map((file) => ({
+            filename: file.filename,
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            path: file.path,
+            destination: file.destination,
+            s3Location: file.s3Location || null,
+            s3Key: file.s3Key || null,
+            uploadedAt: new Date(),
+            fileType: "annotated-pdf",
+          }));
       }
 
       // Handle general pictures
@@ -16726,6 +17379,17 @@ app.post(
         }
       }
 
+      // Validate required fields
+      if (!companyId) {
+        return res.status(400).json({ error: "companyId is required" });
+      }
+      if (!projectsId) {
+        return res.status(400).json({ error: "projectsId is required" });
+      }
+      if (!parsedProfessions) {
+        return res.status(400).json({ error: "profession is required" });
+      }
+
       // Build the document object, only including fields that exist
       const documentToInsert = {
         profession: parsedProfessions,
@@ -16735,9 +17399,17 @@ app.post(
         projectsId: Array.isArray(projectsId) ? projectsId : [projectsId],
         companyId,
         picture,
-        currentVersion: currentVersion || 1, // ✨ Set initial version to 1
+        currentVersion: currentVersion || "1", // ✨ Set initial version to 1 (as string to match existing documents)
         createdAt: createdAt || new Date().toISOString(),
       };
+      
+      console.log('Document to insert:', {
+        companyId: documentToInsert.companyId,
+        projectsId: documentToInsert.projectsId,
+        profession: documentToInsert.profession?.GroupName || documentToInsert.profession?.name,
+        hasDrawing: !!parsedDrawing,
+        hasAnnotatedPdfs: annotatedPdfs.length > 0
+      });
 
       // Only add optional fields if they exist and are not empty
       if (parsedIndependentController) {
@@ -16794,20 +17466,74 @@ app.post(
         documentToInsert.special = special;
       }
 
+      // Validate required fields before inserting
+      if (!companyId) {
+        return res.status(400).json({ error: "companyId is required" });
+      }
+      if (!projectsId) {
+        return res.status(400).json({ error: "projectsId is required" });
+      }
+      if (!parsedProfessions) {
+        return res.status(400).json({ error: "profession is required" });
+      }
+
       console.log(
         `✅ Creating gamma with currentVersion: ${documentToInsert.currentVersion}`
       );
+      console.log('Document to insert summary:', {
+        companyId: documentToInsert.companyId,
+        projectsId: documentToInsert.projectsId,
+        profession: documentToInsert.profession?.GroupName || documentToInsert.profession?.name,
+        hasDrawing: !!parsedDrawing,
+        hasAnnotatedPdfs: annotatedPdfs.length > 0,
+        item: documentToInsert.item
+      });
 
       // Insert the data into the database
       const result = await db.collection("gammas").insertOne(documentToInsert);
+      console.log('✅ Successfully inserted gamma with ID:', result.insertedId);
 
-      res.status(201).json(result);
+      res.status(201).json({
+        success: true,
+        insertedId: result.insertedId,
+        message: "Gamma created successfully"
+      });
     } catch (error) {
-      console.error("Error:", error);
-      res.status(500).json({ error: "Failed to create gamma" });
+      console.error("❌ Error creating gamma:", error);
+      console.error("Error name:", error.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+      
+      // Ensure we always return JSON, never HTML
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: "Failed to create gamma",
+          details: error.message,
+          name: error.name,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+      }
     }
   }
 );
+
+// Global error handler middleware (must be after all routes)
+app.use((err, req, res, next) => {
+  console.error("❌ Global error handler caught error:", err);
+  console.error("Error name:", err.name);
+  console.error("Error message:", err.message);
+  console.error("Error stack:", err.stack);
+  
+  // Ensure we always return JSON, never HTML
+  if (!res.headersSent) {
+    res.status(err.status || 500).json({
+      error: "Internal server error",
+      details: err.message,
+      name: err.name,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
 app.post(
   "/update-gamma/:id",
   upload.fields([
@@ -21777,6 +22503,53 @@ app.get("/notes/pdf", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send("Error generating PDF");
+  }
+});
+
+// Proxy endpoint to fetch PDFs from S3 (bypasses CORS)
+app.get("/proxy-pdf", async (req, res) => {
+  try {
+    const { url } = req.query;
+    
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required query parameter: url",
+      });
+    }
+
+    // Validate that it's an S3 URL for security
+    if (!url.includes('s3.amazonaws.com') && !url.includes('s3.eu-north-1.amazonaws.com')) {
+      return res.status(400).json({
+        success: false,
+        message: "Only S3 URLs are allowed",
+      });
+    }
+
+    // Fetch PDF from S3
+    const axios = require('axios');
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      headers: {
+        'Accept': 'application/pdf',
+      },
+    });
+
+    // Set appropriate headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="document.pdf"`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    
+    // Send the PDF
+    res.send(Buffer.from(response.data, 'binary'));
+  } catch (error) {
+    console.error('Error proxying PDF:', error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching PDF from S3",
+      error: error.message,
+    });
   }
 });
 

@@ -9,12 +9,47 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
+// Translation logging to file
+const TRANSLATION_LOG_FILE = path.join(__dirname, "extl3-translation.log");
+let translationLogBuffer = [];
+
+// Simple file logger for translations
+function logTranslation(message, data = null) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    message,
+    data: data || null
+  };
+  
+  // Add to buffer
+  translationLogBuffer.push(logEntry);
+  
+  // Keep only last 100 entries in memory
+  if (translationLogBuffer.length > 100) {
+    translationLogBuffer.shift();
+  }
+  
+  // Write to file (async, don't block)
+  const logLine = `[${timestamp}] ${message}${data ? ' ' + JSON.stringify(data) : ''}\n`;
+  fs.appendFile(TRANSLATION_LOG_FILE, logLine, (err) => {
+    // Error logging removed
+  });
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // -------------------- DATABASE CONNECTION --------------------
-const localUri = "mongodb://localhost:27017/mughees";
+// Use environment variable or default to the same MongoDB as main server
+const defaultUri = "mongodb://127.0.0.1:27031/construction_db";
+const localUri = process.env.MONGODB_URI || defaultUri;
 let uri = localUri;
+
+// Extract database name from URI
+const uriParts = localUri.split('/');
+const dbName = uriParts[uriParts.length - 1] || "construction_db";
+
 let client = new MongoClient(uri, {
   serverSelectionTimeoutMS: 60000,
   connectTimeoutMS: 60000,
@@ -26,7 +61,6 @@ let client = new MongoClient(uri, {
   maxIdleTimeMS: 30000,
   heartbeatFrequencyMS: 10000,
 });
-const dbName = "mughees";
 let db;
 
 // Connect to MongoDB - Local only
@@ -37,11 +71,6 @@ async function connectToMongoDB() {
   // Connect to local MongoDB only
   while (retryCount < maxRetries) {
     try {
-      console.log(
-        `Attempting to connect to local MongoDB (attempt ${
-          retryCount + 1
-        }/${maxRetries})...`
-      );
       uri = localUri;
       const localClient = new MongoClient(uri, {
         serverSelectionTimeoutMS: 10000,
@@ -53,31 +82,138 @@ async function connectToMongoDB() {
       });
 
       await localClient.connect();
-      console.log("Connected to local MongoDB successfully!");
       client = localClient;
       db = client.db(dbName);
       return; // Success, exit the function
     } catch (error) {
       retryCount++;
-      console.error(
-        `Error connecting to local MongoDB (attempt ${retryCount}/${maxRetries}):`,
-        error.message
-      );
 
       if (retryCount >= maxRetries) {
-        console.error(
-          "Failed to connect to local MongoDB after all retry attempts"
-        );
-        console.log("Starting server without database connection...");
         return; // Don't exit, let the server start without DB
       }
 
       // Wait before retrying
       const waitTime = 2000;
-      console.log(`Retrying in ${waitTime}ms...`);
       await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
+}
+
+// -------------------- TRANSLATION HELPERS --------------------
+// Helper function to call translation API
+async function translateTexts(texts, targetLang, sourceLang = "EN") {
+  try {
+    if (!targetLang) {
+      logTranslation("TRANSLATE_SKIPPED", { reason: "No targetLang" });
+      const translationMap = {};
+      texts.forEach((text) => {
+        translationMap[text] = text;
+      });
+      return translationMap;
+    }
+
+    logTranslation("TRANSLATE_START", { 
+      textCount: texts.length, 
+      targetLang, 
+      sourceLang 
+    });
+    
+    const response = await axios.post("http://localhost:3000/translate", {
+      texts: texts,
+      target_lang: targetLang,
+      source_lang: sourceLang,
+    });
+
+    if (!response || !response.data || !Array.isArray(response.data)) {
+      logTranslation("TRANSLATE_ERROR", { 
+        error: "Invalid response",
+        responseData: response?.data 
+      });
+      throw new Error("Invalid response from translation API");
+    }
+
+    // Create a map of original -> translated
+    const translationMap = {};
+    response.data.forEach((item) => {
+      if (item && item.original && item.translated) {
+        translationMap[item.original] = item.translated;
+      }
+    });
+
+    const translatedCount = Object.keys(translationMap).filter(
+      key => translationMap[key] !== key
+    ).length;
+
+    logTranslation("TRANSLATE_SUCCESS", {
+      totalTexts: texts.length,
+      translatedTexts: response.data.length,
+      mapEntries: Object.keys(translationMap).length,
+      actuallyTranslated: translatedCount,
+      sample: response.data.slice(0, 3).map(item => ({
+        original: item.original,
+        translated: item.translated
+      }))
+    });
+    
+    return translationMap;
+  } catch (error) {
+    logTranslation("TRANSLATE_ERROR", {
+      error: error.message,
+      status: error.response?.status,
+      responseData: error.response?.data,
+      hasRequest: !!error.request
+    });
+    
+    // On error, return original texts
+    const translationMap = {};
+    texts.forEach((text) => {
+      translationMap[text] = text;
+    });
+    return translationMap;
+  }
+}
+
+// Constant for boxed footnote text (used in page7 and collectAllTextsForTranslation)
+const BOXED_FOOTNOTE_TEXT = "(+): Possible choices. Additional restrictions may be set in the DS/EN 1992-DS/EN 1999 series, including the\nassociated national annexes or in the associated execution standards, including the corresponding national\napplication documents.\n1) For structures that are not covered by the Building Regulations, \"construction classes\" are replaced\ntextually by \"consequence classes\", where CC1 replaces KK1, CC2 replaces KK2, CC3 replaces KK3 and \"CC3\ncovered by B4 KDK NA (4)\" replaces KK4.";
+
+// Helper function to translate text (used throughout all pages)
+function t(text, translations = {}) {
+  if (!text || typeof text !== 'string') return text;
+  if (isNumberOrDate(text)) return text;
+  // Try exact match first
+  if (translations[text]) return translations[text];
+  // For boxed footnote text, try normalized match
+  if (text.trim() === BOXED_FOOTNOTE_TEXT.trim()) {
+    return translations[BOXED_FOOTNOTE_TEXT] || text;
+  }
+  return text;
+}
+
+// Helper function to check if a string is a number or date
+function isNumberOrDate(str) {
+  if (!str || typeof str !== "string") return false;
+  const trimmed = str.trim();
+
+  // Check if it's a number (including decimals, negative, with spaces/commas)
+  if (/^-?\d+([.,]\d+)?$/.test(trimmed.replace(/[\s,]/g, ""))) {
+    return true;
+  }
+
+  // Check if it's a date (various formats)
+  if (
+    /^\d{4}-\d{2}-\d{2}/.test(trimmed) ||
+    /^\d{2}-\d{2}-\d{4}/.test(trimmed) ||
+    /^\d{2}\/\d{2}\/\d{4}/.test(trimmed)
+  ) {
+    return true;
+  }
+
+  // Check if it's a percentage
+  if (/^\d+\.?\d*%$/.test(trimmed)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -107,29 +243,55 @@ const BORDER_COLOR = "#003b71";
 // Total logical pages in template (Side 1 af 24 ... Side 24 af 24)
 const TOTAL_PAGES = 24;
 
+// -------------------- TABLE CONFIG (B4–B6) --------------------
+// Column widths for sections 7.4, 7.5, 7.6 tables (same as extl.js)
+const B_COL_WIDTHS = [
+  36, // POS
+  46, // CHECKING THE
+  46, // SUBJECT
+  61, // CONSTRUCTION PART
+  61, // BASIS
+  72, // CONTROL METHOD
+  41, // SCOPE
+  82, // ACCEPTANCE CRITERIA
+  67, // TIME CONTROL
+];
+
+function getBColXs() {
+  const xs = [M.l];
+  for (let i = 0; i < B_COL_WIDTHS.length - 1; i++) {
+    xs.push(xs[i] + B_COL_WIDTHS[i]);
+  }
+  return xs;
+}
+
+const B_COL_XS = getBColXs();
+
 /**
  * Draws a full-width dark-blue bar with white text (for section titles)
  */
-function drawSectionBar(doc, y, text, rightLabel) {
+function drawSectionBar(doc, y, text, rightLabel, translations = {}) {
   const barHeight = 20;
 
   doc.save().rect(M.l, y, CONTENT_W, barHeight).fill(HEADING_COLOR).restore();
 
+  const translatedText = t(text, translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(11)
     .fillColor("white")
-    .text(text, M.l + 8, y + 4, {
+    .text(translatedText, M.l + 8, y + 4, {
       width: CONTENT_W - 16,
       align: "left",
     });
 
   if (rightLabel) {
+    const translatedRightLabel = t(rightLabel, translations);
     doc
       .font("Helvetica-Bold")
       .fontSize(11)
       .fillColor("white")
-      .text(rightLabel, M.l + 8, y + 4, {
+      .text(translatedRightLabel, M.l + 8, y + 4, {
         width: CONTENT_W - 16,
         align: "right",
       });
@@ -141,12 +303,13 @@ function drawSectionBar(doc, y, text, rightLabel) {
 /**
  * Generic paragraph helper
  */
-function paragraph(doc, y, text, options = {}) {
+function paragraph(doc, y, text, options = {}, translations = {}) {
+  const translatedText = translations[text] || text;
   doc
     .font(options.bold ? "Helvetica-Bold" : "Helvetica")
     .fontSize(options.fontSize || 9)
     .fillColor(options.color || "black")
-    .text(text, M.l, y, {
+    .text(translatedText, M.l, y, {
       width: CONTENT_W,
       lineGap: options.lineGap != null ? options.lineGap : 2,
       align: options.align || "left",
@@ -155,12 +318,99 @@ function paragraph(doc, y, text, options = {}) {
   return doc.y + (options.afterGap != null ? options.afterGap : 4);
 }
 
+// -------------------- TABLE HELPERS FOR B4–B6 (7.4–7.6) --------------------
+// Note: isNumberOrDate function is defined above in translation helpers section
+
+// Header row for B4–B6 tables (same as extl.js)
+function bHeaderRow(doc, y, translations = {}) {
+  const headers = [
+    "POS",
+    "CHECKING THE",
+    "SUBJECT",
+    "CONSTRUCTION PART",
+    "BASIS",
+    "CONTROL METHOD",
+    "SCOPE",
+    "ACCEPTANCE CRITERIA",
+    "TIME CONTROL",
+  ];
+
+  doc.font("Helvetica-Bold").fontSize(8).fillColor("black");
+
+  let maxY = y;
+  headers.forEach((text, idx) => {
+    const translatedText = translations[text] || text;
+    doc.text(translatedText, B_COL_XS[idx] + 2, y, {
+      width: B_COL_WIDTHS[idx] - 4,
+    });
+    if (doc.y > maxY) maxY = doc.y;
+  });
+
+  const bottom = maxY + 2;
+  doc.strokeColor(HEADING_COLOR);
+  doc
+    .moveTo(M.l, bottom)
+    .lineTo(PAGE.w - M.r, bottom)
+    .stroke();
+  doc.strokeColor("black").fillColor("black");
+
+  return bottom + 2;
+}
+
+/**
+ * Draw one B-table row (same as extl.js)
+ * row = {
+ *   pos, checkingThe, subject, constructionPart,
+ *   basis, method, scope, acceptance, timeControl
+ * }
+ */
+function bDataRow(doc, y, row, translations = {}) {
+  doc.font("Helvetica").fontSize(8).fillColor("black");
+
+  // Translate values if they're not numbers/dates
+  const translateValue = (value) => {
+    if (!value || typeof value !== "string") return value;
+    if (isNumberOrDate(value)) return value;
+    return translations[value] || value;
+  };
+
+  const values = [
+    row.pos || "", // pos is usually a number/ID, don't translate
+    translateValue(row.checkingThe || ""),
+    translateValue(row.subject || ""),
+    translateValue(row.constructionPart || ""),
+    translateValue(row.basis || ""),
+    translateValue(row.method || ""),
+    row.scope || "", // scope is usually a percentage, don't translate
+    translateValue(row.acceptance || ""),
+    translateValue(row.timeControl || ""),
+  ];
+
+  let maxY = y;
+  values.forEach((text, idx) => {
+    doc.text(String(text), B_COL_XS[idx] + 2, y, {
+      width: B_COL_WIDTHS[idx] - 4,
+    });
+    if (doc.y > maxY) maxY = doc.y;
+  });
+
+  const bottom = maxY + 2;
+  doc.strokeColor(HEADING_COLOR);
+  doc
+    .moveTo(M.l, bottom)
+    .lineTo(PAGE.w - M.r, bottom)
+    .stroke();
+  doc.strokeColor("black").fillColor("black");
+
+  return bottom + 2;
+}
+
 /**
  * Standard footer:
  * "Part of Kvalitetssikring Danmark ApS" centered
  * "Side X af 24" on the right
  */
-function footer(doc, logicalPageNumber) {
+function footer(doc, logicalPageNumber, pageSuffix = "", translations = {}) {
   const pageW = doc.page.width;
   const pageH = doc.page.height;
 
@@ -168,29 +418,32 @@ function footer(doc, logicalPageNumber) {
   const footerY = pageH - M.b + 20; // same spacing, but correct for landscape too
 
   // Left
+  const leftText = t("Assurement", translations);
   doc
     .font("Helvetica")
     .fontSize(8)
     .fillColor("black")
-    .text("Assurement", M.l, footerY, {
+    .text(leftText, M.l, footerY, {
       width: contentW / 3,
       align: "left",
     });
 
   // Center
-  doc.text(
-    "Part of Kvalitetssikring Danmark ApS",
-    M.l + contentW / 3,
-    footerY,
-    {
-      width: contentW / 3,
-      align: "center",
-    }
-  );
+  const centerText =
+    t("Part of Kvalitetssikring Danmark ApS", translations);
+  doc.text(centerText, M.l + contentW / 3, footerY, {
+    width: contentW / 3,
+    align: "center",
+  });
 
-  // Right
+  // Right - format page number with suffix if provided
+  const pageLabel = t("Page", translations);
+  const afText = t("af", translations);
+  const pageNumberText = pageSuffix
+    ? `${pageLabel} ${logicalPageNumber}${pageSuffix} ${afText} ${TOTAL_PAGES}`
+    : `${pageLabel} ${logicalPageNumber} ${afText} ${TOTAL_PAGES}`;
   doc.text(
-    `Side ${logicalPageNumber} af ${TOTAL_PAGES}`,
+    pageNumberText,
     M.l + (2 * contentW) / 3,
     footerY,
     {
@@ -201,24 +454,685 @@ function footer(doc, logicalPageNumber) {
 }
 
 // Helper function to fetch image from URL
-async function fetchImageBuffer(url) {
-  try {
-    const response = await axios.get(url, { responseType: "arraybuffer" });
-    return Buffer.from(response.data, "binary");
-  } catch (error) {
-    console.error("Error fetching image:", url, error.message);
-    throw error;
+async function fetchImageBuffer(url, retries = 2) {
+  if (!url || typeof url !== 'string') {
+    throw new Error("Invalid URL provided to fetchImageBuffer");
   }
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        responseType: "arraybuffer",
+        timeout: 30000, // 30 second timeout
+        maxContentLength: 50 * 1024 * 1024, // 50MB max
+        maxBodyLength: 50 * 1024 * 1024,
+        validateStatus: function (status) {
+          return status >= 200 && status < 300;
+        },
+        // Add headers to prevent connection issues
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Accept': 'image/*,*/*',
+        },
+      });
+      
+      if (response.data) {
+        return Buffer.from(response.data, "binary");
+      } else {
+        throw new Error("Empty response data");
+      }
+    } catch (error) {
+      const isLastAttempt = attempt === retries;
+      const errorMsg = error.message || "Unknown error";
+      
+      if (error.code === 'ECONNABORTED' || errorMsg.includes('timeout')) {
+      } else if (error.code === 'ECONNRESET' || errorMsg.includes('socket hang up')) {
+      } else {
+      }
+      
+      if (isLastAttempt) {
+        throw new Error(`Failed to fetch image after ${retries + 1} attempts: ${errorMsg}`);
+      }
+      
+      // Wait before retrying (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+}
+
+/**
+ * Collect all static and dynamic texts for translation
+ * @param {object} dynamicData - dynamic data from database
+ * @returns {object} - object with all texts to translate
+ */
+function collectAllTextsForTranslation(dynamicData) {
+  const texts = {
+    // Common static texts
+    "Executing party:": "Executing party:",
+    "Post no. / City:": "Post no. / City:",
+    "Address:": "Address:",
+    "CVR:": "CVR:",
+    "Telephone:": "Telephone:",
+    "Mail:": "Mail:",
+    "Company logo": "Company logo",
+    "Static Control Report:": "Static Control Report:",
+    "For those executed within the": "For those executed within the",
+    "Document ID:": "Document ID:",
+    "Applicable EU standards 2024": "Applicable EU standards 2024",
+    "Eurocode 0: Design basis for structures": "Eurocode 0: Design basis for structures",
+    "Eurocode 1: Load on load-bearing structures": "Eurocode 1: Load on load-bearing structures",
+    "Eurocode 2: Concrete structures": "Eurocode 2: Concrete structures",
+    "Eurocode 3: Steel structures": "Eurocode 3: Steel structures",
+    "Eurocode 4: Composite Structures": "Eurocode 4: Composite Structures",
+    "Eurocode 5: Timber structures": "Eurocode 5: Timber structures",
+    "Eurocode 6: Masonry structures": "Eurocode 6: Masonry structures",
+    "Eurocode 7: Geotechnical Engineering": "Eurocode 7: Geotechnical Engineering",
+    "Eurocode 8: Structures in seismic areas": "Eurocode 8: Structures in seismic areas",
+    "Eurocode 9: Aluminium structures.": "Eurocode 9: Aluminium structures.",
+    "EN 1520: Lightweight concrete with porous aggregates": "EN 1520: Lightweight concrete with porous aggregates",
+    "EN 12602: Aerated concrete": "EN 12602: Aerated concrete",
+    "Part of Kvalitetssikring Danmark ApS": "Part of Kvalitetssikring Danmark ApS",
+    "Page": "Page",
+    "Side": "Side",
+    "af": "af",
+    "Assurement": "Assurement",
+    
+    // Table headers
+    "POS": "POS",
+    "CHECKING THE": "CHECKING THE",
+    "SUBJECT": "SUBJECT",
+    "CONSTRUCTION PART": "CONSTRUCTION PART",
+    "BASIS": "BASIS",
+    "CONTROL METHOD": "CONTROL METHOD",
+    "SCOPE": "SCOPE",
+    "ACCEPTANCE CRITERIA": "ACCEPTANCE CRITERIA",
+    "TIME CONTROL": "TIME CONTROL",
+    
+    // Page 2 texts
+    "STATIC INSPECTION REPORT": "STATIC INSPECTION REPORT",
+    "For load-bearing structures, cf. DS1140 applies to:": "For load-bearing structures, cf. DS1140 applies to:",
+    "Construction part": "Construction part",
+    "The control plan is built according to the current EU standard:": "The control plan is built according to the current EU standard:",
+    "Eurocode": "Eurocode",
+    "Project name/ID": "Project name/ID",
+    "Main Contractor/Custumer": "Main Contractor/Custumer",
+    "ID/Case no.": "ID/Case no.",
+    "Name": "Name",
+    "Address": "Address",
+    "Post no./City": "Post no./City",
+    "CVR no.": "CVR no.",
+    "Contact person": "Contact person",
+    "e-mail": "e-mail",
+    "Project Start-up": "Project Start-up",
+    "Company Contact": "Company Contact",
+    "DOCUMENT TYPE:": "DOCUMENT TYPE:",
+    "VERSION": "VERSION",
+    "CONSTRUCTION CLASS": "CONSTRUCTION CLASS",
+    "SIGNING": "SIGNING",
+    "Prepared/approved by:": "Prepared/approved by:",
+    "Enterprise": "Enterprise",
+    "Own control (OC)": "Own control (OC)",
+    "Independent Controller (IC)": "Independent Controller (IC)",
+    "Signed": "Signed",
+    "Content": "Content",
+    "Indhold": "Indhold",
+    "Document completion status": "Document completion status",
+    "Report - system": "Report - system",
+    
+    // Page 4 - Table of Contents labels
+    "Static inspection report": "Static inspection report",
+    "Construction part Special text": "Construction part Special text",
+    "Eurocode": "Eurocode",
+    "Signing:": "Signing:",
+    "1. Generally": "1. Generally",
+    "1.1 Structure of the report": "1.1 Structure of the report",
+    "1.2 Description of the Control Work": "1.2 Description of the Control Work",
+    "1.3 Organisation of the control work": "1.3 Organisation of the control work",
+    "1.4 Inspectors associated with": "1.4 Inspectors associated with",
+    "1.5 Explanation of the use of assistant inspectors": "1.5 Explanation of the use of assistant inspectors",
+    "1.6 Significant deviations": "1.6 Significant deviations",
+    "2. DOCUMENTATION OF GENERAL CONTROLS": "2. DOCUMENTATION OF GENERAL CONTROLS",
+    "2. Documentation of general controls": "2. Documentation of general controls",
+    "2.1 General": "2.1 General",
+    "2.2 Standards": "2.2 Standards",
+    "2.3 Control Types/Levels": "2.3 Control Types/Levels",
+    "The general inspection is carried out in accordance with DS 1140. In addition, the general control is carried out in accordance with the rules of DS/EN 1992-DS/EN 1999 including the associated national annexes and in accordance with the rules of the related execution standards including the corresponding national application documents.": "The general inspection is carried out in accordance with DS 1140. In addition, the general control is carried out in accordance with the rules of DS/EN 1992-DS/EN 1999 including the associated national annexes and in accordance with the rules of the related execution standards including the corresponding national application documents.",
+    "The general inspection is carried out in accordance with the submitted inspection plan for the present": "The general inspection is carried out in accordance with the submitted inspection plan for the present",
+    "and the associated control plan from the contractor's company, which is stated on page 1 of the report.": "and the associated control plan from the contractor's company, which is stated on page 1 of the report.",
+    "This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE.": "This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE.",
+    "The type of control is determined by who performs the execution check. A distinction is made between three types of controls:": "The type of control is determined by who performs the execution check. A distinction is made between three types of controls:",
+    "Self-monitoring": "Self-monitoring",
+    "Independent control": "Independent control",
+    "Third-Party Control.": "Third-Party Control.",
+    "The requirements are defined in DS1140, (Danish standard 2019a) and the Construction Designers have defined which Construction class and execution class must be made documentation according to.": "The requirements are defined in DS1140, (Danish standard 2019a) and the Construction Designers have defined which Construction class and execution class must be made documentation according to.",
+    "CONSTRUCTION CLASS": "CONSTRUCTION CLASS",
+    "INDEPENDENT CONTROL": "INDEPENDENT CONTROL",
+    "THIRD-PARTY CONTROLS": "THIRD-PARTY CONTROLS",
+    "As a general rule, general control of the execution of the performers is carried out, see SBI 271\nSection 6.6.1, Planning of general controls.": "As a general rule, general control of the execution of the performers is carried out, see SBI 271\nSection 6.6.1, Planning of general controls.",
+    "Performance classes": "Performance classes",
+    "EXECUTION CLASS": "EXECUTION CLASS",
+    "Performance classes indicate the importance of the design for the safety of a load-bearing structure:": "Performance classes indicate the importance of the design for the safety of a load-bearing structure:",
+    "– EXC1: The design has limited impact on the safety of a load-bearing structure": "– EXC1: The design has limited impact on the safety of a load-bearing structure",
+    "– EXC2: The execution is important for the safety of a load-bearing structure": "– EXC2: The execution is important for the safety of a load-bearing structure",
+    "3. List of selected Construction and execution classes": "3. List of selected Construction and execution classes",
+    "3. LIST OF SELECTED CONSTRUCTION AND EXECUTION CLASSES": "3. LIST OF SELECTED CONSTRUCTION AND EXECUTION CLASSES",
+    "3.1 Construction and execution classes selected.": "3.1 Construction and execution classes selected.",
+    "Below, the building designer has indicated which classes have been determined from the project material.": "Below, the building designer has indicated which classes have been determined from the project material.",
+    "These control sections are covered by the following:": "These control sections are covered by the following:",
+    "CONSTRUCTION PART": "CONSTRUCTION PART",
+    "DOCUMENT": "DOCUMENT",
+    "CONSTRUCTION CLASS": "CONSTRUCTION CLASS",
+    "EXECUTION CLASS": "EXECUTION CLASS",
+    "Static Control Report:": "Static Control Report:",
+    "4. DOCUMENTATION SPECIAL CONTROLS": "4. DOCUMENTATION SPECIAL CONTROLS",
+    "4. Documentation Special Controls": "4. Documentation Special Controls",
+    "4.1 General": "4.1 General",
+    "There are no special controls assigned by the building designers, cf.  This Special text .": "There are no special controls assigned by the building designers, cf.  This Special text .",
+    "Should there be special controls, they will be stated in section 3.2": "Should there be special controls, they will be stated in section 3.2",
+    "4.2 Special control points": "4.2 Special control points",
+    "If there are special checks, it will be stated below in the form, otherwise there will be none.": "If there are special checks, it will be stated below in the form, otherwise there will be none.",
+    "CONTROL ID": "CONTROL ID",
+    "SPECIAL CONTROL": "SPECIAL CONTROL",
+    "DESCRIPTION": "DESCRIPTION",
+    "MADE BY:": "MADE BY:",
+    "5. FOLLOW-UP ON DEVIATIONS": "5. FOLLOW-UP ON DEVIATIONS",
+    "5. Follow-up on deviations": "5. Follow-up on deviations",
+    "5.1 Handling of any deviations": "5.1 Handling of any deviations",
+    "5.1 Handling of any deviations B7": "5.1 Handling of any deviations B7",
+    "It is the Contractor's responsibility that the corrective action is carried out, and then that the independent\ninspector re-checks the deviations that may have occurred during the process.": "It is the Contractor's responsibility that the corrective action is carried out, and then that the independent\ninspector re-checks the deviations that may have occurred during the process.",
+    "The list below shows in writing the registered deviations. If the list is empty, no one is registered.": "The list below shows in writing the registered deviations. If the list is empty, no one is registered.",
+    "DEVIATION ID": "DEVIATION ID",
+    "LOCALIZATION PHOTO/TEXT": "LOCALIZATION PHOTO/TEXT",
+    "The above is updated every time a deviation occurs in the execution.": "The above is updated every time a deviation occurs in the execution.",
+    "− EXC3: The design is of great importance for the safety of a load-bearing structure": "− EXC3: The design is of great importance for the safety of a load-bearing structure",
+    [BOXED_FOOTNOTE_TEXT]: BOXED_FOOTNOTE_TEXT,
+    "6. Control points selected in the Control Plan": "6. Control points selected in the Control Plan",
+    "7. Control carried out of the items in the Control Plan/checklist": "7. Control carried out of the items in the Control Plan/checklist",
+    "7.1 Verification of the basis for execution from design B1": "7.1 Verification of the basis for execution from design B1",
+    "7.2 Verification of the basis for execution of the work B2": "7.2 Verification of the basis for execution of the work B2",
+    "7.3 Checking documentation of materials and products B3": "7.3 Checking documentation of materials and products B3",
+    "7.4 Receive control of deliveries B4": "7.4 Receive control of deliveries B4",
+    "7.5 Execution control B5": "7.5 Execution control B5",
+    "7.6 Final Check B6": "7.6 Final Check B6",
+    "8.A OWN CONTROL REGISTRATIONS/DOCUMENTATION/PHOTOS, CF. SECTION": "8.A OWN CONTROL REGISTRATIONS/DOCUMENTATION/PHOTOS, CF. SECTION",
+    "8.B EXTERNAL CONTROL REPORT": "8.B EXTERNAL CONTROL REPORT",
+    "8.5 STATEMENT ANNEXES": "8.5 STATEMENT ANNEXES",
+    "9. KONTROLPUNKT OVERVIEW": "9. KONTROLPUNKT OVERVIEW",
+    "7.1 Review of the execution basis from the design B1": "7.1 Review of the execution basis from the design B1",
+    "7.2 Verification of the basis for execution of the work": "7.2 Verification of the basis for execution of the work",
+    "7.3 Verification of Documentation of Materials and Products": "7.3 Verification of Documentation of Materials and Products",
+    "7.4 RECEIPT CONTROL DELIVERIES B4": "7.4 RECEIPT CONTROL DELIVERIES B4",
+    "7.5 PERFORMANCE CONTROL; B5": "7.5 PERFORMANCE CONTROL; B5",
+    "7.6. FINAL check B6": "7.6. FINAL check B6",
+    
+    // Page 3 texts
+    "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections.": "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections.",
+    "The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document.": "The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document.",
+    "Expected approval time 14 days, after which the content of the document is considered approved.": "Expected approval time 14 days, after which the content of the document is considered approved.",
+    
+    // Page 4-6 texts
+    "GENERALLY": "GENERALLY",
+    "1.": "1.",
+    "1.1  Structure of the report": "1.1  Structure of the report",
+    "1.2  Description of the Control Work": "1.2  Description of the Control Work",
+    "1.3  Organisation of the control work": "1.3  Organisation of the control work",
+    "1.4  Inspectors associated with": "1.4  Inspectors associated with",
+    "1.5  Explanation of the use of assistant inspectors": "1.5  Explanation of the use of assistant inspectors",
+    "1.6 Significant deviations": "1.6 Significant deviations",
+    "This inspection report is structured, cf. SBI Guideline 271 (3rd edition 2020), Table 15.": "This inspection report is structured, cf. SBI Guideline 271 (3rd edition 2020), Table 15.",
+    "The general inspection has been carried out in accordance with DS/EN 1990 DK NA, Annex B5, DS 1140 and associated execution standards and is documented in accordance with SBI 271 and forms the basis for this inspection report.": "The general inspection has been carried out in accordance with DS/EN 1990 DK NA, Annex B5, DS 1140 and associated execution standards and is documented in accordance with SBI 271 and forms the basis for this inspection report.",
+    "The executing contractor carries out his contract for a Main or Turnkey Contractor and only submits the report for his": "The executing contractor carries out his contract for a Main or Turnkey Contractor and only submits the report for his",
+    "on this case.": "on this case.",
+    "The self-monitoring has been carried out by the individual performer or a designated person from the company on the work in question, name appears on page 2.": "The self-monitoring has been carried out by the individual performer or a designated person from the company on the work in question, name appears on page 2.",
+    "The independent inspection has been carried out in accordance with the requirements specified in DS/EN 1990 DK NA, Annex B5.": "The independent inspection has been carried out in accordance with the requirements specified in DS/EN 1990 DK NA, Annex B5.",
+    "The associated inspectors will be stated below in section 1.4": "The associated inspectors will be stated below in section 1.4",
+    "Applier": "Applier",
+    "Name": "Name",
+    "Education": "Education",
+    "Experience": "Experience",
+    "Initials": "Initials",
+    "Own Controller": "Own Controller",
+    "Independent controller": "Independent controller",
+    "OC": "OC",
+    "IC Fixed": "IC Fixed",
+    "There are the following inspectors on the specific project:": "There are the following inspectors on the specific project:",
+    "NAME": "NAME",
+    "COMPANY": "COMPANY",
+    "INSPECTOR TYPE": "INSPECTOR TYPE",
+    "Independet control.": "Independet control.",
+    "Independet controler name IF any": "Independet controler name IF any",
+    "From Company organisation": "From Company organisation",
+    "Where co-inspectors have been used, these are listed under section 1.4.": "Where co-inspectors have been used, these are listed under section 1.4.",
+    "For practical reasons, an assistant inspector is most often used, as this is the optimal workflow in the executing company's process for independent control.": "For practical reasons, an assistant inspector is most often used, as this is the optimal workflow in the executing company's process for independent control.",
+    "If an inspector makes use of co-inspectors, he or she follows up on the inspection carried out by co-inspectors and ensures that the inspection has been carried out sensibly by checking the documentation for the inspection and signs this as the responsible inspector.": "If an inspector makes use of co-inspectors, he or she follows up on the inspection carried out by co-inspectors and ensures that the inspection has been carried out sensibly by checking the documentation for the inspection and signs this as the responsible inspector.",
+    "The responsibility for the independent verification lies with the appointed independent auditor, who ensures that the overall documentation is consistent.": "The responsibility for the independent verification lies with the appointed independent auditor, who ensures that the overall documentation is consistent.",
+    "If there are deviations, these will be registered separately and be included in the contract under clause: B7\nA so-called deviation note will be prepared separately.": "If there are deviations, these will be registered separately and be included in the contract under clause: B7\nA so-called deviation note will be prepared separately.",
+    "Construction classes": "Construction classes",
+    " (early designations CC1-CC2-CC3-CC4)": " (early designations CC1-CC2-CC3-CC4)",
+    "3.1 Construction and execution classes selected.": "3.1 Construction and execution classes selected.",
+    "These control sections are covered by the following:": "These control sections are covered by the following:",
+    "4.1 General": "4.1 General",
+    "4.2 Special control points": "4.2 Special control points",
+    "Cf. section 3.1, no special controls are required.": "Cf. section 3.1, no special controls are required.",
+    "5.1 Handling of any deviations": "5.1 Handling of any deviations",
+    "B7": "B7",
+    "Image not available": "Image not available",
+    "Link.": "Link.",
+    "OVERVIEW:": "OVERVIEW:",
+    "DRAWINGS INDICATING SELECTED INSPECTION POINTS:": "DRAWINGS INDICATING SELECTED INSPECTION POINTS:",
+    "DRAWING NAME:": "DRAWING NAME:",
+    "marked main drawing": "marked main drawing",
+    "The colors below indicate which category they relate to.": "The colors below indicate which category they relate to.",
+    "POS.": "POS.",
+    "DATE": "DATE",
+    "DESCRIPTION": "DESCRIPTION",
+    "STATUS": "STATUS",
+    "NOTE": "NOTE",
+    "Approved": "Approved",
+    "No comments": "No comments",
+    "Submitted": "Submitted",
+    "Pending": "Pending",
+    "signature field in static report.": "signature field in static report.",
+    " (early designations CC1-CC2-CC3-CC4)": " (early designations CC1-CC2-CC3-CC4)",
+    "7.4 Receive control of deliveries": "7.4 Receive control of deliveries",
+    "7.5 Execution control": "7.5 Execution control",
+    "7.6 Final Check": "7.6 Final Check",
+    "8.1 Receive control of deliveries": "8.1 Receive control of deliveries",
+    "8.2 Execution control": "8.2 Execution control",
+    "8.3 Final Check": "8.3 Final Check",
+    "Status: Approval PFASE": "Status: Approval PFASE",
+    "APPROVED": "APPROVED",
+    "B4": "B4",
+    "B5": "B5",
+    "B6": "B6",
+    "B7": "B7",
+    "Independent Controller Name:": "Independent Controller Name:",
+    "Independent Controller Company": "Independent Controller Company",
+    "CONTROL/ID": "CONTROL/ID",
+    
+    // Page 7-25 texts
+    "7.4 RECEIPT CONTROL DELIVERIES B4": "7.4 RECEIPT CONTROL DELIVERIES B4",
+    "7.5 EXECUTION CONTROL B5": "7.5 EXECUTION CONTROL B5",
+    "7.6 FINAL CHECK B6": "7.6 FINAL CHECK B6",
+    "8.B EXTERNAL CONTROL REPORT": "8.B EXTERNAL CONTROL REPORT",
+    "Planned Sample Checks": "Planned Sample Checks",
+    "B3": "B3",
+    "B4": "B4",
+    
+    // Additional page strings
+    "Above there are points indicated where the executor has carried out checks in accordance with the control plan.": "Above there are points indicated where the executor has carried out checks in accordance with the control plan.",
+    "4. DOCUMENTATION SPECIAL CONTROLS": "4. DOCUMENTATION SPECIAL CONTROLS",
+    "Project manager – company organization": "Project manager – company organization",
+    "Admin – company organization": "Admin – company organization",
+    "company organization": "company organization",
+    "Independent Controller – company organization": "Independent Controller – company organization",
+    "Signature": "Signature",
+    "Date": "Date",
+    "GENERALLY": "GENERALLY",
+    
+    // Additional strings found in pages
+    "1.": "1.",
+    "7.3 Checking documentation of materials and products": "7.3 Checking documentation of materials and products",
+    "[Select Date]": "[Select Date]",
+    "Select an item.": "Select an item.",
+    "8.1 Receive control of deliveries": "8.1 Receive control of deliveries",
+    "8.2 Execution control": "8.2 Execution control",
+    "8.3 Final Check": "8.3 Final Check",
+    "DATE/ID": "DATE/ID",
+    "CONTROL TYPE": "CONTROL TYPE",
+    "CONSTRUCTION PART:": "CONSTRUCTION PART:",
+    "ACCEPTANCE": "ACCEPTANCE",
+    "PROFFESSION:": "PROFFESSION:",
+    "ENDORSEMENT": "ENDORSEMENT",
+    "LOCALIZATION OF CONTROLS": "LOCALIZATION OF CONTROLS",
+    "COMMENT:": "COMMENT:",
+    "ID  7.4.": "ID  7.4.",
+    "ID  7.5.": "ID  7.5.",
+    "ID  7.6.": "ID  7.6.",
+    "Marked drawing": "Marked drawing",
+    "Comments on picture": "Comments on picture",
+    "Photo from registration.": "Photo from registration.",
+    "INDEPENDENT CONTROL": "INDEPENDENT CONTROL",
+    "File name.": "File name.",
+  };
+
+  // Add dynamic texts (excluding numbers and dates)
+  if (dynamicData) {
+    // ========== COMPANY DATA ==========
+    const company = dynamicData.company || {};
+    if (company.name && !isNumberOrDate(company.name)) {
+      texts[company.name] = company.name;
+    }
+    if (company.address && !isNumberOrDate(company.address)) {
+      texts[company.address] = company.address;
+    }
+    if (company.postalCode && !isNumberOrDate(company.postalCode)) {
+      texts[company.postalCode] = company.postalCode;
+    }
+    if (company.city && !isNumberOrDate(company.city)) {
+      texts[company.city] = company.city;
+    }
+    if (company.postalCode && company.city) {
+      const postCity = `${company.postalCode} ${company.city}`;
+      if (!isNumberOrDate(postCity)) {
+        texts[postCity] = postCity;
+      }
+    }
+    if (company.cvr && !isNumberOrDate(company.cvr)) {
+      texts[company.cvr] = company.cvr;
+    }
+    if (company.contactPhone && !isNumberOrDate(company.contactPhone)) {
+      texts[company.contactPhone] = company.contactPhone;
+    }
+    if (company.email && !isNumberOrDate(company.email)) {
+      texts[company.email] = company.email;
+    }
+
+    // ========== PROJECT DATA ==========
+    const project = dynamicData.project || {};
+    if (project.name && !isNumberOrDate(project.name)) {
+      texts[project.name] = project.name;
+    }
+    if (project.address && !isNumberOrDate(project.address)) {
+      texts[project.address] = project.address;
+    }
+    if (project.postalCode && !isNumberOrDate(project.postalCode)) {
+      texts[project.postalCode] = project.postalCode;
+    }
+    if (project.city && !isNumberOrDate(project.city)) {
+      texts[project.city] = project.city;
+    }
+    if (project.postalCode && project.city) {
+      const projectPostCity = `${project.postalCode} ${project.city}`;
+      if (!isNumberOrDate(projectPostCity)) {
+        texts[projectPostCity] = projectPostCity;
+      }
+    }
+    if (project.caseNumber && !isNumberOrDate(project.caseNumber)) {
+      texts[project.caseNumber] = project.caseNumber;
+    }
+    if (project.contactPerson && !isNumberOrDate(project.contactPerson)) {
+      texts[project.contactPerson] = project.contactPerson;
+    }
+
+    // ========== MAIN USER DATA ==========
+    const mainUser = dynamicData.mainUser || {};
+    if (mainUser.name && !isNumberOrDate(mainUser.name)) {
+      texts[mainUser.name] = mainUser.name;
+    }
+    if (mainUser.address && !isNumberOrDate(mainUser.address)) {
+      texts[mainUser.address] = mainUser.address;
+    }
+    if (mainUser.postalCode && !isNumberOrDate(mainUser.postalCode)) {
+      texts[mainUser.postalCode] = mainUser.postalCode;
+    }
+    if (mainUser.city && !isNumberOrDate(mainUser.city)) {
+      texts[mainUser.city] = mainUser.city;
+    }
+    if (mainUser.postalCode && mainUser.city) {
+      const mainUserPostCity = `${mainUser.postalCode} ${mainUser.city}`;
+      if (!isNumberOrDate(mainUserPostCity)) {
+        texts[mainUserPostCity] = mainUserPostCity;
+      }
+    }
+    if (mainUser.email && !isNumberOrDate(mainUser.email)) {
+      texts[mainUser.email] = mainUser.email;
+    }
+    if (mainUser.contactPerson && !isNumberOrDate(mainUser.contactPerson)) {
+      texts[mainUser.contactPerson] = mainUser.contactPerson;
+    }
+
+    // ========== GAMMA / CONSTRUCTION PART DATA ==========
+    const gamma = dynamicData.gamma || {};
+    if (gamma.special && !isNumberOrDate(String(gamma.special))) {
+      texts[String(gamma.special)] = String(gamma.special);
+    }
+
+    // ========== EUROCODE DATA ==========
+    if (dynamicData.eurocode && !isNumberOrDate(dynamicData.eurocode)) {
+      texts[dynamicData.eurocode] = dynamicData.eurocode;
+    }
+
+    // ========== SIGNATURES DATA ==========
+    const signatures = dynamicData.signatures || {};
+    Object.values(signatures).forEach((sig) => {
+      if (sig && typeof sig === 'object') {
+        if (sig.name && !isNumberOrDate(sig.name)) {
+          texts[sig.name] = sig.name;
+        }
+        if (sig.company && !isNumberOrDate(sig.company)) {
+          texts[sig.company] = sig.company;
+        }
+      }
+    });
+
+    // ========== INDEPENDENT CONTROLLERS DATA ==========
+    if (dynamicData.independentControllers && Array.isArray(dynamicData.independentControllers)) {
+      dynamicData.independentControllers.forEach((controller) => {
+        // Collect name
+        if (controller.name && !isNumberOrDate(controller.name)) {
+          texts[controller.name] = controller.name;
+        }
+        // Collect username (used as fallback)
+        if (controller.username && !isNumberOrDate(controller.username)) {
+          texts[controller.username] = controller.username;
+        }
+        // Collect company
+        if (controller.company && !isNumberOrDate(controller.company)) {
+          texts[controller.company] = controller.company;
+        }
+        if (controller.companyName && !isNumberOrDate(controller.companyName)) {
+          texts[controller.companyName] = controller.companyName;
+        }
+      });
+    }
+    
+    // ========== SPECIAL CONTROLS DATA ==========
+    if (dynamicData.specialControls && Array.isArray(dynamicData.specialControls)) {
+      dynamicData.specialControls.forEach((control) => {
+        // Collect comment
+        if (control.comment && !isNumberOrDate(control.comment)) {
+          texts[control.comment] = control.comment;
+        }
+        // Collect project manager name
+        if (control.projectManager && control.projectManager.name && !isNumberOrDate(control.projectManager.name)) {
+          texts[control.projectManager.name] = control.projectManager.name;
+        }
+      });
+    }
+    
+    // ========== DEVIATIONS DATA ==========
+    if (dynamicData.deviations && Array.isArray(dynamicData.deviations)) {
+      dynamicData.deviations.forEach((deviation) => {
+        // Collect comment
+        if (deviation.comment && !isNumberOrDate(deviation.comment)) {
+          texts[deviation.comment] = deviation.comment;
+        }
+      });
+    }
+    
+    // ========== COMPANY NAME FALLBACK ==========
+    // Collect "From Company organisation" fallback text
+    if (dynamicData.company && !dynamicData.company.name) {
+      const fallbackText = "From Company organisation";
+      texts[fallbackText] = fallbackText;
+    }
+
+    // Collect texts from B4, B5, B6 rows (if they exist)
+    const collectRowTexts = (rows, prefix) => {
+      if (rows && Array.isArray(rows)) {
+        rows.forEach((row) => {
+          if (row.checkingThe && !isNumberOrDate(row.checkingThe)) {
+            texts[row.checkingThe] = row.checkingThe;
+          }
+          if (row.subject && !isNumberOrDate(row.subject)) {
+            texts[row.subject] = row.subject;
+          }
+          if (row.constructionPart && !isNumberOrDate(row.constructionPart)) {
+            texts[row.constructionPart] = row.constructionPart;
+          }
+          if (row.basis && !isNumberOrDate(row.basis)) {
+            texts[row.basis] = row.basis;
+          }
+          if (row.method && !isNumberOrDate(row.method)) {
+            texts[row.method] = row.method;
+          }
+          if (row.acceptance && !isNumberOrDate(row.acceptance)) {
+            texts[row.acceptance] = row.acceptance;
+          }
+          if (row.timeControl && !isNumberOrDate(row.timeControl)) {
+            texts[row.timeControl] = row.timeControl;
+          }
+          // Also collect desc field if it exists (used in page9)
+          if (row.desc && !isNumberOrDate(row.desc)) {
+            texts[row.desc] = row.desc;
+          }
+        });
+      }
+    };
+
+    // Collect from checklist items (used in page9 and page10)
+    const collectChecklistItemTexts = (items) => {
+      if (items && Array.isArray(items)) {
+        items.forEach((item) => {
+          // Collect "Contol of" field (note the typo in the field name)
+          if (item["Contol of"] && !isNumberOrDate(item["Contol of"])) {
+            texts[item["Contol of"]] = item["Contol of"];
+          }
+          // Collect Subject field
+          if (item.Subject && !isNumberOrDate(item.Subject)) {
+            texts[item.Subject] = item.Subject;
+          }
+          // Collect "Independent      inspektion" field (note the spaces)
+          if (item["Independent      inspektion"] && !isNumberOrDate(item["Independent      inspektion"])) {
+            texts[item["Independent      inspektion"]] = item["Independent      inspektion"];
+          }
+        });
+      }
+    };
+
+    // Collect from approval status (comments, notes, independent controller names)
+    const collectApprovalStatusTexts = (approvalStatus) => {
+      if (approvalStatus && typeof approvalStatus === 'object') {
+        Object.values(approvalStatus).forEach((status) => {
+          if (status && typeof status === 'object') {
+            // Collect comment
+            if (status.comment && !isNumberOrDate(status.comment)) {
+              texts[status.comment] = status.comment;
+            }
+            // Collect notes
+            if (status.notes && !isNumberOrDate(status.notes)) {
+              texts[status.notes] = status.notes;
+            }
+            // Collect independent controller name
+            if (status.independentController) {
+              if (typeof status.independentController === 'object' && status.independentController.name) {
+                if (!isNumberOrDate(status.independentController.name)) {
+                  texts[status.independentController.name] = status.independentController.name;
+                }
+              } else if (typeof status.independentController === 'string') {
+                if (!isNumberOrDate(status.independentController)) {
+                  texts[status.independentController] = status.independentController;
+                }
+              }
+            }
+          }
+        });
+      }
+    };
+
+    // Collect from ALL data sources - B1, B2, B3, B4, B5, B6 rows
+    if (dynamicData.b1Rows) collectRowTexts(dynamicData.b1Rows, "B1");
+    if (dynamicData.b2Rows) collectRowTexts(dynamicData.b2Rows, "B2");
+    if (dynamicData.b3Rows) collectRowTexts(dynamicData.b3Rows, "B3");
+    if (dynamicData.b4Rows) collectRowTexts(dynamicData.b4Rows, "B4");
+    if (dynamicData.b5Rows) collectRowTexts(dynamicData.b5Rows, "B5");
+    if (dynamicData.b6Rows) collectRowTexts(dynamicData.b6Rows, "B6");
+    if (dynamicData.controlsData) {
+      Object.values(dynamicData.controlsData).forEach((sectionData) => {
+        if (sectionData.rows) collectRowTexts(sectionData.rows);
+      });
+    }
+    
+    // Collect from checklist items if they exist
+    if (dynamicData.checklistItems) collectChecklistItemTexts(dynamicData.checklistItems);
+    if (dynamicData.b1Items) collectChecklistItemTexts(dynamicData.b1Items);
+    if (dynamicData.b2Items) collectChecklistItemTexts(dynamicData.b2Items);
+    if (dynamicData.b3Items) collectChecklistItemTexts(dynamicData.b3Items);
+    
+    // Collect from approval status if it exists
+    if (dynamicData.approvalStatus) collectApprovalStatusTexts(dynamicData.approvalStatus);
+    
+    // Also collect from specialControls, deviations if they have text fields
+    if (dynamicData.specialControls && Array.isArray(dynamicData.specialControls)) {
+      dynamicData.specialControls.forEach((control) => {
+        if (control.description && !isNumberOrDate(control.description)) {
+          texts[control.description] = control.description;
+        }
+        if (control.name && !isNumberOrDate(control.name)) {
+          texts[control.name] = control.name;
+        }
+      });
+    }
+    
+    if (dynamicData.deviations && Array.isArray(dynamicData.deviations)) {
+      dynamicData.deviations.forEach((deviation) => {
+        if (deviation.description && !isNumberOrDate(deviation.description)) {
+          texts[deviation.description] = deviation.description;
+        }
+        if (deviation.note && !isNumberOrDate(deviation.note)) {
+          texts[deviation.note] = deviation.note;
+        }
+      });
+    }
+  }
+
+  return texts;
 }
 
 /**
  * Main generator for STATIC CONTROL REPORT
  * @param {object} dynamic - dynamic data (company, project, tables, etc.)
  * @param {Writable} outputStream - Express res or any writable stream
+ * @param {string} targetLang - target language for translation (optional)
  */
-async function generateStaticControlReport(dynamic = {}, outputStream) {
+async function generateStaticControlReport(dynamic = {}, outputStream, targetLang = null) {
+  logTranslation("GENERATE_FUNCTION_STARTED", { targetLang });
+  
   if (!outputStream || typeof outputStream.write !== "function") {
     throw new Error("outputStream (Writable) is required");
+  }
+
+  // Global array to collect all mark picture URLs
+  global.markPictureUrls = [];
+
+  // Collect and translate texts if target language is specified
+  let translations = {};
+  if (targetLang) {
+    logTranslation("TRANSLATION_REQUESTED", { targetLang });
+    const allTexts = collectAllTextsForTranslation(dynamic);
+    const textsArray = Object.keys(allTexts);
+    logTranslation("TEXTS_COLLECTED", { 
+      count: textsArray.length,
+      sample: textsArray.slice(0, 5)
+    });
+    
+    translations = await translateTexts(textsArray, targetLang);
+    
+    const translationCount = Object.keys(translations).length;
+    const translatedCount = Object.keys(translations).filter(key => translations[key] !== key).length;
+    
+    logTranslation("TRANSLATION_COMPLETED", {
+      totalEntries: translationCount,
+      translatedEntries: translatedCount,
+      sample: Object.keys(translations).slice(0, 5).map(key => ({
+        original: key,
+        translated: translations[key],
+        isTranslated: translations[key] !== key
+      }))
+    });
+  } else {
+    logTranslation("NO_TRANSLATION", { reason: "No targetLang provided" });
   }
 
   const doc = new PDFDocument({
@@ -234,106 +1148,90 @@ async function generateStaticControlReport(dynamic = {}, outputStream) {
   // So we draw page1 on the initial page (no addPage() before page1).
 
   // PAGE 1 – Cover / Executing party, Static Control Report, Eurocodes
-  await page1(doc, dynamic); // will design this page in next steps
+  await page1(doc, dynamic, translations); // will design this page in next steps
 
   // PAGE 2 – STATIC INSPECTION REPORT + Construction case + Signing
   doc.addPage({ size: "A4", margin: 0 });
-  page2(doc, dynamic);
+  page2(doc, dynamic, translations);
 
   // PAGE 3 – Document completion status
   doc.addPage({ size: "A4", margin: 0 });
-  page3(doc, dynamic);
+  page3(doc, dynamic, translations);
 
   // PAGE 4 – Content table
   doc.addPage({ size: "A4", margin: 0 });
-  page4(doc, dynamic);
+  page4(doc, dynamic, translations);
 
   // PAGE 5 – 1. GENERALLY (with pagination support)
   doc.addPage({ size: "A4", margin: 0 });
-  page5(doc, dynamic);
+  page5(doc, dynamic, translations);
 
   // PAGE 6 – 2. DOCUMENTATION OF GENERAL CONTROLS
   doc.addPage({ size: "A4", margin: 0 });
-  page6(doc, dynamic);
+  page6(doc, dynamic, translations);
 
   // PAGE 7 – 3. LIST OF SELECTED CONSTRUCTION AND EXECUTION CLASSES, 4. DOCUMENTATION SPECIAL CONTROLS, 5. FOLLOW-UP
   doc.addPage({ size: "A4", margin: 0 });
-  await page7(doc, dynamic);
+  await page7(doc, dynamic, translations);
 
   // PAGE 8 – 6. CONTROL POINTS SELECTED IN THE CONTROL PLAN
   doc.addPage({ size: "A4", margin: 0 });
-  await page8(doc, dynamic);
+  await page8(doc, dynamic, translations);
 
   // PAGE 9 – 7. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHE (B1–B3 intro/tables)
-  doc.addPage({ size: "A4", margin: 0 });
-  await page9(doc, dynamic);
+  doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+  await page9(doc, dynamic, translations);
 
   // PAGE 10 – 7.4–7.6 tables (B4–B6)
-  doc.addPage({ size: "A4", margin: 0 });
-  page10(doc, dynamic);
+  doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+  await page10(doc, dynamic, translations);
 
-  // PAGE 11 – 8.A OWN CONTROL B4
+  // PAGE 11 – 8.1 OWN CONTROL B4 (Static Report Registration Entries) - 8.A page
   doc.addPage({ size: "A4", margin: 0 });
-  page11(doc, dynamic);
-
-  // PAGE 12 – 8.A OWN CONTROL B5
-  doc.addPage({ size: "A4", margin: 0 });
-  page12(doc, dynamic);
-
-  // PAGE 13 – 8.A OWN CONTROL B6
-  doc.addPage({ size: "A4", margin: 0 });
-  page13(doc, dynamic);
-
-  // PAGE 14 – 8.B EXTERNAL CONTROL B4
-  doc.addPage({ size: "A4", margin: 0 });
-  page14(doc, dynamic);
-
-  // PAGE 15 – 8.B EXTERNAL CONTROL B5
-  doc.addPage({ size: "A4", margin: 0 });
-  page15(doc, dynamic);
-
-  // PAGE 16 – 8.B EXTERNAL CONTROL B6
-  doc.addPage({ size: "A4", margin: 0 });
-  page16(doc, dynamic);
+  await page11(doc, dynamic, translations);
 
   // PAGE 17 – 8.4 DEVIATIONS B7
   doc.addPage({ size: "A4", margin: 0 });
-  page17(doc, dynamic);
+  await page17(doc, dynamic, translations);
 
   // PAGE 18 – 8.5 STATEMENT ANNEXES
   doc.addPage({ size: "A4", margin: 0 });
-  page18(doc, dynamic);
+  await page18(doc, dynamic, translations);
 
   // PAGE 19 – 9. KONTROLPUNKT OVERVIEW (drawing + explanation)
   doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
-  page19(doc, dynamic);
+  await page19(doc, dynamic, translations);
 
   // PAGE 20 – 7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1
   doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
-  page20(doc, dynamic);
+  page20(doc, dynamic, translations);
 
   // PAGE 21 – 7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK B2
   doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
-  page21(doc, dynamic);
+  page21(doc, dynamic, translations);
 
   // PAGE 22 – 7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS B3
-  doc.addPage({ size: "A4", margin: 0 });
-  page22(doc, dynamic);
+  doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+  page22(doc, dynamic, translations);
 
   // PAGE 23 – 7.4 RECEIPT CONTROL DELIVERIES B4
-  doc.addPage({ size: "A4", margin: 0 });
-  page23(doc, dynamic);
+  doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+  await page23_7_4(doc, dynamic, translations);
 
-  // PAGE 24 – 7.5 PERFORMANCE CONTROL; B5
-  doc.addPage({ size: "A4", margin: 0 });
-  page24(doc, dynamic);
+  // PAGE 24 – 7.5 EXECUTION CONTROL B5
+  doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+  await page24_7_5(doc, dynamic, translations);
 
   // PAGE 25 – 7.6 FINAL CHECK B6
-  doc.addPage({ size: "A4", margin: 0 });
-  page25(doc, dynamic);
+  doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+  await page25_7_6(doc, dynamic, translations);
 
   // Finish the PDF
   doc.end();
+  
+  // Clean up global variable
+  delete global.markPictureUrls;
+  
   return doc;
 }
 
@@ -345,7 +1243,7 @@ async function generateStaticControlReport(dynamic = {}, outputStream) {
 
 // PAGE 1 – Executing party, Static Control Report, Eurocodes (COVER)
 // PAGE 1 – Cover: Executing party, Static Control Report, EU standards
-async function page1(doc, dynamic) {
+async function page1(doc, dynamic, translations = {}) {
   // Get company data
   const company = dynamic.company || {};
   const companyName =
@@ -356,7 +1254,6 @@ async function page1(doc, dynamic) {
       : company.postalCode || company.city || "";
   const address = company.address || "";
   const cvr = company.cvr || "";
-  const telephone = company.contactPhone || "";
   const mail = company.email || "";
 
   // Get project data
@@ -366,105 +1263,134 @@ async function page1(doc, dynamic) {
   // Get gamma data for specialText and documentId
   const gamma = dynamic.gamma || {};
   const specialText = gamma.special ? String(gamma.special) : "Special text";
-  const xNumber = gamma.x ? String(gamma.x) : "X number";
+  const xNumber = gamma.x ? String(gamma.x) : "X";
   const documentId = `B3.${xNumber}`;
-  const documentIdExtra = specialText;
 
   let y = M.t + 10;
 
   // -------------------------------------------------------
-  // 0) Add mainlg.jpg image at the top left
+  // 0) HEADER: Large logo on left
   // -------------------------------------------------------
+  let logoX = M.l;
+  let logoY = y;
+  let logoWidth = 200; // Increased from 80 to 200
+  let logoHeight = 120; // Increased from 50 to 120
+
+  // Add mainlg.jpg image at the top left (large size)
   try {
     const mainlgPath = path.join(__dirname, "mainlg.jpg");
     if (fs.existsSync(mainlgPath)) {
-      // Image dimensions
-      const imageWidth = 150; // Fixed width for the logo
-      const imageHeight = 60; // Fixed height for the logo
-
-      // Position at top left
-      doc.image(mainlgPath, M.l, y, {
-        fit: [imageWidth, imageHeight],
+      doc.image(mainlgPath, logoX, logoY, {
+        fit: [logoWidth, logoHeight],
         align: "left",
       });
-    } else {
-      console.log("mainlg.jpg not found at:", mainlgPath);
     }
   } catch (error) {
-    console.error("Error loading mainlg.jpg:", error.message);
+    // Logo not found, continue
   }
 
-  y = y + 70; // Add spacing after main logo
+  y = logoY + logoHeight + 30;
 
   // -------------------------------------------------------
-  // 1) "Executing party" + plain company detail (NO BOX) + logo box
+  // 1) "Executing party" section with company details
   // -------------------------------------------------------
+  const executingPartyLabel = t("Executing party:", translations);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(11)
+    .fillColor(BORDER_COLOR)
+    .text(executingPartyLabel, M.l, y);
 
-  // Label
+  // Company details on the right side
+  const companyInfoX = M.l + 120;
+  const companyInfoY = y;
+  let companyInfoYCurrent = companyInfoY;
+
+  // Translate company name if it's not a number/date
+  const companyNameStr = String(companyName).trim();
+  const translatedCompanyName = companyNameStr && !isNumberOrDate(companyNameStr)
+    ? (translations[companyNameStr] || companyNameStr)
+    : companyNameStr;
   doc
     .font("Helvetica-Bold")
     .fontSize(10)
     .fillColor("black")
-    .text("Executing party:", M.l, y);
-
-  y += 14;
-
-  // Company detail – plain text, no border
-  const infoX = M.l;
-  const infoW = CONTENT_W * 0.6;
-
-  doc
-    .font("Helvetica")
-    .fontSize(9)
-    .fillColor("black")
-    .text(companyName, infoX, y, {
-      width: infoW,
+    .text(translatedCompanyName, companyInfoX, companyInfoYCurrent, {
+      width: CONTENT_W - (companyInfoX - M.l),
       align: "left",
     });
-
-  let lineY = doc.y + 2;
+  companyInfoYCurrent = doc.y + 4;
 
   if (postCity) {
-    doc.text(`Post no. / City: ${postCity}`, infoX, lineY, {
-      width: infoW,
-      align: "left",
-    });
-    lineY = doc.y + 2;
+    const postCityLabel = t("Post no. / City:", translations);
+    const postCityStr = String(postCity).trim();
+    const translatedPostCity = postCityStr && !isNumberOrDate(postCityStr)
+      ? (translations[postCityStr] || postCityStr)
+      : postCityStr;
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black");
+    doc.text(`${postCityLabel} `, companyInfoX, companyInfoYCurrent, { continued: true });
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#333");
+    doc.text(translatedPostCity, { continued: false });
+    companyInfoYCurrent = doc.y + 4;
   }
   if (address) {
-    doc.text(`Address: ${address}`, infoX, lineY, {
-      width: infoW,
-      align: "left",
-    });
-    lineY = doc.y + 2;
+    const addressLabel = t("Address:", translations);
+    const addressStr = String(address).trim();
+    const translatedAddress = addressStr && !isNumberOrDate(addressStr) 
+      ? (translations[addressStr] || addressStr)
+      : addressStr;
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black");
+    doc.text(`${addressLabel} `, companyInfoX, companyInfoYCurrent, { continued: true });
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#333");
+    doc.text(translatedAddress, { continued: false });
+    companyInfoYCurrent = doc.y + 4;
   }
   if (cvr) {
-    doc.text(`CVR: ${cvr}`, infoX, lineY, {
-      width: infoW,
-      align: "left",
-    });
-    lineY = doc.y + 2;
-  }
-  if (telephone) {
-    doc.text(`Telephone: ${telephone}`, infoX, lineY, {
-      width: infoW,
-      align: "left",
-    });
-    lineY = doc.y + 2;
+    const cvrLabel = t("CVR:", translations);
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black");
+    doc.text(`${cvrLabel} `, companyInfoX, companyInfoYCurrent, { continued: true });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor("#333");
+    doc.text(cvr, { continued: false });
+    companyInfoYCurrent = doc.y + 4;
   }
   if (mail) {
-    doc.text(`Mail: ${mail}`, infoX, lineY, {
-      width: infoW,
-      align: "left",
-    });
-    lineY = doc.y + 2;
+    const mailLabel = t("Mail:", translations);
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black");
+    doc.text(`${mailLabel} `, companyInfoX, companyInfoYCurrent, { continued: true });
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#0066cc");
+    doc.text(mail, { continued: false });
+    companyInfoYCurrent = doc.y + 4;
   }
 
-  // Logo box on the right
+  // Company logo box on the far right
   const logoBoxHeight = 60;
-  const logoBoxWidth = CONTENT_W * 0.3;
-  const logoBoxX = M.l + infoW + 10;
-  const logoBoxY = y;
+  const logoBoxWidth = 100;
+  const logoBoxX = PAGE.w - M.r - logoBoxWidth;
+  const logoBoxY = companyInfoY;
 
   // Try to load and display company image
   try {
@@ -476,19 +1402,11 @@ async function page1(doc, dynamic) {
       "";
 
     if (companyImageUrl) {
-      console.log("Page 1 - Fetching company image from:", companyImageUrl);
       const imgBuffer = await fetchImageBuffer(companyImageUrl);
-      console.log(
-        "Page 1 - Company image buffer fetched, size:",
-        imgBuffer.length
-      );
-
-      // Display company image
       doc.image(imgBuffer, logoBoxX, logoBoxY, {
         fit: [logoBoxWidth, logoBoxHeight],
         align: "left",
       });
-      console.log("Page 1 - Company image displayed successfully");
     } else {
       // Fallback: draw empty box with text
       doc
@@ -499,17 +1417,17 @@ async function page1(doc, dynamic) {
         .stroke()
         .restore();
 
+      const companyLogoText = t("Company logo", translations);
       doc
         .font("Helvetica")
         .fontSize(9)
-        .fillColor("black")
-        .text("Company logo", logoBoxX, logoBoxY + logoBoxHeight / 2 - 5, {
+        .fillColor("#666")
+        .text(companyLogoText, logoBoxX, logoBoxY + logoBoxHeight / 2 - 5, {
           width: logoBoxWidth,
           align: "center",
         });
     }
   } catch (error) {
-    console.error("Page 1 - Error loading company image:", error.message);
     // Fallback: draw empty box with text
     doc
       .save()
@@ -519,130 +1437,173 @@ async function page1(doc, dynamic) {
       .stroke()
       .restore();
 
+    const companyLogoText = t("Company logo", translations);
     doc
       .font("Helvetica")
-      .fontSize(9)
+      .fontSize(8)
       .fillColor("black")
-      .text("Company logo", logoBoxX, logoBoxY + logoBoxHeight / 2 - 5, {
+      .text(companyLogoText, logoBoxX, logoBoxY + logoBoxHeight / 2 - 5, {
         width: logoBoxWidth,
         align: "center",
       });
   }
 
-  const headerBottom = Math.max(lineY, logoBoxY + logoBoxHeight);
-  y = headerBottom + 40;
+  const headerBottom = Math.max(companyInfoYCurrent, logoBoxY + logoBoxHeight);
+  y = headerBottom + 25;
 
   // -------------------------------------------------------
-  // 2) TITLE: "Static Control Report: Project name..." LEFT ALIGNED
+  // 2) HORIZONTAL LINE SEPARATOR
   // -------------------------------------------------------
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor("#000")
+    .moveTo(M.l, y)
+    .lineTo(M.l + CONTENT_W, y)
+    .stroke()
+    .restore();
 
+  y += 20;
+
+  // -------------------------------------------------------
+  // 3) TITLE: "Static Control Report: Project name..."
+  // -------------------------------------------------------
+  const staticControlReportLabel = t("Static Control Report:", translations);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(22)
+    .fillColor(BORDER_COLOR)
+    .text(staticControlReportLabel, M.l, y, {
+      width: CONTENT_W,
+      align: "left",
+    });
+
+  y = doc.y + 10;
+
+  const translatedProjectName = t(projectName, translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(16)
-    .fillColor(BORDER_COLOR)
-    .text("Static Control Report:", M.l, y, {
+    .fillColor("#1a1a1a")
+    .text(translatedProjectName, M.l, y, {
       width: CONTENT_W,
+      align: "left",
+    });
+
+  y = doc.y + 16;
+
+  // -------------------------------------------------------
+  // 4) "For those executed within the Special text :"
+  // -------------------------------------------------------
+  const forThoseExecutedText = t("For those executed within the", translations);
+  const specialTextStr = String(specialText).trim();
+  const translatedSpecialText = specialTextStr && !isNumberOrDate(specialTextStr)
+    ? (translations[specialTextStr] || specialTextStr)
+    : specialTextStr;
+  doc
+    .font("Helvetica")
+    .fontSize(10)
+    .fillColor("#333");
+  doc.text(`${forThoseExecutedText} `, M.l, y, { continued: true, width: CONTENT_W });
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(10)
+    .fillColor(BORDER_COLOR);
+  doc.text(`${translatedSpecialText} :`, { continued: false });
+
+  y = doc.y + 14;
+
+  // -------------------------------------------------------
+  // 5) DOCUMENT ID TABLE (1 row, 2 columns side by side)
+  // -------------------------------------------------------
+  const tableX = M.l;
+  const tableY = y;
+  const tableWidth = 300;
+  const tableHeight = 20;
+  const cellWidth = tableWidth / 2;
+  const padding = 5;
+
+  // Draw table borders with dark blue color
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor(BORDER_COLOR)
+    // Outer border
+    .rect(tableX, tableY, tableWidth, tableHeight)
+    // Vertical line (middle)
+    .moveTo(tableX + cellWidth, tableY)
+    .lineTo(tableX + cellWidth, tableY + tableHeight)
+    .stroke()
+    .restore();
+
+  // Left cell: "Document ID: B3.X - number"
+  const documentIdLabel = t("Document ID:", translations);
+  const documentIdFullText = `${documentIdLabel} ${documentId}`;
+  
+  // Draw "Document ID:" in bold black
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(10)
+    .fillColor("black")
+    .text(documentIdLabel, tableX + padding, tableY + padding, {
+      width: cellWidth - padding * 2,
       align: "left",
       continued: true,
     });
-
+  
+  // Draw "B3.X - number" in bold red
   doc
-    .font("Helvetica")
-    .fontSize(16)
-    .fillColor("black")
-    .text(" " + projectName, {
-      align: "left",
+    .font("Helvetica-Bold")
+    .fontSize(10)
+    .fillColor("red")
+    .text(` ${documentId}`, {
       continued: false,
     });
 
-  y = doc.y + 18;
-
-  // -------------------------------------------------------
-  // 3) SPECIAL TEXT + DOCUMENT ID – TEXT LINE + 2 SIDE-BY-SIDE BOXES
-  // -------------------------------------------------------
-
-  // Text line
+  // Right cell: "Special text" in bold red
+  const documentIdExtraStr = String(specialText).trim();
+  const translatedDocumentIdExtra = documentIdExtraStr && !isNumberOrDate(documentIdExtraStr)
+    ? (translations[documentIdExtraStr] || documentIdExtraStr)
+    : documentIdExtraStr;
   doc
-    .font("Helvetica")
-    .fontSize(9)
-    .fillColor("black")
-    .text(`For those executed within the ${specialText} :`, M.l, y, {
-      width: CONTENT_W,
-      align: "left",
-    });
-
-  y = doc.y + 8;
-
-  // Two boxes next to each other:
-  // [ Document ID: B3.X - number ]  [ Special text ]
-  const boxHeight = 18;
-  const boxGap = 10;
-  const boxWidth = 150; // each box width
-  const firstBoxX = M.l;
-  const secondBoxX = firstBoxX + boxWidth + boxGap;
-
-  // Left box: Document ID
-  doc
-    .save()
-    .lineWidth(0.8)
-    .strokeColor(BORDER_COLOR)
-    .rect(firstBoxX, y, boxWidth, boxHeight)
-    .stroke()
-    .restore();
-
-  doc
-    .font("Helvetica")
-    .fontSize(9)
-    .fillColor("black")
-    .text(`Document ID: ${documentId}`, firstBoxX + 4, y + 4, {
-      width: boxWidth - 8,
-      align: "left",
-    });
-
-  // Right box: Special text
-  doc
-    .save()
-    .lineWidth(0.8)
-    .strokeColor(BORDER_COLOR)
-    .rect(secondBoxX, y, boxWidth, boxHeight)
-    .stroke()
-    .restore();
-
-  doc.text(documentIdExtra, secondBoxX + 4, y + 4, {
-    width: boxWidth - 8,
+    .font("Helvetica-Bold")
+    .fontSize(10)
+    .fillColor("red")
+    .text(translatedDocumentIdExtra, tableX + cellWidth + padding, tableY + padding, {
+      width: cellWidth - padding * 2,
     align: "left",
   });
 
-  y = y + boxHeight + 30;
+  y = tableY + tableHeight + 30;
 
   // -------------------------------------------------------
-  // 4) APPLICABLE EU STANDARDS – BULLET BLOCK CENTER OF PAGE
+  // 6) APPLICABLE EU STANDARDS – BULLET LIST (CENTERED)
   // -------------------------------------------------------
-  // We'll center the WHOLE block vertically/horizontally roughly on the page,
-  // but also make sure it doesn't overlap the content above.
-
-  const blockWidth = CONTENT_W * 0.5;
-  const blockX = (PAGE.w - blockWidth) / 2; // center on page X-axis
+  // Calculate block dimensions for centering
+  const blockWidth = CONTENT_W * 0.6;
+  const blockX = M.l + (CONTENT_W - blockWidth) / 2; // Center horizontally
 
   // Estimate block height: heading + 12 bullets
-  const estimatedBlockHeight = 20 + 12 * 12; // ≈ 164
+  const headingHeight = 15;
+  const lineHeight = 11;
+  const estimatedBlockHeight = headingHeight + 8 + (12 * lineHeight); // ≈ 155
 
-  const desiredTop = PAGE.h / 2 - estimatedBlockHeight / 2;
+  // Center vertically on page (but ensure it doesn't overlap content above)
+  const desiredTop = (PAGE.h / 2) - (estimatedBlockHeight / 2);
+  const minY = y; // Don't go above the table
+  y = Math.max(minY, desiredTop);
 
-  // Ensure we don't overlap previous content
-  y = Math.max(y, desiredTop);
-
-  // Heading centered inside the block
+  const euStandardsLabel = t("Applicable EU standards 2024", translations);
   doc
     .font("Helvetica-Bold")
-    .fontSize(11)
-    .fillColor("black")
-    .text("Applicable EU standards 2024", blockX, y, {
+    .fontSize(13)
+    .fillColor(BORDER_COLOR)
+    .text(euStandardsLabel, blockX, y, {
       width: blockWidth,
       align: "center",
     });
 
-  y = doc.y + 8;
+  y = doc.y + 10;
 
   const bulletItems = [
     "Eurocode 0: Design basis for structures",
@@ -659,42 +1620,64 @@ async function page1(doc, dynamic) {
     "EN 12602: Aerated concrete",
   ];
 
-  doc.font("Helvetica").fontSize(9).fillColor("black");
-
   bulletItems.forEach((item) => {
-    doc.text(`• ${item}`, blockX, y, {
+    const translatedItem = t(item, translations);
+    // Use better bullet styling
+    doc
+      .font("Helvetica")
+      .fontSize(9.5)
+      .fillColor("#2a2a2a");
+    doc.text(`• `, blockX, y, { continued: true });
+    // Make the code part bold
+    const parts = translatedItem.split(':');
+    if (parts.length > 1) {
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9.5)
+        .fillColor("#1a1a1a");
+      doc.text(parts[0] + ':', { continued: true });
+      doc
+        .font("Helvetica")
+        .fontSize(9.5)
+        .fillColor("#333");
+      doc.text(parts.slice(1).join(':'), {
       width: blockWidth,
       align: "left",
-    });
-    y = doc.y + 2;
+        continued: false,
+      });
+    } else {
+      doc.text(translatedItem, {
+        width: blockWidth,
+        align: "left",
+        continued: false,
+      });
+    }
+    y = doc.y + 4;
   });
 
   // -------------------------------------------------------
-  // 5) BOTTOM CENTER TEXT
+  // 7) BOTTOM CENTER TEXT
   // -------------------------------------------------------
-
   const bottomY = PAGE.h - 80;
 
+  const reportSystemText = t("Report - system", translations);
   doc
     .font("Helvetica")
-    .fontSize(9)
-    .fillColor("black")
-    .text("Report - system", M.l, bottomY, {
+    .fontSize(10)
+    .fillColor("#666")
+    .text(reportSystemText, M.l, bottomY, {
       width: CONTENT_W,
       align: "center",
     });
 
-  doc.text("Part of Quality Assurance Denmark", M.l, doc.y + 4, {
-    width: CONTENT_W,
-    align: "center",
-  });
+  // Part of text removed as requested
 
   // No footer (page number) on cover
 }
 
 // PAGE 2 – STATIC INSPECTION REPORT + construction case, signing
 // PAGE 2 – STATIC INSPECTION REPORT + CONSTRUCTION CASE + SIGNING
-function page2(doc, dynamic) {
+function page2(doc, dynamic, translations = {}) {
   // Get gamma data
   const gamma = dynamic.gamma || {};
   const constructionPart = gamma.special
@@ -759,25 +1742,30 @@ function page2(doc, dynamic) {
   const sig2 = signatures[2] || signatures["2"];
   const sig3 = signatures[3] || signatures["3"];
 
-  const preparedRole = "Prepared/approved by:";
-  const preparedEnterprise = "Enterprise";
-  const preparedAdminOrg = sig1?.name || "Admin – company organization";
-  const preparedOwnCompanyOrg = companyName;
+  const preparedRole = t("Prepared/approved by:", translations);
+  const preparedEnterprise = t("Enterprise", translations);
+  const preparedAdminOrgRaw = sig1?.name || "Admin – company organization";
+  const preparedAdminOrg = t(preparedAdminOrgRaw, translations);
+  const preparedOwnCompanyOrgRaw = companyName || "company organization";
+  const preparedOwnCompanyOrg = t(preparedOwnCompanyOrgRaw, translations);
 
-  const ocEnterprise = "Enterprise";
-  const ocProjectManagerOrg =
+  const ocEnterprise = t("Enterprise", translations);
+  const ocProjectManagerOrgRaw =
     sig2?.name || "Project manager – company organization";
-  const ocOwnCompanyOrg = companyName;
+  const ocProjectManagerOrg = t(ocProjectManagerOrgRaw, translations);
+  const ocOwnCompanyOrgRaw = companyName || "company organization";
+  const ocOwnCompanyOrg = t(ocOwnCompanyOrgRaw, translations);
 
-  const icEnterprise = "Enterprise";
-  const icOrg = sig3?.name || "company organization";
+  const icEnterprise = t("Enterprise", translations);
+  const icOrgRaw = sig3?.name || "company organization";
+  const icOrg = t(icOrgRaw, translations);
 
   let y = M.t;
 
   // -------------------------------------------------------
   // 1) TOP HEADING BAR: STATIC INSPECTION REPORT
   // -------------------------------------------------------
-  y = drawSectionBar(doc, y, "STATIC INSPECTION REPORT");
+  y = drawSectionBar(doc, y, "STATIC INSPECTION REPORT", undefined, translations);
   y += 4;
 
   // -------------------------------------------------------
@@ -785,30 +1773,31 @@ function page2(doc, dynamic) {
   // -------------------------------------------------------
   doc.font("Helvetica").fontSize(9).fillColor("black");
 
-  doc.text("For load-bearing structures, cf. DS1140 applies to:", M.l, y, {
+  const forLoadBearingText = t("For load-bearing structures, cf. DS1140 applies to:", translations);
+  doc.text(forLoadBearingText, M.l, y, {
     width: CONTENT_W,
     align: "left",
   });
   y = doc.y + 4;
 
-  doc.text(`Construction part  ${constructionPart}`, M.l, y, {
+  const constructionPartLabel = t("Construction part", translations);
+  const translatedConstructionPart = t(constructionPart, translations);
+  doc.text(`${constructionPartLabel}  ${translatedConstructionPart}`, M.l, y, {
     width: CONTENT_W,
     align: "left",
   });
   y = doc.y + 8;
 
-  doc.text(
-    "The control plan is built according to the current EU standard:",
-    M.l,
-    y,
-    {
-      width: CONTENT_W,
-      align: "left",
-    }
-  );
+  const controlPlanText = t("The control plan is built according to the current EU standard:", translations);
+  doc.text(controlPlanText, M.l, y, {
+    width: CONTENT_W,
+    align: "left",
+  });
   y = doc.y + 4;
 
-  doc.text(`Eurocode  ${eurocode}`, M.l, y, {
+  const eurocodeLabel = t("Eurocode", translations);
+  const translatedEurocode = t(eurocode, translations);
+  doc.text(`${eurocodeLabel}  ${translatedEurocode}`, M.l, y, {
     width: CONTENT_W,
     align: "left",
   });
@@ -818,7 +1807,7 @@ function page2(doc, dynamic) {
   // -------------------------------------------------------
   // 3) CONSTRUCTION CASE – BLUE BAR HEADING
   // -------------------------------------------------------
-  y = drawSectionBar(doc, y, "CONSTRUCTION CASE:");
+  y = drawSectionBar(doc, y, "CONSTRUCTION CASE:", undefined, translations);
   y += 6;
 
   // 2-column “info” table with ONLY bottom lines
@@ -830,14 +1819,16 @@ function page2(doc, dynamic) {
   function drawCaseRow(label, value) {
     doc.font("Helvetica").fontSize(9).fillColor("black");
 
-    // Label
-    doc.text(label, labelX, y, {
+    // Label (with translation)
+    const translatedLabel = t(label, translations);
+    doc.text(translatedLabel, labelX, y, {
       width: valueX - labelX - 8,
       align: "left",
     });
 
-    // Value
-    doc.text(value, valueX, y, {
+    // Value (with translation, but check if it's a number/date first)
+    const translatedValue = t(value, translations);
+    doc.text(translatedValue, valueX, y, {
       width: M.l + lineWidth - valueX,
       align: "left",
     });
@@ -881,21 +1872,24 @@ function page2(doc, dynamic) {
   const tableRowH = 16;
 
   // Header row (no blue bar, just text + bottom line)
+  const docTypeLabel = t("DOCUMENT TYPE:", translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(9)
     .fillColor("black")
-    .text("DOCUMENT TYPE:", docTableX, y, {
+    .text(docTypeLabel, docTableX, y, {
       width: col1W,
       align: "left",
     });
 
-  doc.text("VERSION", docTableX + col1W, y, {
+  const versionLabel = t("VERSION", translations);
+  doc.text(versionLabel, docTableX + col1W, y, {
     width: col2W,
     align: "left",
   });
 
-  doc.text("CONSTRUCTION CLASS", docTableX + col1W + col2W, y, {
+  const constructionClassLabel = t("CONSTRUCTION CLASS", translations);
+  doc.text(constructionClassLabel, docTableX + col1W + col2W, y, {
     width: col3W,
     align: "left",
   });
@@ -913,11 +1907,12 @@ function page2(doc, dynamic) {
   y += tableRowH;
 
   // Value row
+  const translatedDocumentType = t(documentType, translations);
   doc
     .font("Helvetica")
     .fontSize(9)
     .fillColor("black")
-    .text(documentType, docTableX, y, {
+    .text(translatedDocumentType, docTableX, y, {
       width: col1W,
       align: "left",
     });
@@ -947,7 +1942,7 @@ function page2(doc, dynamic) {
   // -------------------------------------------------------
   // 5) SIGNING – BLUE BAR HEADING
   // -------------------------------------------------------
-  y = drawSectionBar(doc, y, "SIGNING");
+  y = drawSectionBar(doc, y, "SIGNING", undefined, translations);
   y += 6;
 
   // Three simple 3-column tables stacked vertically
@@ -967,17 +1962,20 @@ function page2(doc, dynamic) {
     // Row 1: Signed | Role | Enterprise
     let rowY = y;
 
-    doc.text("Signed", sigTableX, rowY, {
+    const signedText = t("Signed", translations);
+    doc.text(signedText, sigTableX, rowY, {
       width: sigColW,
       align: "left",
     });
 
-    doc.text(roleText, sigTableX + sigColW, rowY, {
+    const translatedRoleText = t(roleText, translations);
+    doc.text(translatedRoleText, sigTableX + sigColW, rowY, {
       width: sigColW,
       align: "left",
     });
 
-    doc.text(enterpriseText, sigTableX + sigColW * 2, rowY, {
+    const translatedEnterpriseText = t(enterpriseText, translations);
+    doc.text(translatedEnterpriseText, sigTableX + sigColW * 2, rowY, {
       width: sigColW,
       align: "left",
     });
@@ -995,17 +1993,19 @@ function page2(doc, dynamic) {
     // Row 2: Date | OrgLeft | OrgRight
     rowY += sigRowH;
 
-    doc.text(signatureDate || "[Select Date]", sigTableX, rowY, {
+    doc.text(signatureDate || t("[Select Date]", translations), sigTableX, rowY, {
       width: sigColW,
       align: "left",
     });
 
-    doc.text(orgLeft, sigTableX + sigColW, rowY, {
+    const translatedOrgLeft = t(orgLeft, translations);
+    doc.text(translatedOrgLeft, sigTableX + sigColW, rowY, {
       width: sigColW,
       align: "left",
     });
 
-    doc.text(orgRight || "", sigTableX + sigColW * 2, rowY, {
+    const translatedOrgRight = t(orgRight, translations);
+    doc.text(translatedOrgRight || "", sigTableX + sigColW * 2, rowY, {
       width: sigColW,
       align: "left",
     });
@@ -1035,8 +2035,9 @@ function page2(doc, dynamic) {
 
   // 2) Own control (OC)
   const sig2Date = formatDate(sig2?.createdAt || sig2?.signatureDate);
+  const ownControlText = t("Own control (OC)", translations);
   drawSignatureTable(
-    "Own control (OC)",
+    ownControlText,
     ocEnterprise,
     ocProjectManagerOrg,
     ocOwnCompanyOrg,
@@ -1045,8 +2046,9 @@ function page2(doc, dynamic) {
 
   // 3) Independent Controller (IC)
   const sig3Date = formatDate(sig3?.createdAt || sig3?.signatureDate);
+  const independentControllerText = t("Independent Controller (IC)", translations);
   drawSignatureTable(
-    "Independent Controller (IC)",
+    independentControllerText,
     icEnterprise,
     icOrg,
     "",
@@ -1054,18 +2056,18 @@ function page2(doc, dynamic) {
   );
 
   // FOOTER: logical page 1 of 24 (this is Side 1 af 24 in your Danish footer)
-  footer(doc, 1);
+  footer(doc, 1, "", translations);
 }
 
 // PAGE 3 – Document completion status
 // PAGE 3 – Document completion status (Side 2 af 24)
-function page3(doc, dynamic) {
+function page3(doc, dynamic, translations = {}) {
   let y = M.t;
 
   // -------------------------------------------------------
   // 1) HEADING BAR: Document completion status
   // -------------------------------------------------------
-  y = drawSectionBar(doc, y, "Document completion status");
+  y = drawSectionBar(doc, y, "Document completion status", undefined, translations);
   y += 8;
 
   // -------------------------------------------------------
@@ -1076,11 +2078,8 @@ function page3(doc, dynamic) {
 
   doc.font("Helvetica").fontSize(9).fillColor("black");
 
-  doc.text(
-    "The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections.",
-    leftColX,
-    y,
-    {
+  const text1 = t("The figure to the right from SBI 271 Item 4.3 indicates which phase you are in in your document submissions, and must also help to ensure that both the contractor and the consultant work proactively to communicate back and forth in connection with any corrections.", translations);
+  doc.text(text1, leftColX, y, {
       width: leftColW,
       align: "left",
       lineGap: 2,
@@ -1089,11 +2088,8 @@ function page3(doc, dynamic) {
 
   y = doc.y + 8;
 
-  doc.text(
-    "The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document.",
-    leftColX,
-    y,
-    {
+  const text2 = t("The document is signed when this has been approved by the structural engineer, until then the document is a dynamic document.", translations);
+  doc.text(text2, leftColX, y, {
       width: leftColW,
       align: "left",
       lineGap: 2,
@@ -1103,11 +2099,8 @@ function page3(doc, dynamic) {
   y = doc.y + 14;
 
   // Expected approval time line
-  doc.text(
-    "Expected approval time 14 days, after which the content of the document is considered approved.",
-    leftColX,
-    y,
-    {
+  const text3 = t("Expected approval time 14 days, after which the content of the document is considered approved.", translations);
+  doc.text(text3, leftColX, y, {
       width: leftColW,
       align: "left",
       lineGap: 2,
@@ -1148,9 +2141,11 @@ function page3(doc, dynamic) {
   // -------------------------------------------------------
   // 4) STATUS BLOCK NEAR BOTTOM RIGHT
   // -------------------------------------------------------
-  const statusLabel = dynamic.statusLabel || "Status: Approval PFASE";
-  const statusDate = dynamic.statusDate || "18-11-2025";
-  const statusText = dynamic.statusText || "APPROVED";
+  const statusLabelRaw = dynamic.statusLabel || "Status: Approval PFASE";
+  const statusLabel = t(statusLabelRaw, translations);
+  const statusDate = dynamic.statusDate || "18-11-2025"; // Date format, don't translate
+  const statusTextRaw = dynamic.statusText || "APPROVED";
+  const statusText = t(statusTextRaw, translations);
 
   const statusBlockWidth = CONTENT_W * 0.5;
   const statusX = M.l + CONTENT_W - statusBlockWidth;
@@ -1178,20 +2173,21 @@ function page3(doc, dynamic) {
   // -------------------------------------------------------
   // 5) FOOTER – Side 2 af 24
   // -------------------------------------------------------
-  footer(doc, 2);
+  footer(doc, 2, "", translations);
 }
 
 // PAGE 4 – Content table
 // PAGE 4 – Content (Side 3 af 24)
-function page4(doc, dynamic) {
+function page4(doc, dynamic, translations = {}) {
   let y = M.t;
 
   // ---- Heading: Content ----
+  const contentLabel = t("Content", translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(BORDER_COLOR)
-    .text("Content", M.l, y, {
+    .text(contentLabel, M.l, y, {
       width: CONTENT_W,
       align: "left",
     });
@@ -1205,7 +2201,8 @@ function page4(doc, dynamic) {
    * level  = indent level (0,1,...)
    */
   function drawTocLineSafe(doc, y, label, pageNo, level) {
-    const txt = label || "";
+    // Translate the label if translation is available
+    const txt = translations[label] || label || "";
     const pageTxt = pageNo != null ? String(pageNo) : "";
     const fontSize = 9;
     const lineGap = 2;
@@ -1215,7 +2212,7 @@ function page4(doc, dynamic) {
 
     doc.font("Helvetica").fontSize(fontSize).fillColor("black");
 
-    // draw label
+    // draw label (translated)
     doc.text(txt, indentX, y, {
       width: pageColX - indentX - 24,
       align: "left",
@@ -1389,12 +2386,12 @@ function page4(doc, dynamic) {
   });
 
   // Footer – this is Side 3 af 24
-  footer(doc, 3);
+  footer(doc, 3, "", translations);
 }
 
 // PAGE 5 – 1. GENERALLY
 // PAGE 5 – 1. GENERALLY (Side 4 af 24)
-function page5(doc, dynamic) {
+function page5(doc, dynamic, translations = {}) {
   // Get gamma data for specialText
   const gamma = dynamic.gamma || {};
   const specialText = gamma.special ? String(gamma.special) : "Special text";
@@ -1409,7 +2406,7 @@ function page5(doc, dynamic) {
   const BLUE = HEADING_COLOR; // #003b71
   const PARA = "#3a3a3a";
   const GRID = "#6f6f6f";
-  const RED = "#cc0000";
+  const RED = "black";
   const YELLOW = "#fff176";
 
   let y = M.t;
@@ -1424,13 +2421,15 @@ function page5(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(11)
     .fillColor("white")
-    .text("1.", M.l + 10, y + 4, { width: 30, align: "left" });
+    const oneText = t("1.", translations);
+    doc.text(oneText, M.l + 10, y + 4, { width: 30, align: "left" });
 
   doc
     .font("Helvetica-Bold")
     .fontSize(11)
     .fillColor("white")
-    .text("GENERALLY", M.l + 55, y + 4, {
+    const generallyText = t("GENERALLY", translations);
+    doc.text(generallyText, M.l + 55, y + 4, {
       width: CONTENT_W - 65,
       align: "left",
     });
@@ -1441,20 +2440,24 @@ function page5(doc, dynamic) {
   // Helpers
   // -------------------------------
   const h = (title) => {
+    // Translate the title
+    const translatedTitle = translations[title] || title;
     doc
       .font("Helvetica-Bold")
       .fontSize(12)
       .fillColor(BLUE)
-      .text(title, M.l, y, { width: CONTENT_W, align: "left" });
+      .text(translatedTitle, M.l, y, { width: CONTENT_W, align: "left" });
     y = doc.y + 6;
   };
 
   const p = (text, gap = 10) => {
+    // Translate the text
+    const translatedText = translations[text] || text;
     doc
       .font("Helvetica")
       .fontSize(9.5)
       .fillColor(PARA)
-      .text(text, M.l, y, { width: CONTENT_W, align: "left", lineGap: 2 });
+      .text(translatedText, M.l, y, { width: CONTENT_W, align: "left", lineGap: 2 });
     y = doc.y + gap;
   };
 
@@ -1465,6 +2468,7 @@ function page5(doc, dynamic) {
     const color = opts.color || "black";
     const fs = opts.fs || 9;
     const pad = opts.pad == null ? 6 : opts.pad;
+    const skipTranslation = opts.skipTranslation || false; // Allow skipping translation for numbers/dates
 
     if (fill) {
       doc.save().fillColor(fill).rect(x, yy, w, hgt).fill().restore();
@@ -1479,11 +2483,21 @@ function page5(doc, dynamic) {
       .restore();
 
     if (text != null && String(text).length) {
+      // Translate text unless it's a number/date or skipTranslation is true
+      let displayText = String(text);
+      if (!skipTranslation && text) {
+        const strValue = String(text).trim();
+        // Only translate if it's not empty and not a number/date
+        if (strValue && !isNumberOrDate(strValue)) {
+          displayText = translations[strValue] || strValue;
+        }
+      }
+      
       doc
         .font(bold ? "Helvetica-Bold" : "Helvetica")
         .fontSize(fs)
         .fillColor(color)
-        .text(String(text), x + pad, yy + 4, {
+        .text(displayText, x + pad, yy + 4, {
           width: w - pad * 2,
           align,
         });
@@ -1512,8 +2526,12 @@ function page5(doc, dynamic) {
   // 1.3
   // -------------------------------
   h("1.3  Organisation of the control work");
+  // Translate the paragraph with specialText inserted
+  const paragraph1_3_1 = translations["The executing contractor carries out his contract for a Main or Turnkey Contractor and only submits the report for his"] || "The executing contractor carries out his contract for a Main or Turnkey Contractor and only submits the report for his";
+  const paragraph1_3_2 = translations["on this case."] || "on this case.";
+  const translatedSpecialText = translations[specialText] || specialText;
   p(
-    `The executing contractor carries out his contract for a Main or Turnkey Contractor and only submits the report for his ${specialText} on this case.`,
+    `${paragraph1_3_1} ${translatedSpecialText} ${paragraph1_3_2}`,
     10
   );
   p(
@@ -1537,48 +2555,53 @@ function page5(doc, dynamic) {
   const headH = 16;
   const rowH = 18;
 
-  // header row (Education + Experience highlighted yellow)
-  cell(tX + 0, y, c1, headH, "Applier", { fill: LIGHT_GREY, fs: 9 });
-  cell(tX + c1, y, c2, headH, "Name", { fill: LIGHT_GREY, fs: 9 });
-  cell(tX + c1 + c2, y, c3, headH, "Education", { fill: LIGHT_GREY, fs: 9 });
-  cell(tX + c1 + c2 + c3, y, c4, headH, "Experience", {
+  // header row (Education + Experience highlighted yellow) - translate headers
+  cell(tX + 0, y, c1, headH, translations["Applier"] || "Applier", { fill: LIGHT_GREY, fs: 9 });
+  cell(tX + c1, y, c2, headH, translations["Name"] || "Name", { fill: LIGHT_GREY, fs: 9 });
+  cell(tX + c1 + c2, y, c3, headH, translations["Education"] || "Education", { fill: LIGHT_GREY, fs: 9 });
+  cell(tX + c1 + c2 + c3, y, c4, headH, translations["Experience"] || "Experience", {
     fill: LIGHT_GREY,
     fs: 9,
   });
-  cell(tX + c1 + c2 + c3 + c4, y, c5, headH, "Initials", {
+  cell(tX + c1 + c2 + c3 + c4, y, c5, headH, translations["Initials"] || "Initials", {
     fill: LIGHT_GREY,
     fs: 9,
   });
 
   y += headH;
 
-  // row 1: Own Controller - show company name
-  cell(tX + 0, y, c1, rowH, "Own Controller", { fs: 9.2, color: PARA });
-  cell(tX + c1, y, c2, rowH, companyName, {
+  // row 1: Own Controller - show company name (translate labels and company name)
+  const translatedOwnController = translations["Own Controller"] || "Own Controller";
+  const translatedCompanyName = translations[companyName] || companyName;
+  cell(tX + 0, y, c1, rowH, translatedOwnController, { fs: 9.2, color: PARA });
+  cell(tX + c1, y, c2, rowH, translatedCompanyName, {
     fs: 9.2,
     color: RED,
   });
   cell(tX + c1 + c2, y, c3, rowH, "", {});
   cell(tX + c1 + c2 + c3, y, c4, rowH, "", {});
-  cell(tX + c1 + c2 + c3 + c4, y, c5, rowH, "OC", {
+  const translatedOC = translations["OC"] || "OC";
+  cell(tX + c1 + c2 + c3 + c4, y, c5, rowH, translatedOC, {
     fs: 9.2,
     color: RED,
   });
 
   y += rowH;
 
-  // row 2: Independent Controller - show company name (only one row)
-  cell(tX + 0, y, c1, rowH, "Independent controller", {
+  // row 2: Independent Controller - show company name (only one row) - translate labels
+  const translatedIndependentController = translations["Independent controller"] || "Independent controller";
+  cell(tX + 0, y, c1, rowH, translatedIndependentController, {
     fs: 9.2,
     color: PARA,
   });
-  cell(tX + c1, y, c2, rowH, companyName, {
+  cell(tX + c1, y, c2, rowH, translatedCompanyName, {
     fs: 9.2,
     color: RED,
   });
   cell(tX + c1 + c2, y, c3, rowH, "", {});
   cell(tX + c1 + c2 + c3, y, c4, rowH, "", {});
-  cell(tX + c1 + c2 + c3 + c4, y, c5, rowH, "IC Fixed", {
+  const translatedICFixed = translations["IC Fixed"] || "IC Fixed";
+  cell(tX + c1 + c2 + c3 + c4, y, c5, rowH, translatedICFixed, {
     fs: 9.2,
     color: RED,
   });
@@ -1592,12 +2615,13 @@ function page5(doc, dynamic) {
   const h14Y = y;
   h("1.4  Inspectors associated with");
 
+  const inspectorsIntroText = translations["There are the following inspectors on the specific project:"] || "There are the following inspectors on the specific project:";
   doc
     .font("Helvetica-Bold")
     .fontSize(9.5)
     .fillColor(PARA)
     .text(
-      "There are the following inspectors on the specific project:",
+      inspectorsIntroText,
       M.l,
       y,
       {
@@ -1618,10 +2642,14 @@ function page5(doc, dynamic) {
   const tc1 = CONTENT_W * 0.38;
   const tc2 = CONTENT_W * 0.34;
   const tc3 = CONTENT_W - tc1 - tc2;
+  
+  // Pre-translate inspector type text (used in multiple places)
+  const translatedInspectorType = translations["Independet control."] || "Independet control.";
 
-  cell(t2X + 0, y, tc1, t2HeadH, "NAME", { fill: LIGHT_GREY, fs: 9 });
-  cell(t2X + tc1, y, tc2, t2HeadH, "COMPANY", { fill: LIGHT_GREY, fs: 9 });
-  cell(t2X + tc1 + tc2, y, tc3, t2HeadH, "INSPECTOR TYPE", {
+  // Translate table headers
+  cell(t2X + 0, y, tc1, t2HeadH, translations["NAME"] || "NAME", { fill: LIGHT_GREY, fs: 9 });
+  cell(t2X + tc1, y, tc2, t2HeadH, translations["COMPANY"] || "COMPANY", { fill: LIGHT_GREY, fs: 9 });
+  cell(t2X + tc1 + tc2, y, tc3, t2HeadH, translations["INSPECTOR TYPE"] || "INSPECTOR TYPE", {
     fill: LIGHT_GREY,
     fs: 9,
   });
@@ -1650,7 +2678,7 @@ function page5(doc, dynamic) {
       const currentPageNumber = parseFloat(
         (basePageNumber + (pagesCreated - 1) * 0.1).toFixed(1)
       );
-      footer(doc, currentPageNumber);
+      footer(doc, currentPageNumber, "", translations);
 
       // Add new page
       doc.addPage({ size: "A4", margin: 0 });
@@ -1663,7 +2691,7 @@ function page5(doc, dynamic) {
         .fontSize(9.5)
         .fillColor(PARA)
         .text(
-          "There are the following inspectors on the specific project:",
+          inspectorsIntroText,
           M.l,
           y,
           {
@@ -1673,10 +2701,10 @@ function page5(doc, dynamic) {
         );
       y = doc.y + 8;
 
-      // Re-add table header
-      cell(t2X + 0, y, tc1, t2HeadH, "NAME", { fill: LIGHT_GREY, fs: 9 });
-      cell(t2X + tc1, y, tc2, t2HeadH, "COMPANY", { fill: LIGHT_GREY, fs: 9 });
-      cell(t2X + tc1 + tc2, y, tc3, t2HeadH, "INSPECTOR TYPE", {
+      // Re-add table header (translate headers)
+      cell(t2X + 0, y, tc1, t2HeadH, translations["NAME"] || "NAME", { fill: LIGHT_GREY, fs: 9 });
+      cell(t2X + tc1, y, tc2, t2HeadH, translations["COMPANY"] || "COMPANY", { fill: LIGHT_GREY, fs: 9 });
+      cell(t2X + tc1 + tc2, y, tc3, t2HeadH, translations["INSPECTOR TYPE"] || "INSPECTOR TYPE", {
         fill: LIGHT_GREY,
         fs: 9,
       });
@@ -1692,16 +2720,18 @@ function page5(doc, dynamic) {
       }
 
       const controller = independentControllers[controllerIndex];
-      const controllerName =
+      const controllerNameRaw =
         controller.name ||
         controller.username ||
         "Independet controler name IF any";
+      // Translate controller name if it exists in translations
+      const controllerName = translations[controllerNameRaw] || controllerNameRaw;
       cell(t2X + 0, y, tc1, t2RowH, controllerName, {
         color: RED,
         fs: 10,
       });
       cell(t2X + tc1, y, tc2, t2RowH, "", { fs: 10 });
-      cell(t2X + tc1 + tc2, y, tc3, t2RowH, "Independet control.", {
+      cell(t2X + tc1 + tc2, y, tc3, t2RowH, translatedInspectorType, {
         color: PARA,
         fs: 10,
       });
@@ -1710,14 +2740,15 @@ function page5(doc, dynamic) {
       rowsDrawnOnThisPage++;
     }
 
-    // If no controllers and first page, show fallback row
+    // If no controllers and first page, show fallback row (translate fallback text)
     if (independentControllers.length === 0 && pagesCreated === 0) {
-      cell(t2X + 0, y, tc1, t2RowH, "Independet controler name IF any", {
+      const fallbackName = translations["Independet controler name IF any"] || "Independet controler name IF any";
+      cell(t2X + 0, y, tc1, t2RowH, fallbackName, {
         color: RED,
         fs: 10,
       });
       cell(t2X + tc1, y, tc2, t2RowH, "", { fs: 10 });
-      cell(t2X + tc1 + tc2, y, tc3, t2RowH, "Independet control.", {
+      cell(t2X + tc1 + tc2, y, tc3, t2RowH, translatedInspectorType, {
         color: PARA,
         fs: 10,
       });
@@ -1779,39 +2810,45 @@ function page5(doc, dynamic) {
 
 // PAGE 6 – 2. DOCUMENTATION OF GENERAL CONTROLS
 // PAGE 6 – 2. DOCUMENTATION OF GENERAL CONTROLS  (Side 5 af 24)
-function page6(doc, dynamic) {
-  const specialText = dynamic.specialText || "Special text";
+function page6(doc, dynamic, translations = {}) {
+  // Get gamma data for specialText (consistent with other pages)
+  const gamma = dynamic.gamma || {};
+  const specialText = gamma.special ? String(gamma.special) : "Special text";
 
   const BLUE = HEADING_COLOR; // #003b71
   const PARA = "#5a5a5a";
   const GRID = "#2f2f2f";
   const HEAD_BG = "#d9d9d9";
   const NOTE_BG = "#fff176";
-  const NOTE_RED = "#cc0000";
+  const NOTE_RED = "black";
   const BEIGE = "#efe9d7";
 
   let y = M.t;
 
   // --- Top blue bar title ---
-  y = drawSectionBar(doc, y, "2. DOCUMENTATION OF GENERAL CONTROLS");
+  y = drawSectionBar(doc, y, "2. DOCUMENTATION OF GENERAL CONTROLS", undefined, translations);
   y += 4;
 
   // helpers
   const sectionTitle = (t) => {
+    // Translate the title
+    const translatedTitle = translations[t] || t;
     doc
       .font("Helvetica-Bold")
       .fontSize(13)
       .fillColor(BLUE)
-      .text(t, M.l, y, { width: CONTENT_W, align: "left" });
+      .text(translatedTitle, M.l, y, { width: CONTENT_W, align: "left" });
     y = doc.y + 6;
   };
 
   const para = (t, gap = 12) => {
+    // Translate the text
+    const translatedText = translations[t] || t;
     doc
       .font("Helvetica")
       .fontSize(10)
       .fillColor(PARA)
-      .text(t, M.l, y, { width: CONTENT_W, align: "left", lineGap: 3 });
+      .text(translatedText, M.l, y, { width: CONTENT_W, align: "left", lineGap: 3 });
     y = doc.y + gap;
   };
 
@@ -1828,11 +2865,21 @@ function page6(doc, dynamic) {
       .restore();
 
     if (text != null && String(text).length) {
+      // Translate text unless it's a number/date or skipTranslation is true
+      let displayText = String(text);
+      if (!opts.skipTranslation && text) {
+        const strValue = String(text).trim();
+        // Only translate if it's not empty and not a number/date
+        if (strValue && !isNumberOrDate(strValue)) {
+          displayText = translations[strValue] || strValue;
+        }
+      }
+      
       doc
         .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
         .fontSize(opts.fs || 9.5)
         .fillColor(opts.color || "black")
-        .text(String(text), x + (opts.pad ?? 8), yy + 4, {
+        .text(displayText, x + (opts.pad ?? 8), yy + 4, {
           width: w - (opts.pad ?? 8) * 2,
           align: opts.align || "left",
         });
@@ -1861,8 +2908,12 @@ function page6(doc, dynamic) {
     18
   );
 
+  // Translate paragraph with specialText inserted
+  const para2_1_2_part1 = translations["The general inspection is carried out in accordance with the submitted inspection plan for the present"] || "The general inspection is carried out in accordance with the submitted inspection plan for the present";
+  const para2_1_2_part2 = translations["and the associated control plan from the contractor's company, which is stated on page 1 of the report."] || "and the associated control plan from the contractor's company, which is stated on page 1 of the report.";
+  const translatedSpecialText = translations[specialText] || specialText;
   para(
-    `The general inspection is carried out in accordance with the submitted inspection plan for the present ${specialText}  and the associated control plan from the contractor's company, which is stated on page 1 of the report.`,
+    `${para2_1_2_part1} ${translatedSpecialText} ${para2_1_2_part2}`,
     12
   );
 
@@ -1871,8 +2922,9 @@ function page6(doc, dynamic) {
   // -------------------------
   sectionTitle("2.2 Standards");
 
+  // Translate the note text
   const note =
-    "This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE.";
+    translations["This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE."] || "This section is taken from the Eurocode table here we need an extra field with a static text talking about which standards covering the chosen EUROCODE.";
   doc.font("Helvetica-Bold").fontSize(10.5);
 
   const noteH = doc.heightOfString(note, { width: CONTENT_W, lineGap: 3 });
@@ -1883,7 +2935,7 @@ function page6(doc, dynamic) {
     .fill()
     .restore();
 
-  // red text
+  // red text (translated)
   doc
     .font("Helvetica-Bold")
     .fontSize(10.5)
@@ -1918,12 +2970,14 @@ function page6(doc, dynamic) {
   const tx = M.l + 40;
 
   const item = (t) => {
+    // Translate the item text
+    const translatedItem = translations[t] || t;
     drawCheck(bx, y + 4, 9);
     doc
       .font("Helvetica")
       .fontSize(10)
       .fillColor("black")
-      .text(t, tx, y, {
+      .text(translatedItem, tx, y, {
         width: CONTENT_W - (tx - M.l),
         align: "left",
       });
@@ -1945,13 +2999,14 @@ function page6(doc, dynamic) {
   doc
     .font("Helvetica-Bold")
     .fontSize(10)
-    .fillColor(PARA)
-    .text("Construction classes", M.l, y, { continued: true });
+    .fillColor(PARA);
+    const constructionClassesText = t("Construction classes", translations);
+    doc.text(constructionClassesText, M.l, y, { continued: true });
   doc
     .font("Helvetica")
     .fontSize(10)
     .fillColor(PARA)
-    .text(" (early designations CC1-CC2-CC3-CC4)", { continued: false });
+    .text(t(" (early designations CC1-CC2-CC3-CC4)", translations), { continued: false });
 
   y = doc.y + 8;
 
@@ -1966,18 +3021,22 @@ function page6(doc, dynamic) {
   const hRow = 18;
   const rRow = 18;
 
-  drawCell(t1x, y, t1w1, hRow, "CONSTRUCTION CLASS", {
+  // Translate table headers
+  const translatedConstructionClass = translations["CONSTRUCTION CLASS"] || "CONSTRUCTION CLASS";
+  const translatedIndependentControl = translations["INDEPENDENT CONTROL"] || "INDEPENDENT CONTROL";
+  const translatedThirdPartyControls = translations["THIRD-PARTY CONTROLS"] || "THIRD-PARTY CONTROLS";
+  drawCell(t1x, y, t1w1, hRow, translatedConstructionClass, {
     fill: HEAD_BG,
     color: BLUE,
     fs: 10,
   });
-  drawCell(t1x + t1w1, y, t1w2, hRow, "INDEPENDENT CONTROL", {
+  drawCell(t1x + t1w1, y, t1w2, hRow, translatedIndependentControl, {
     fill: HEAD_BG,
     color: BLUE,
     fs: 10,
     align: "center",
   });
-  drawCell(t1x + t1w1 + t1w2, y, t1w3, hRow, "THIRD-PARTY CONTROLS", {
+  drawCell(t1x + t1w1 + t1w2, y, t1w3, hRow, translatedThirdPartyControls, {
     fill: HEAD_BG,
     color: BLUE,
     fs: 10,
@@ -2038,13 +3097,16 @@ function page6(doc, dynamic) {
     .restore();
 
   // Top row (2 cells)
-  drawCell(t2x, t2y, col0, topH, "Performance classes", {
+  // Translate table headers
+  const translatedPerformanceClasses = translations["Performance classes"] || "Performance classes";
+  const translatedConstructionClasses = translations["Construction classes"] || "Construction classes";
+  drawCell(t2x, t2y, col0, topH, translatedPerformanceClasses, {
     bold: true,
     fs: 10,
     color: PARA,
     pad: 6,
   });
-  drawCell(t2x + col0, t2y, t2w - col0, topH, "Construction classes", {
+  drawCell(t2x + col0, t2y, t2w - col0, topH, translatedConstructionClasses, {
     bold: true,
     fs: 10,
     color: PARA,
@@ -2052,9 +3114,10 @@ function page6(doc, dynamic) {
     pad: 6,
   });
 
-  // Header row (beige)
+  // Header row (beige) - translate header
   const hy = t2y + topH;
-  drawCell(t2x, hy, col0, head2H, "EXECUTION CLASS", {
+  const translatedExecutionClass = translations["EXECUTION CLASS"] || "EXECUTION CLASS";
+  drawCell(t2x, hy, col0, head2H, translatedExecutionClass, {
     fill: BEIGE,
     fs: 9.5,
     color: BLUE,
@@ -2122,12 +3185,14 @@ function page6(doc, dynamic) {
     6
   );
 
+  // Translate EXC1 description
+  const exc1Text = translations["– EXC1: The design has limited impact on the safety of a load-bearing structure"] || "– EXC1: The design has limited impact on the safety of a load-bearing structure";
   doc
     .font("Helvetica")
     .fontSize(10)
     .fillColor(PARA)
     .text(
-      "– EXC1: The design has limited impact on the safety of a load-bearing structure",
+      exc1Text,
       M.l,
       y,
       {
@@ -2137,12 +3202,14 @@ function page6(doc, dynamic) {
     );
   y = doc.y + 4;
 
+  // Translate EXC2 description
+  const exc2Text = translations["– EXC2: The execution is important for the safety of a load-bearing structure"] || "– EXC2: The execution is important for the safety of a load-bearing structure";
   doc
     .font("Helvetica")
     .fontSize(10)
     .fillColor(PARA)
     .text(
-      "– EXC2: The execution is important for the safety of a load-bearing structure",
+      exc2Text,
       M.l,
       y,
       {
@@ -2153,69 +3220,55 @@ function page6(doc, dynamic) {
   y = doc.y + 10;
 
   // Footer – Side 5 af 24
-  footer(doc, 5);
+  footer(doc, 5, "", translations);
 }
 
 // PAGE 7 – 3.1, 4, 5 sections
 // PAGE 7 – 3 + 4 + 5 sections  (Side 6 af 24)
-async function page7(doc, dynamic) {
+async function page7(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_TXT = "#5a5a5a";
   const LIGHT_LINE = "#bfbfbf";
   const TABLE_HEAD_BG = LIGHT_GREY;
-  const RED = "#cc0000";
+  const RED = "black";
 
   // Get gamma data
   const gamma = dynamic.gamma || {};
   const xNumber = gamma.x ? String(gamma.x) : "X number";
-  const constructionClass = gamma.cc ? String(gamma.cc) : "KK3";
-  const executionClass = gamma.exc ? String(gamma.exc) : "EXC3";
+  const constructionClassRaw = gamma.cc ? String(gamma.cc) : "KK3";
+  const constructionClass = t(constructionClassRaw, translations);
+  const executionClassRaw = gamma.exc ? String(gamma.exc) : "EXC3";
+  const executionClass = t(executionClassRaw, translations);
   const docId = `B3.${xNumber}`;
 
   // Debug logging
-  console.log("Page 7 - Gamma data:", {
-    x: gamma.x,
-    cc: gamma.cc,
-    exc: gamma.exc,
-    constructionClass,
-    executionClass,
-    docId,
-  });
 
   // Get special controls and deviations
   const specialControls = dynamic.specialControls || [];
   const deviations = dynamic.deviations || [];
 
   // Debug logging
-  console.log("Page 7 - Special controls count:", specialControls.length);
-  console.log("Page 7 - Deviations count:", deviations.length);
+  
   if (specialControls.length > 0) {
-    console.log("Page 7 - First special control:", {
-      _id: specialControls[0]._id,
-      comment: specialControls[0].comment,
-      projectManager: specialControls[0].projectManager,
-    });
+   
   }
   if (deviations.length > 0) {
-    console.log("Page 7 - First deviation:", {
-      _id: deviations[0]._id,
-      comment: deviations[0].comment,
-      submittedDate: deviations[0].submittedDate,
-      hasImage: !!(
-        deviations[0].annotatedPdfs && deviations[0].annotatedPdfs.length > 0
-      ),
-    });
+
   }
 
   let y = M.t;
 
   // --- top note line (carry-over bullet line) ---
+  // Translate the EXC3 description
+  const exc3Description = t("− EXC3: The design is of great importance for the safety of a load-bearing structure", translations);
+  // Replace EXC3 with actual execution class if different
+  const excDescription = exc3Description.replace("EXC3", executionClass);
   doc
     .font("Helvetica")
     .fontSize(8.5)
     .fillColor(GREY_TXT)
     .text(
-      `− ${executionClass}: The design is of great importance for the safety of a load-bearing structure`,
+      excDescription,
       M.l,
       y,
       { width: CONTENT_W, align: "left" }
@@ -2223,13 +3276,8 @@ async function page7(doc, dynamic) {
   y = doc.y + 10;
 
   // --- boxed footnote ---
-  const boxText =
-    "(+): Possible choices. Additional restrictions may be set in the DS/EN 1992-DS/EN 1999 series, including the\n" +
-    "associated national annexes or in the associated execution standards, including the corresponding national\n" +
-    "application documents.\n" +
-    '1) For structures that are not covered by the Building Regulations, "construction classes" are replaced\n' +
-    'textually by "consequence classes", where CC1 replaces KK1, CC2 replaces KK2, CC3 replaces KK3 and "CC3\n' +
-    'covered by B4 KDK NA (4)" replaces KK4.';
+  // Translate the box text using the constant to ensure exact match
+  const boxText = t(BOXED_FOOTNOTE_TEXT, translations);
 
   const boxH =
     doc.heightOfString(boxText, { width: CONTENT_W - 16, lineGap: 2 }) + 12;
@@ -2250,10 +3298,13 @@ async function page7(doc, dynamic) {
   y = y + boxH + 12;
 
   // --- section 3 bar ---
+  const section3Title = t("3. LIST OF SELECTED CONSTRUCTION AND EXECUTION CLASSES", translations);
   y = drawSectionBar(
     doc,
     y,
-    "3. LIST OF SELECTED CONSTRUCTION AND EXECUTION CLASSES"
+    section3Title,
+    undefined,
+    translations
   );
   y -= 2;
 
@@ -2262,25 +3313,23 @@ async function page7(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(10)
     .fillColor(BLUE)
-    .text("3.1 Construction and execution classes selected.", M.l, y, {
+    const constructionClassesText = t("3.1 Construction and execution classes selected.", translations);
+    doc.text(constructionClassesText, M.l, y, {
       width: CONTENT_W,
       align: "left",
     });
   y = doc.y + 6;
 
+  const belowText = t("Below, the building designer has indicated which classes have been determined from the project material.", translations);
   doc
     .font("Helvetica")
     .fontSize(8.5)
     .fillColor(GREY_TXT)
-    .text(
-      "Below, the building designer has indicated which classes have been determined from the project material.",
-      M.l,
-      y,
-      { width: CONTENT_W, lineGap: 2 }
-    );
+    .text(belowText, M.l, y, { width: CONTENT_W, lineGap: 2 });
   y = doc.y + 4;
 
-  doc.text("These control sections are covered by the following:", M.l, y, {
+  const theseControlSectionsText = t("These control sections are covered by the following:", translations);
+  doc.text(theseControlSectionsText, M.l, y, {
     width: CONTENT_W,
     lineGap: 2,
   });
@@ -2299,14 +3348,28 @@ async function page7(doc, dynamic) {
       .restore();
 
     if (text != null && String(text).length) {
+      // Translate text unless it's a number/date or skipTranslation is true
+      let displayText = String(text);
+      if (!opts.skipTranslation && text) {
+        const strValue = String(text).trim();
+        // Only translate if it's not empty and not a number/date
+        if (strValue && !isNumberOrDate(strValue)) {
+          displayText = t(strValue, translations);
+        }
+      }
+      
+      // Clip text to cell boundaries to prevent overflow
+      doc.save();
+      doc.rect(x, yy, w, h).clip();
       doc
         .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
         .fontSize(opts.fs || 8.3)
         .fillColor(opts.color || "black")
-        .text(String(text), x + 6, yy + 4, {
+        .text(displayText, x + 6, yy + 4, {
           width: w - 12,
           align: opts.align || "left",
         });
+      doc.restore();
     }
   };
 
@@ -2320,56 +3383,74 @@ async function page7(doc, dynamic) {
   const headH = 24; // Increased from 16 to accommodate text better
   const rowH = 18;
 
-  cell(tX, y, c1, headH, "CONSTRUCTION PART", {
+  // Translate table headers
+  const translatedConstructionPart = t("CONSTRUCTION PART", translations);
+  const translatedDocument = t("DOCUMENT", translations);
+  const translatedConstructionClass = t("CONSTRUCTION CLASS", translations);
+  const translatedExecutionClass = t("EXECUTION CLASS", translations);
+  cell(tX, y, c1, headH, translatedConstructionPart, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true, // Already translated
   });
-  cell(tX + c1, y, c2, headH, "DOCUMENT", { fill: TABLE_HEAD_BG, bold: true });
-  cell(tX + c1 + c2, y, c3, headH, "CONSTRUCTION CLASS", {
+  cell(tX + c1, y, c2, headH, translatedDocument, { fill: TABLE_HEAD_BG, bold: true, skipTranslation: true });
+  cell(tX + c1 + c2, y, c3, headH, translatedConstructionClass, {
     fill: TABLE_HEAD_BG,
     bold: true,
     align: "center",
+    skipTranslation: true,
   });
-  cell(tX + c1 + c2 + c3, y, c4, headH, "EXECUTION CLASS", {
+  cell(tX + c1 + c2 + c3, y, c4, headH, translatedExecutionClass, {
     fill: TABLE_HEAD_BG,
     bold: true,
     align: "center",
+    skipTranslation: true,
   });
 
   y += headH;
 
-  // Use dynamic data from gamma
-  cell(tX, y, c1, rowH, docId, { color: RED });
-  cell(tX + c1, y, c2, rowH, "Static Control Report:");
+  // Use dynamic data from gamma - translate "Static Control Report:"
+  const translatedStaticControlReport = t("Static Control Report:", translations);
+  cell(tX, y, c1, rowH, docId, { color: "black" });
+  cell(tX + c1, y, c2, rowH, translatedStaticControlReport, { skipTranslation: true });
   cell(tX + c1 + c2, y, c3, rowH, constructionClass, {
-    color: RED,
+    color: "black",
     align: "center",
+    skipTranslation: true, // Already translated
   });
   cell(tX + c1 + c2 + c3, y, c4, rowH, executionClass, {
-    color: RED,
+    color: "black",
     align: "center",
+    skipTranslation: true, // Already translated
   });
 
   y += rowH + 12;
 
   // --- section 4 bar ---
-  y = drawSectionBar(doc, y, "4. DOCUMENTATION SPECIAL CONTROLS");
+  y = drawSectionBar(doc, y, t("4. DOCUMENTATION SPECIAL CONTROLS", translations), undefined, translations);
   y -= 2;
 
   // 4.1
+  const general41Text = t("4.1 General", translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(9.5)
     .fillColor(BLUE)
-    .text("4.1 General", M.l, y, { width: CONTENT_W });
+    .text(general41Text, M.l, y, { width: CONTENT_W });
   y = doc.y + 4;
 
+  // Translate paragraph with specialText
+  const para4_1_part1 = t("There are no special controls assigned by the building designers, cf.  This Special text .", translations);
+  // Replace "Special text" with actual specialText value
+  const specialTextRaw = gamma.special ? String(gamma.special) : "Special text";
+  const translatedSpecialText = t(specialTextRaw, translations);
+  const para4_1_final = para4_1_part1.replace("Special text", translatedSpecialText);
   doc
     .font("Helvetica")
     .fontSize(8.5)
     .fillColor(GREY_TXT)
     .text(
-      "There are no special controls assigned by the building designers, cf.  This Special text .",
+      para4_1_final,
       M.l,
       y,
       {
@@ -2379,8 +3460,9 @@ async function page7(doc, dynamic) {
     );
   y = doc.y + 2;
 
+  const para4_1_part2 = t("Should there be special controls, they will be stated in section 3.2", translations);
   doc.text(
-    "Should there be special controls, they will be stated in section 3.2",
+    para4_1_part2,
     M.l,
     y,
     {
@@ -2392,23 +3474,25 @@ async function page7(doc, dynamic) {
 
   // 4.2
   doc
-    .font("Helvetica-Bold")
+    const specialControlPointsText = t("4.2 Special control points", translations);
+    doc.font("Helvetica-Bold")
     .fontSize(9.5)
     .fillColor(BLUE)
-    .text("4.2 Special control points", M.l, y, { width: CONTENT_W });
+    .text(specialControlPointsText, M.l, y, { width: CONTENT_W });
   y = doc.y + 4;
 
   doc
     .font("Helvetica")
     .fontSize(8.5)
     .fillColor(GREY_TXT)
-    .text("Cf. section 3.1, no special controls are required.", M.l, y, {
+    .text(t("Cf. section 3.1, no special controls are required.", translations), M.l, y, {
       width: CONTENT_W,
     });
   y = doc.y + 2;
 
+  const para4_2_part2 = t("If there are special checks, it will be stated below in the form, otherwise there will be none.", translations);
   doc.text(
-    "If there are special checks, it will be stated below in the form, otherwise there will be none.",
+    para4_2_part2,
     M.l,
     y,
     { width: CONTENT_W }
@@ -2424,21 +3508,30 @@ async function page7(doc, dynamic) {
   // Make header height taller to fit "SPECIAL CONTROL" text on two lines
   const specialHeadH = 24; // Increased from 16 to accommodate two lines
 
-  cell(tX, y, s1, specialHeadH, "CONTROL ID", {
+  // Translate table headers
+  const translatedControlId = t("CONTROL ID", translations);
+  const translatedSpecialControl = t("SPECIAL CONTROL", translations);
+  const translatedDescription = t("DESCRIPTION", translations);
+  const translatedMadeBy = t("MADE BY:", translations);
+  cell(tX, y, s1, specialHeadH, translatedControlId, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true, // Already translated
   });
-  cell(tX + s1, y, s2, specialHeadH, "SPECIAL CONTROL", {
+  cell(tX + s1, y, s2, specialHeadH, translatedSpecialControl, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true,
   });
-  cell(tX + s1 + s2, y, s3, specialHeadH, "DESCRIPTION", {
+  cell(tX + s1 + s2, y, s3, specialHeadH, translatedDescription, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true,
   });
-  cell(tX + s1 + s2 + s3, y, s4, specialHeadH, "MADE BY:", {
+  cell(tX + s1 + s2 + s3, y, s4, specialHeadH, translatedMadeBy, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true,
   });
 
   y += specialHeadH;
@@ -2456,7 +3549,7 @@ async function page7(doc, dynamic) {
       if (y + rowH > maxYForContent) {
         // Add footer to current page
         const currentPageNumber = parseFloat((6 + pageNum * 0.1).toFixed(1));
-        footer(doc, currentPageNumber);
+        footer(doc, currentPageNumber, "", translations);
 
         // Add new page
         doc.addPage({ size: "A4", margin: 0 });
@@ -2464,7 +3557,7 @@ async function page7(doc, dynamic) {
         pageNum++;
 
         // Re-add section 4 heading on continuation pages
-        y = drawSectionBar(doc, y, "4. DOCUMENTATION SPECIAL CONTROLS");
+        y = drawSectionBar(doc, y, t("4. DOCUMENTATION SPECIAL CONTROLS", translations), undefined, translations);
         y -= 2;
 
         // Re-add 4.2 heading
@@ -2472,37 +3565,50 @@ async function page7(doc, dynamic) {
           .font("Helvetica-Bold")
           .fontSize(9.5)
           .fillColor(BLUE)
-          .text("4.2 Special control points", M.l, y, { width: CONTENT_W });
+          .text(specialControlPointsText, M.l, y, { width: CONTENT_W });
         y = doc.y + 8;
 
-        // Re-add table header (use specialHeadH for consistency)
-        cell(tX, y, s1, specialHeadH, "CONTROL ID", {
+        // Re-add table header (use specialHeadH for consistency) - use translated headers
+        cell(tX, y, s1, specialHeadH, translatedControlId, {
           fill: TABLE_HEAD_BG,
           bold: true,
+          skipTranslation: true, // Already translated
         });
-        cell(tX + s1, y, s2, specialHeadH, "SPECIAL CONTROL", {
+        cell(tX + s1, y, s2, specialHeadH, translatedSpecialControl, {
           fill: TABLE_HEAD_BG,
           bold: true,
+          skipTranslation: true,
         });
-        cell(tX + s1 + s2, y, s3, specialHeadH, "DESCRIPTION", {
+        cell(tX + s1 + s2, y, s3, specialHeadH, translatedDescription, {
           fill: TABLE_HEAD_BG,
           bold: true,
+          skipTranslation: true,
         });
-        cell(tX + s1 + s2 + s3, y, s4, specialHeadH, "MADE BY:", {
+        cell(tX + s1 + s2 + s3, y, s4, specialHeadH, translatedMadeBy, {
           fill: TABLE_HEAD_BG,
           bold: true,
+          skipTranslation: true,
         });
         y += specialHeadH;
       }
 
       const controlId = control._id ? String(control._id) : "";
-      const comment = control.comment || "";
-      const projectManagerName = control.projectManager?.name || "";
+      const commentRaw = control.comment || "";
+      const projectManagerNameRaw = control.projectManager?.name || "";
+      
+      // Translate dynamic data using t() function
+      const comment = commentRaw && !isNumberOrDate(commentRaw)
+        ? t(commentRaw, translations)
+        : commentRaw;
+      const projectManagerName = projectManagerNameRaw && !isNumberOrDate(projectManagerNameRaw)
+        ? t(projectManagerNameRaw, translations)
+        : projectManagerNameRaw;
 
-      cell(tX, y, s1, rowH, controlId, { color: RED });
+      // Use smaller font size for control ID to prevent overflow
+      cell(tX, y, s1, rowH, controlId, { color: "black", fs: 7 });
       cell(tX + s1, y, s2, rowH, "", {}); // Empty second column
-      cell(tX + s1 + s2, y, s3, rowH, comment, { color: RED });
-      cell(tX + s1 + s2 + s3, y, s4, rowH, projectManagerName, {});
+      cell(tX + s1 + s2, y, s3, rowH, comment, { color: "black", skipTranslation: true }); // Already translated
+      cell(tX + s1 + s2 + s3, y, s4, rowH, projectManagerName, { skipTranslation: true }); // Already translated
 
       y += rowH;
     }
@@ -2512,7 +3618,7 @@ async function page7(doc, dynamic) {
   y += 14;
 
   // --- section 5 bar ---
-  y = drawSectionBar(doc, y, "5. FOLLOW-UP ON DEVIATIONS");
+  y = drawSectionBar(doc, y, t("5. FOLLOW-UP ON DEVIATIONS", translations), undefined, translations);
   y -= 2;
 
   // 5.1 + B7 label
@@ -2520,7 +3626,7 @@ async function page7(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(9.5)
     .fillColor(BLUE)
-    .text("5.1 Handling of any deviations", M.l, y, {
+    .text(t("5.1 Handling of any deviations", translations), M.l, y, {
       width: CONTENT_W - 40,
       align: "left",
     });
@@ -2529,24 +3635,26 @@ async function page7(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(9.5)
     .fillColor("black")
-    .text("B7", M.l, y, { width: CONTENT_W, align: "right" });
+    .text(t("B7", translations), M.l, y, { width: CONTENT_W, align: "right" });
 
   y = doc.y + 6;
 
+  const para5_1_part1 = t("It is the Contractor's responsibility that the corrective action is carried out, and then that the independent\ninspector re-checks the deviations that may have occurred during the process.", translations);
   doc
     .font("Helvetica")
     .fontSize(8.5)
     .fillColor(GREY_TXT)
     .text(
-      "It is the Contractor's responsibility that the corrective action is carried out, and then that the independent\ninspector re-checks the deviations that may have occurred during the process.",
+      para5_1_part1,
       M.l,
       y,
       { width: CONTENT_W, lineGap: 2 }
     );
   y = doc.y + 6;
 
+  const para5_1_part2 = t("The list below shows in writing the registered deviations. If the list is empty, no one is registered.", translations);
   doc.text(
-    "The list below shows in writing the registered deviations. If the list is empty, no one is registered.",
+    para5_1_part2,
     M.l,
     y,
     { width: CONTENT_W }
@@ -2563,18 +3671,23 @@ async function page7(doc, dynamic) {
   const devHeadH = 16;
   const devRowH = 60; // Height for each deviation row (enough for image)
 
-  // Draw table header
-  cell(tX, y, d1, devHeadH, "DEVIATION ID", {
+  // Draw table header - translate headers
+  const translatedDeviationId = t("DEVIATION ID", translations);
+  const translatedLocalizationPhotoText = t("LOCALIZATION PHOTO/TEXT", translations);
+  cell(tX, y, d1, devHeadH, translatedDeviationId, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true, // Already translated
   });
-  cell(tX + d1, y, d2, devHeadH, "DESCRIPTION", {
+  cell(tX + d1, y, d2, devHeadH, translatedDescription, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true,
   });
-  cell(tX + d1 + d2, y, d3, devHeadH, "LOCALIZATION PHOTO/TEXT", {
+  cell(tX + d1 + d2, y, d3, devHeadH, translatedLocalizationPhotoText, {
     fill: TABLE_HEAD_BG,
     bold: true,
+    skipTranslation: true,
   });
 
   y += devHeadH;
@@ -2588,7 +3701,7 @@ async function page7(doc, dynamic) {
         const currentPageNumber = parseFloat(
           (basePageNumber + pageNum * 0.1).toFixed(1)
         );
-        footer(doc, currentPageNumber);
+        footer(doc, currentPageNumber, "", translations);
 
         // Add new page
         doc.addPage({ size: "A4", margin: 0 });
@@ -2596,7 +3709,7 @@ async function page7(doc, dynamic) {
         pageNum++;
 
         // Re-add section 5 heading on continuation pages
-        y = drawSectionBar(doc, y, "5. FOLLOW-UP ON DEVIATIONS");
+        y = drawSectionBar(doc, y, t("5. FOLLOW-UP ON DEVIATIONS", translations), undefined, translations);
         y -= 2;
 
         // Re-add section 5 intro text
@@ -2604,7 +3717,7 @@ async function page7(doc, dynamic) {
           .font("Helvetica-Bold")
           .fontSize(9.5)
           .fillColor(BLUE)
-          .text("5.1 Handling of any deviations", M.l, y, {
+          .text(t("5.1 Handling of any deviations", translations), M.l, y, {
             width: CONTENT_W - 40,
             align: "left",
           });
@@ -2612,7 +3725,7 @@ async function page7(doc, dynamic) {
           .font("Helvetica-Bold")
           .fontSize(9.5)
           .fillColor("black")
-          .text("B7", M.l, y, { width: CONTENT_W, align: "right" });
+          .text(t("B7", translations), M.l, y, { width: CONTENT_W, align: "right" });
         y = doc.y + 6;
 
         doc
@@ -2620,7 +3733,7 @@ async function page7(doc, dynamic) {
           .fontSize(8.5)
           .fillColor(GREY_TXT)
           .text(
-            "It is the Contractor's responsibility that the corrective action is carried out, and then that the independent\ninspector re-checks the deviations that may have occurred during the process.",
+            para5_1_part1,
             M.l,
             y,
             { width: CONTENT_W, lineGap: 2 }
@@ -2628,25 +3741,28 @@ async function page7(doc, dynamic) {
         y = doc.y + 6;
 
         doc.text(
-          "The list below shows in writing the registered deviations. If the list is empty, no one is registered.",
+          para5_1_part2,
           M.l,
           y,
           { width: CONTENT_W }
         );
         y = doc.y + 6;
 
-        // Re-add table header on continuation pages
-        cell(tX, y, d1, devHeadH, "DEVIATION ID", {
+        // Re-add table header on continuation pages - use translated headers
+        cell(tX, y, d1, devHeadH, translatedDeviationId, {
           fill: TABLE_HEAD_BG,
           bold: true,
+          skipTranslation: true, // Already translated
         });
-        cell(tX + d1, y, d2, devHeadH, "DESCRIPTION", {
+        cell(tX + d1, y, d2, devHeadH, translatedDescription, {
           fill: TABLE_HEAD_BG,
           bold: true,
+          skipTranslation: true,
         });
-        cell(tX + d1 + d2, y, d3, devHeadH, "LOCALIZATION PHOTO/TEXT", {
+        cell(tX + d1 + d2, y, d3, devHeadH, translatedLocalizationPhotoText, {
           fill: TABLE_HEAD_BG,
           bold: true,
+          skipTranslation: true,
         });
         y += devHeadH;
       }
@@ -2660,11 +3776,15 @@ async function page7(doc, dynamic) {
         submittedDate ? `     ${submittedDate}` : ""
       }`;
 
-      const comment = deviation.comment || "";
+      const commentRaw = deviation.comment || "";
+      // Translate comment if it's not a number/date using t() function
+      const comment = commentRaw && !isNumberOrDate(commentRaw)
+        ? t(commentRaw, translations)
+        : commentRaw;
 
       // Draw row cells
-      cell(tX, y, d1, devRowH, deviationIdText, { color: RED });
-      cell(tX + d1, y, d2, devRowH, comment, { color: RED });
+      cell(tX, y, d1, devRowH, deviationIdText, { color: "black" });
+      cell(tX + d1, y, d2, devRowH, comment, { color: "black", skipTranslation: true }); // Already translated
 
       // Draw image in third column if available
       const imageUrl =
@@ -2686,12 +3806,12 @@ async function page7(doc, dynamic) {
             align: "left",
           });
         } catch (error) {
-          console.error("Error loading deviation image:", error.message);
+
           doc
             .font("Helvetica")
             .fontSize(8.5)
-            .fillColor(RED)
-            .text("Image not available", tX + d1 + d2 + 6, y + 6, {
+            .fillColor("black")
+            .text(t("Image not available", translations), tX + d1 + d2 + 6, y + 6, {
               width: d3 - 12,
             });
         }
@@ -2699,8 +3819,8 @@ async function page7(doc, dynamic) {
         doc
           .font("Helvetica")
           .fontSize(8.5)
-          .fillColor(RED)
-          .text("Link.", tX + d1 + d2 + 6, y + 6, { width: d3 - 12 });
+          .fillColor("black")
+          .text(t("Link.", translations), tX + d1 + d2 + 6, y + 6, { width: d3 - 12 });
       }
 
       // Draw cell borders
@@ -2736,12 +3856,13 @@ async function page7(doc, dynamic) {
   // Show bottom text on last page if it fits
   if (y + 20 <= maxYForContent) {
     y += 10;
+    const bottomText = translations["The above is updated every time a deviation occurs in the execution."] || "The above is updated every time a deviation occurs in the execution.";
     doc
       .font("Helvetica")
       .fontSize(8.2)
       .fillColor(GREY_TXT)
       .text(
-        "The above is updated every time a deviation occurs in the execution.",
+        bottomText,
         M.l,
         y,
         {
@@ -2760,29 +3881,103 @@ async function page7(doc, dynamic) {
 
 // PAGE 8 – 6. CONTROL POINTS SELECTED IN THE CONTROL PLAN
 // PAGE 8 – 6. CONTROL POINTS SELECTED IN THE CONTROL PLAN (Side 7 af 24)
-async function page8(doc, dynamic) {
+async function page8(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY = "#5a5a5a";
   const LINE = "#bfbfbf";
-  const RED = "#cc0000";
+  const RED = "black";
 
-  // Get gamma data
-  const gamma = dynamic.gamma || {};
-  const annotatedPdf =
+  // Fetch gamma data from database using projectId and subjectMatterId
+  let gamma = {};
+  let annotatedPdf = null;
+
+  const { projectId, companyId, subjectMatterId } = dynamic;
+  const dbToUse = dynamic.db || db;
+
+  // Always try to fetch from database if we have the required parameters
+  if (projectId && companyId && subjectMatterId && dbToUse) {
+    try {
+      // Fetch gamma from database
+      let gammaResults = await dbToUse
+        .collection("gammas")
+        .find({
+          companyId: companyId,
+          $or: [
+            { projectsId: { $in: [projectId] } },
+            { projectsId: { $in: [new ObjectId(projectId)] } },
+          ],
+          "profession.SubjectMatterId": subjectMatterId,
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+
+      if (gammaResults.length > 0) {
+        gamma = gammaResults[0];
+      } else {
+        // Try without subjectMatterId filter
+        gammaResults = await dbToUse
+          .collection("gammas")
+          .find({
+            companyId: companyId,
+            $or: [
+              { projectsId: { $in: [projectId] } },
+              { projectsId: { $in: [new ObjectId(projectId)] } },
+            ],
+          })
+          .sort({ createdAt: -1 })
+          .limit(1)
+          .toArray();
+        if (gammaResults.length > 0) {
+          gamma = gammaResults[0];
+        }
+      }
+    } catch (error) {
+      // If fetch fails, fall back to dynamic.gamma if available
+      gamma = dynamic.gamma || {};
+    }
+  } else {
+    // If we don't have required parameters, use dynamic.gamma as fallback
+    gamma = dynamic.gamma || {};
+  }
+
+  // Extract annotated PDF from gamma
+  annotatedPdf =
     gamma.annotatedPdfs && gamma.annotatedPdfs.length > 0
       ? gamma.annotatedPdfs[0]
       : null;
 
-  const drawingName = annotatedPdf?.filename || "File name.";
-  const imageUrl =
-    annotatedPdf?.s3Location ||
-    annotatedPdf?.s3location ||
-    annotatedPdf?.location ||
-    null;
+  const drawingName = annotatedPdf?.filename || annotatedPdf?.originalname || "File name.";
+  
+  // Get baseUrl for constructing full URL if path is local
+  // Priority: dynamic.baseUrl > BASE_URL env > BACKEND_URL env > localhost:3000 (local dev) > server URL (fallback)
+  const baseUrl = dynamic?.baseUrl 
+    || process.env.BASE_URL 
+    || process.env.BACKEND_URL 
+    || "http://localhost:3000"; // Use localhost:3000 for local development
+
+  // Construct image URL - try s3Location first, then path, then location
+  let imageUrl = null;
+  if (annotatedPdf) {
+    imageUrl = annotatedPdf?.s3Location || annotatedPdf?.s3location || annotatedPdf?.location || null;
+    
+    // If no s3Location but path exists, construct full URL
+    if (!imageUrl && annotatedPdf?.path) {
+      const path = annotatedPdf.path;
+      // If path is already a full URL, use it; otherwise construct from baseUrl
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        imageUrl = path;
+      } else {
+        // Remove leading slash if present and construct URL
+        const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+        imageUrl = `${baseUrl}/${cleanPath}`;
+      }
+    }
+  }
 
   let y = M.t;
 
-  y = drawSectionBar(doc, y, "6. CONTROL POINTS SELECTED IN THE CONTROL PLAN");
+  y = drawSectionBar(doc, y, "6. CONTROL POINTS SELECTED IN THE CONTROL PLAN", undefined, translations);
   y += 4;
 
   // OVERVIEW:
@@ -2790,12 +3985,14 @@ async function page8(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(8.8)
     .fillColor(GREY)
-    .text("OVERVIEW:", M.l, y, { width: CONTENT_W });
+    const overviewText = t("OVERVIEW:", translations);
+    doc.text(overviewText, M.l, y, { width: CONTENT_W });
   y = doc.y + 6;
 
   // lines
+  const drawingsText = t("DRAWINGS INDICATING SELECTED INSPECTION POINTS:", translations);
   doc.font("Helvetica").fontSize(7.8).fillColor("black");
-  doc.text("DRAWINGS INDICATING SELECTED INSPECTION POINTS:", M.l, y, {
+  doc.text(drawingsText, M.l, y, {
     width: CONTENT_W,
   });
   y = doc.y + 6;
@@ -2853,27 +4050,40 @@ async function page8(doc, dynamic) {
   if (imageUrl) {
     try {
       const imgBuffer = await fetchImageBuffer(imageUrl);
-      // Draw image inside the box with padding
-      doc.image(imgBuffer, boxX + 10, boxY + 10, {
-        fit: [boxW - 20, boxH - 20],
-        align: "center",
-      });
-    } catch (error) {
-      console.error("Error loading main drawing image:", error.message);
+      const padding = 10;
+      const imageX = boxX + padding;
+      const imageY = boxY + padding;
+      const imageW = boxW - (padding * 2);
+      const imageH = boxH - (padding * 2);
+      
+      // Use clipping to ensure image stays within box boundaries
+      doc.save();
+      doc.rect(imageX, imageY, imageW, imageH).clip();
+      
+      // Draw image inside the box with padding, maintaining aspect ratio
+      doc.image(imgBuffer, imageX, imageY, {
+        fit: [imageW, imageH],
+          align: "center",
+        valign: "center",
+        });
+      
+      doc.restore();
+      } catch (error) {
       // Fallback: show placeholder text if image fails to load
       doc
         .font("Helvetica")
         .fontSize(8.5)
         .fillColor(RED)
-        .text("marked main drawing", boxX + 6, boxY + 6);
+        .text(t("marked main drawing", translations), boxX + 6, boxY + 6);
     }
   } else {
     // No image available - show placeholder text
     doc
       .font("Helvetica")
       .fontSize(8.5)
-      .fillColor(RED)
-      .text("marked main drawing", boxX + 6, boxY + 6);
+      .fillColor(RED);
+      const markedMainDrawingText = t("marked main drawing", translations);
+      doc.text(markedMainDrawingText, boxX + 6, boxY + 6);
   }
 
   y = boxY + boxH + 16;
@@ -2896,21 +4106,22 @@ async function page8(doc, dynamic) {
   );
   y = doc.y + 4;
 
-  doc.text("The colors below indicate which category they relate to.", M.l, y, {
+  const colorsText = t("The colors below indicate which category they relate to.", translations);
+  doc.text(colorsText, M.l, y, {
     width: CONTENT_W,
   });
 
   // Footer – Side 7 af 24
-  footer(doc, 7);
+  footer(doc, 7, "", translations);
 }
 
 // PAGE 9 – 7. CONTROL CARRIED OUT ... B1–B3 tables
 // PAGE 9 – 7. CONTROL CARRIED OUT ... (B1/B2/B3 tables)  (Side 8 af 24)
-function page9(doc, dynamic) {
+function page9(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY = "#5a5a5a";
   const LINE = "#d9d9d9";
-  const RED = "#cc0000";
+  const RED = "black";
   const GREEN = "#00b050";
 
   let y = M.t;
@@ -2966,15 +4177,15 @@ function page9(doc, dynamic) {
     // header
     const headerY = y;
     doc.font("Helvetica-Bold").fontSize(7.2).fillColor(BLUE);
-    doc.text("POS.", x, headerY, { width: wPOS });
-    doc.text("DATE", x + wPOS, headerY, { width: wDATE });
-    doc.text("DESCRIPTION", x + wPOS + wDATE, headerY, { width: wDESC });
-    doc.text("STATUS", x + wPOS + wDATE + wDESC, headerY, { width: wSTATUS });
-    doc.text("NOTE", x + wPOS + wDATE + wDESC + wSTATUS, headerY, {
+    doc.text(t("POS.", translations), x, headerY, { width: wPOS });
+    doc.text(t("DATE", translations), x + wPOS, headerY, { width: wDATE });
+    doc.text(t("DESCRIPTION", translations), x + wPOS + wDATE, headerY, { width: wDESC });
+    doc.text(t("STATUS", translations), x + wPOS + wDATE + wDESC, headerY, { width: wSTATUS });
+    doc.text(t("NOTE", translations), x + wPOS + wDATE + wDESC + wSTATUS, headerY, {
       width: wNOTE,
     });
     doc.text(
-      "CONTROL/ID",
+      t("CONTROL/ID", translations),
       x + wPOS + wDATE + wDESC + wSTATUS + wNOTE,
       headerY,
       { width: wCTRL }
@@ -3001,26 +4212,30 @@ function page9(doc, dynamic) {
       doc.fillColor(GREY).text(r.pos, x, rowTop, { width: wPOS });
       doc
         .fillColor(GREY)
-        .text("[Select Date]", x + wPOS, rowTop, { width: wDATE });
+        .text(t("[Select Date]", translations), x + wPOS, rowTop, { width: wDATE });
 
-      doc.fillColor(GREY).text(r.desc, x + wPOS + wDATE, rowTop, {
+      // Translate desc if it's not a number/date
+      const descText = r.desc && !isNumberOrDate(String(r.desc)) 
+        ? t(String(r.desc), translations) 
+        : (r.desc || "");
+      doc.fillColor(GREY).text(descText, x + wPOS + wDATE, rowTop, {
         width: wDESC,
         lineGap: 1,
       });
 
       doc
         .fillColor(GREY)
-        .text("Approved", x + wPOS + wDATE + wDESC, rowTop, { width: wSTATUS });
+        .text(t("Approved", translations), x + wPOS + wDATE + wDESC, rowTop, { width: wSTATUS });
       doc
         .fillColor(GREY)
-        .text("No comments", x + wPOS + wDATE + wDESC + wSTATUS, rowTop, {
+        .text(t("No comments", translations), x + wPOS + wDATE + wDESC + wSTATUS, rowTop, {
           width: wNOTE,
         });
 
       doc
         .fillColor(GREY)
         .text(
-          "Independent control of self-\nmonitoring.",
+          t("Independent control of self-\nmonitoring.", translations),
           x + wPOS + wDATE + wDESC + wSTATUS + wNOTE,
           rowTop,
           {
@@ -3046,7 +4261,7 @@ function page9(doc, dynamic) {
   };
 
   // --- 7.1 ---
-  drawHeading("7.1 Verification of the basis for execution from design", "B1");
+  drawHeading(t("7.1 Verification of the basis for execution from design", translations), t("B1", translations));
 
   doc
     .font("Helvetica")
@@ -3069,7 +4284,7 @@ function page9(doc, dynamic) {
   ]);
 
   // --- 7.2 ---
-  drawHeading("7.2 Verification of the basis for execution of the work", "B2");
+  drawHeading(t("7.2 Verification of the basis for execution of the work", translations), t("B2", translations));
 
   drawTable([
     { pos: "7.2.1", desc: "Working drawings,\ninstructions, self-control" },
@@ -3089,7 +4304,7 @@ function page9(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(9.5)
     .fillColor(BLUE)
-    .text("7.3 Checking documentation of materials and products", M.l, y, {
+    .text(t("7.3 Checking documentation of materials and products", translations), M.l, y, {
       width: CONTENT_W - 60,
       align: "left",
     });
@@ -3098,7 +4313,7 @@ function page9(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(9.5)
     .fillColor("black")
-    .text("B3", M.l, y, {
+    .text(t("B3", translations), M.l, y, {
       width: CONTENT_W - 18,
       align: "right",
     });
@@ -3138,21 +4353,64 @@ function page9(doc, dynamic) {
   ]);
 
   // Footer – Side 8 af 24
-  footer(doc, 8);
+  footer(doc, 8, "", translations);
 }
 
 // PAGE 10 – 7.4–7.6 B4–B6 tables
 // PAGE 9 – 7. CONTROL CARRIED OUT ... (B1/B2/B3 tables)  (Side 8 af 24)
-async function page9(doc, dynamic) {
+async function page9(doc, dynamic, translations = {}) {
+  
   const BLUE = HEADING_COLOR;
   const GREY = "#5a5a5a";
   const LINE = "#d9d9d9";
-  const RED = "#cc0000";
+  const RED = "black";
   const GREEN = "#00b050";
 
-  let y = M.t;
+  // Dynamic margins and content width for A3 landscape
+  const pageMargin = 50;
+  const dynamicM = {
+    t: pageMargin,
+    b: pageMargin,
+    l: pageMargin,
+    r: pageMargin,
+  };
+  let dynamicContentW = doc.page.width - dynamicM.l - dynamicM.r;
 
-  y = drawSectionBar(
+  // Track pagination for page 9 (9, 9.1, 9.2, etc.)
+  const basePageNumber = 9;
+  let pagesCreated = 0;
+  let currentPageNumber = basePageNumber; // Track the current page number
+
+  let y = dynamicM.t;
+
+  // Local drawSectionBar for A3 landscape (uses dynamic margins)
+  const drawSectionBarLocal = (doc, y, text, rightLabel = null) => {
+    const barHeight = 20;
+    doc.save().rect(dynamicM.l, y, dynamicContentW, barHeight).fill(HEADING_COLOR).restore();
+    const translatedText = t(text, translations);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .fillColor("white")
+      .text(translatedText, dynamicM.l + 8, y + 4, {
+        width: dynamicContentW - 16,
+        align: "left",
+      });
+    if (rightLabel) {
+      const translatedRightLabel = t(rightLabel, translations);
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(11)
+        .fillColor("white")
+        .text(translatedRightLabel, dynamicM.l + 8, y + 4, {
+          width: dynamicContentW - 16,
+          align: "right",
+        });
+    }
+    return y + barHeight;
+  };
+
+  y = drawSectionBarLocal(
     doc,
     y,
     "7. CONTROL CARRIED OUT OF THE ITEMS IN THE CONTROL PLAN/CHE"
@@ -3173,46 +4431,175 @@ async function page9(doc, dynamic) {
       if (professionData && professionData.staticDocumentCheckList) {
         checklistItems = professionData.staticDocumentCheckList;
 
-        // Get checklist IDs for status checking
+        // Get checklist IDs for status checking (convert to ObjectIds and strings)
         const checklistIds = checklistItems.map((item) => item._id.toString());
+        const checklistObjectIds = checklistIds.map((id) => new ObjectId(id));
 
-        if (checklistIds.length > 0 && db) {
-          // Query database for approval status (same logic as API)
-          const queries = [
-            {
-              projectId: projectId,
-              "profession.SubjectMatterId": subjectMatterId,
-            },
-            {
-              projectId: projectId,
-              "profession._id": subjectMatterId,
-            },
-            ...(subjectMatterId &&
-            subjectMatterId.length === 24 &&
-            /^[0-9a-fA-F]{24}$/.test(subjectMatterId)
-              ? [
-                  {
-                    projectId: projectId,
-                    "profession._id": new ObjectId(subjectMatterId),
-                  },
-                ]
-              : []),
-          ];
+        // Use db from dynamic object if available, otherwise fall back to module-level db
+        const dbToUse = dynamic.db || db;
+        
+        if (checklistIds.length > 0 && dbToUse) {
+          
+          // DEBUG: First, let's see if we can find ANY documents for this project
+          try {
+            const allProjectDocs = await dbToUse
+              .collection("staticDocumentChecklistProjectAndProfessionWise")
+              .find({ projectId: projectId })
+              .limit(5)
+              .toArray();
+            if (allProjectDocs.length > 0) {
+           
+            }
+          } catch (debugError) {
 
+          }
+          
+          // DEBUG: Check if any checklistIds match
+          try {
+            const matchingChecklistIds = await dbToUse
+              .collection("staticDocumentChecklistProjectAndProfessionWise")
+              .find({
+                projectId: projectId,
+                staticDocumentCheckListId: { $in: checklistIds },
+              })
+              .toArray();
+            
+            if (matchingChecklistIds.length > 0) {
+
+            }
+          } catch (debugError) {
+
+          }
+          
+          // Query database for approval status (same logic as check-static-document-checklist-status API)
+          // Try multiple query variations to find submitted entries
           let submittedEntries = [];
-          for (let i = 0; i < queries.length; i++) {
-            try {
-              const result = await db
-                .collection("staticDocumentChecklistProjectAndProfessionWise")
-                .find(queries[i])
-                .toArray();
 
-              if (result.length > 0) {
-                submittedEntries = result;
-                break;
+          // Query 1: With profession filter and ObjectId comparison
+          try {
+            submittedEntries = await dbToUse
+              .collection("staticDocumentChecklistProjectAndProfessionWise")
+              .find({
+                projectId: projectId,
+                "profession._id": subjectMatterId,
+                staticDocumentCheckListId: { $in: checklistObjectIds },
+              })
+              .toArray();
+         
+            if (submittedEntries.length > 0) {
+
+            }
+          } catch (error) {
+
+          }
+
+          // Query 2: With profession filter and string comparison
+          if (submittedEntries.length === 0) {
+            try {
+              submittedEntries = await dbToUse
+                .collection("staticDocumentChecklistProjectAndProfessionWise")
+                .find({
+                  projectId: projectId,
+                  "profession._id": subjectMatterId,
+                  staticDocumentCheckListId: { $in: checklistIds },
+                })
+                .toArray();
+        
+              if (submittedEntries.length > 0) {
+
               }
             } catch (error) {
-              console.log(`Query ${i + 1} failed:`, error.message);
+
+            }
+          }
+
+          // Query 3: Try with profession.SubjectMatterId
+          if (submittedEntries.length === 0) {
+            try {
+              submittedEntries = await dbToUse
+                .collection("staticDocumentChecklistProjectAndProfessionWise")
+                .find({
+                  projectId: projectId,
+                  "profession.SubjectMatterId": subjectMatterId,
+                  staticDocumentCheckListId: { $in: checklistObjectIds },
+                })
+                .toArray();
+
+              if (submittedEntries.length > 0) {
+
+              }
+            } catch (error) {
+
+            }
+          }
+
+          // Query 4: Without profession filter but with ObjectId
+          if (submittedEntries.length === 0) {
+            try {
+              submittedEntries = await dbToUse
+                .collection("staticDocumentChecklistProjectAndProfessionWise")
+                .find({
+                  projectId: projectId,
+                  staticDocumentCheckListId: { $in: checklistObjectIds },
+                })
+                .toArray();
+
+            } catch (error) {
+
+            }
+          }
+
+          // Query 5: Without profession filter and with string comparison
+          if (submittedEntries.length === 0) {
+            try {
+              submittedEntries = await dbToUse
+                .collection("staticDocumentChecklistProjectAndProfessionWise")
+                .find({
+                  projectId: projectId,
+                  staticDocumentCheckListId: { $in: checklistIds },
+                })
+                .toArray();
+
+              if (submittedEntries.length > 0) {
+              
+              }
+            } catch (error) {
+
+            }
+          }
+          
+          // Query 6: Try with profession.SubjectMatterId and string checklistIds (most likely to work)
+          if (submittedEntries.length === 0) {
+            try {
+             
+              submittedEntries = await dbToUse
+                .collection("staticDocumentChecklistProjectAndProfessionWise")
+                .find({
+                  projectId: projectId,
+                  "profession.SubjectMatterId": subjectMatterId,
+                  staticDocumentCheckListId: { $in: checklistIds },
+                })
+                .toArray();
+
+              if (submittedEntries.length > 0) {
+
+              } else {
+
+                // Try without checklistIds filter to see what profession data exists
+                const professionDocs = await dbToUse
+                  .collection("staticDocumentChecklistProjectAndProfessionWise")
+                  .find({
+                    projectId: projectId,
+                    "profession.SubjectMatterId": subjectMatterId,
+                  })
+                  .toArray();
+
+                if (professionDocs.length > 0) {
+                  
+                }
+              }
+            } catch (error) {
+
             }
           }
 
@@ -3222,27 +4609,69 @@ async function page9(doc, dynamic) {
           );
 
           submittedEntries.forEach((entry) => {
-            approvalStatus[entry.staticDocumentCheckListId.toString()] = {
-              approvedBy: entry.approvedBy || false,
-              approvedDate: entry.approvedDate || null,
-              submittedDate:
-                entry.submittedDate || entry.submissionCreatedDate || null,
-              selectedDate: entry.selectedDate || entry.date || null,
-              comment: entry.comment || null,
-              notes: entry.notes || null, // Notes from approval
-            };
+            const checklistId = entry.staticDocumentCheckListId 
+              ? (entry.staticDocumentCheckListId.toString ? entry.staticDocumentCheckListId.toString() : String(entry.staticDocumentCheckListId))
+              : null;
+            
+            if (checklistId) {
+              
+              approvalStatus[checklistId] = {
+                approvedBy: entry.approvedBy || false,
+                approvedDate: entry.approvedDate || null,
+                submittedDate:
+                  entry.submittedDate || entry.submissionCreatedDate || null,
+                selectedDate: entry.selectedDate || entry.date || null,
+                comment: entry.comment || null,
+                notes: entry.notes || null, // Notes from approval (stored at top level)
+                independentController: entry.independentController || null, // Independent controller info (full user object)
+              };
+            }
           });
+          
         }
       }
     }
   } catch (error) {
-    console.error("Error fetching checklist data:", error);
+
   }
 
   // Group items by DS_GroupId (B1, B2, B3)
-  const b1Items = checklistItems.filter((item) => item.DS_GroupId === "B1");
-  const b2Items = checklistItems.filter((item) => item.DS_GroupId === "B2");
-  const b3Items = checklistItems.filter((item) => item.DS_GroupId === "B3");
+  let b1Items = checklistItems.filter((item) => item.DS_GroupId === "B1");
+  let b2Items = checklistItems.filter((item) => item.DS_GroupId === "B2");
+  let b3Items = checklistItems.filter((item) => item.DS_GroupId === "B3");
+
+  // Helper function to sort items by ItemId (e.g., "7.1.1", "7.1.2", etc.)
+  const sortByItemId = (a, b) => {
+    const itemIdA = a.ItemId || "";
+    const itemIdB = b.ItemId || "";
+    
+    // Split ItemId by dots and convert to numbers for proper numeric sorting
+    const partsA = itemIdA.split(".").map(part => {
+      const num = parseInt(part, 10);
+      return isNaN(num) ? part : num;
+    });
+    const partsB = itemIdB.split(".").map(part => {
+      const num = parseInt(part, 10);
+      return isNaN(num) ? part : num;
+    });
+    
+    // Compare parts lexicographically
+    const maxLength = Math.max(partsA.length, partsB.length);
+    for (let i = 0; i < maxLength; i++) {
+      const partA = partsA[i] !== undefined ? partsA[i] : 0;
+      const partB = partsB[i] !== undefined ? partsB[i] : 0;
+      
+      if (partA < partB) return -1;
+      if (partA > partB) return 1;
+    }
+    
+    return 0;
+  };
+
+  // Sort items by ItemId
+  b1Items.sort(sortByItemId);
+  b2Items.sort(sortByItemId);
+  b3Items.sort(sortByItemId);
 
   // Helper function to format date
   const formatDate = (dateString) => {
@@ -3262,12 +4691,12 @@ async function page9(doc, dynamic) {
   // Helper function to get status text
   const getStatusText = (itemId) => {
     const status = approvalStatus[itemId];
-    if (status && status.approvedBy) {
-      return "Approved";
+    if (status && status.approvedBy === true) {
+      return t("Approved", translations);
     } else if (submittedChecklistIds.includes(itemId)) {
-      return "Submitted";
+      return t("Submitted", translations);
     }
-    return "Pending";
+    return t("Pending", translations);
   };
 
   // Helper function to get status color
@@ -3284,32 +4713,43 @@ async function page9(doc, dynamic) {
   const drawHeading = (left, rightLabel) => {
     // Check if we need a new page before drawing heading (need space for heading + table header)
     const footerHeight = 30;
-    const maxYForContent = PAGE.h - M.b - footerHeight;
+    const maxYForContent = doc.page.height - dynamicM.b - footerHeight;
     const headingHeight = 50; // Approximate height for heading + underline + spacing
 
     if (y + headingHeight > maxYForContent) {
-      // Add footer to current page
-      footer(doc, 8);
+      // Add footer to current page with decimal notation
+      footer(doc, currentPageNumber, "", translations);
+      pagesCreated++;
+      
+      // Calculate page number for the new continuation page
+      currentPageNumber = parseFloat((basePageNumber + pagesCreated * 0.1).toFixed(1));
 
-      // Add new page
-      doc.addPage({ size: "A4", margin: 0 });
-      y = M.t;
+      // Add new page (A4 landscape for continuation - same as initial page)
+      doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+      // Reset dynamic margins for A4 landscape
+      const pageMargin = 50;
+      dynamicM.t = pageMargin;
+      dynamicM.b = pageMargin;
+      dynamicM.l = pageMargin;
+      dynamicM.r = pageMargin;
+      dynamicContentW = doc.page.width - dynamicM.l - dynamicM.r;
+      y = dynamicM.t;
     }
 
     doc
       .font("Helvetica-Bold")
       .fontSize(9.5)
       .fillColor(BLUE)
-      .text(left, M.l, y, {
-        width: CONTENT_W - 40,
+      .text(left, dynamicM.l, y, {
+        width: dynamicContentW - 40,
         align: "left",
       });
     doc
       .font("Helvetica-Bold")
       .fontSize(9.5)
       .fillColor("black")
-      .text(rightLabel, M.l, y, {
-        width: CONTENT_W,
+      .text(rightLabel, dynamicM.l, y, {
+        width: dynamicContentW,
         align: "right",
       });
     y = doc.y + 6;
@@ -3319,8 +4759,8 @@ async function page9(doc, dynamic) {
       .save()
       .lineWidth(0.8)
       .strokeColor("#999")
-      .moveTo(M.l, y)
-      .lineTo(M.l + CONTENT_W, y)
+      .moveTo(dynamicM.l, y)
+      .lineTo(dynamicM.l + dynamicContentW, y)
       .stroke()
       .restore();
     y += 8;
@@ -3328,37 +4768,59 @@ async function page9(doc, dynamic) {
 
   // Helper function to draw table header (returns new y position)
   const drawTableHeader = (startY) => {
-    const x = M.l;
-    const wPOS = 40;
-    const wDATE = 80;
-    const wDESC = 170;
-    const wSTATUS = 70;
-    const wNOTE = 95;
-    const wCTRL = CONTENT_W - (wPOS + wDATE + wDESC + wSTATUS + wNOTE);
+    const x = dynamicM.l;
+    // Base widths (proportions)
+    const baseWidths = {
+      POS: 40,
+      DATE: 80,
+      DESC: 170,
+      STATUS: 70,
+      NOTE: 95,
+      CTRL: 200 // Base width for control column
+    };
+    const totalBaseWidth = baseWidths.POS + baseWidths.DATE + baseWidths.DESC + baseWidths.STATUS + baseWidths.NOTE + baseWidths.CTRL;
+    // Scale all columns to fill the full content width
+    const scale = dynamicContentW / totalBaseWidth;
+    const wPOS = baseWidths.POS * scale;
+    const wDATE = baseWidths.DATE * scale;
+    const wDESC = baseWidths.DESC * scale;
+    const wSTATUS = baseWidths.STATUS * scale;
+    const wNOTE = baseWidths.NOTE * scale;
+    const wCTRL = baseWidths.CTRL * scale;
 
     const headerY = startY;
+    const headerHeight = 14;
+    
+    // Draw grey background for header row
+    const headerBgColor = "#e6e6e6"; // Light grey
+    doc.save()
+      .fillColor(headerBgColor)
+      .rect(x, headerY, dynamicContentW, headerHeight)
+      .fill()
+      .restore();
+    
     doc.font("Helvetica-Bold").fontSize(7.2).fillColor(BLUE);
-    doc.text("POS.", x, headerY, { width: wPOS });
-    doc.text("DATE", x + wPOS, headerY, { width: wDATE });
-    doc.text("DESCRIPTION", x + wPOS + wDATE, headerY, { width: wDESC });
-    doc.text("STATUS", x + wPOS + wDATE + wDESC, headerY, { width: wSTATUS });
-    doc.text("NOTE", x + wPOS + wDATE + wDESC + wSTATUS, headerY, {
+    doc.text(t("POS.", translations), x, headerY, { width: wPOS });
+    doc.text(t("DATE", translations), x + wPOS, headerY, { width: wDATE });
+    doc.text(t("DESCRIPTION", translations), x + wPOS + wDATE, headerY, { width: wDESC });
+    doc.text(t("STATUS", translations), x + wPOS + wDATE + wDESC, headerY, { width: wSTATUS });
+    doc.text(t("NOTE", translations), x + wPOS + wDATE + wDESC + wSTATUS, headerY, {
       width: wNOTE,
     });
     doc.text(
-      "CONTROL/ID",
+      t("CONTROL/ID", translations),
       x + wPOS + wDATE + wDESC + wSTATUS + wNOTE,
       headerY,
       { width: wCTRL }
     );
 
-    let newY = headerY + 14;
+    let newY = headerY + headerHeight;
     doc
       .save()
       .lineWidth(0.8)
       .strokeColor(LINE)
-      .moveTo(M.l, newY)
-      .lineTo(M.l + CONTENT_W, newY)
+      .moveTo(dynamicM.l, newY)
+      .lineTo(dynamicM.l + dynamicContentW, newY)
       .stroke()
       .restore();
     newY += 6;
@@ -3371,17 +4833,29 @@ async function page9(doc, dynamic) {
     }
 
     // column positions (no vertical borders; only row separators like PDF)
-    const x = M.l;
-    const wPOS = 40;
-    const wDATE = 80;
-    const wDESC = 170;
-    const wSTATUS = 70;
-    const wNOTE = 95;
-    const wCTRL = CONTENT_W - (wPOS + wDATE + wDESC + wSTATUS + wNOTE);
+    const x = dynamicM.l;
+    // Base widths (proportions)
+    const baseWidths = {
+      POS: 40,
+      DATE: 80,
+      DESC: 170,
+      STATUS: 70,
+      NOTE: 95,
+      CTRL: 200 // Base width for control column
+    };
+    const totalBaseWidth = baseWidths.POS + baseWidths.DATE + baseWidths.DESC + baseWidths.STATUS + baseWidths.NOTE + baseWidths.CTRL;
+    // Scale all columns to fill the full content width
+    const scale = dynamicContentW / totalBaseWidth;
+    const wPOS = baseWidths.POS * scale;
+    const wDATE = baseWidths.DATE * scale;
+    const wDESC = baseWidths.DESC * scale;
+    const wSTATUS = baseWidths.STATUS * scale;
+    const wNOTE = baseWidths.NOTE * scale;
+    const wCTRL = baseWidths.CTRL * scale;
 
     // Calculate available space for content (page height - margins - footer space)
     const footerHeight = 30;
-    const maxYForContent = PAGE.h - M.b - footerHeight;
+    const maxYForContent = doc.page.height - dynamicM.b - footerHeight;
     const rowH = 22;
     const minSpaceForRow = rowH + 10; // Row height + some padding
 
@@ -3394,12 +4868,23 @@ async function page9(doc, dynamic) {
     items.forEach((item, index) => {
       // Check if we need a new page before drawing this row
       if (y + minSpaceForRow > maxYForContent && index > 0) {
-        // Add footer to current page
-        footer(doc, 8);
+        // Add footer to current page with decimal notation
+        footer(doc, currentPageNumber, "", translations);
+        pagesCreated++;
+        
+        // Calculate page number for the new continuation page
+        currentPageNumber = parseFloat((basePageNumber + pagesCreated * 0.1).toFixed(1));
 
-        // Add new page
-        doc.addPage({ size: "A4", margin: 0 });
-        y = M.t;
+        // Add new page (A4 landscape for continuation - same as initial page)
+        doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+        // Reset dynamic margins for A4 landscape
+        const pageMargin = 50;
+        dynamicM.t = pageMargin;
+        dynamicM.b = pageMargin;
+        dynamicM.l = pageMargin;
+        dynamicM.r = pageMargin;
+        dynamicContentW = doc.page.width - dynamicM.l - dynamicM.r;
+        y = dynamicM.t;
 
         // Re-add header on new page
         y = drawTableHeader(y);
@@ -3409,10 +4894,17 @@ async function page9(doc, dynamic) {
       const itemId = item._id ? item._id.toString() : "";
       const status = approvalStatus[itemId] || {};
       const isSubmitted = submittedChecklistIds.includes(itemId);
+      const isApproved = status.approvedBy === true;
       const statusText = getStatusText(itemId);
       const statusColor = getStatusColor(itemId);
-      // Use approvedDate if approved, otherwise use selectedDate or submittedDate
-      const dateText = status.approvedDate
+      
+      // Debug logging for approved items
+      if (isApproved) {
+
+      }
+      
+      // DATE: Use approvedDate if approved, otherwise use selectedDate or submittedDate
+      const dateText = isApproved && status.approvedDate
         ? formatDate(status.approvedDate)
         : status.selectedDate
         ? formatDate(status.selectedDate)
@@ -3420,14 +4912,25 @@ async function page9(doc, dynamic) {
         ? formatDate(status.submittedDate)
         : "";
 
+      // Draw alternating row background (grey for even rows, white for odd rows)
+      const rowBgColor = index % 2 === 0 ? "#f5f5f5" : "#ffffff"; // Light grey for even, white for odd
+      doc.save()
+        .fillColor(rowBgColor)
+        .rect(x, rowTop, dynamicContentW, rowH)
+        .fill()
+        .restore();
+
       // POS (ItemId)
       doc.fillColor(GREY).text(item.ItemId || "", x, rowTop, { width: wPOS });
 
       // DATE
       doc.fillColor(GREY).text(dateText, x + wPOS, rowTop, { width: wDATE });
 
-      // DESCRIPTION (Contol of or Subject)
-      const desc = item["Contol of"] || item.Subject || "";
+      // DESCRIPTION (Contol of or Subject) - translate if not number/date
+      const descRaw = item["Contol of"] || item.Subject || "";
+      const desc = descRaw && !isNumberOrDate(String(descRaw))
+        ? t(String(descRaw), translations)
+        : descRaw;
       doc.fillColor(GREY).text(desc, x + wPOS + wDATE, rowTop, {
         width: wDESC,
         lineGap: 1,
@@ -3440,8 +4943,14 @@ async function page9(doc, dynamic) {
           width: wSTATUS,
         });
 
-      // NOTE - Use notes (from approval) if available, otherwise use comment (from submission)
-      const noteText = status.notes || status.comment || "No comments";
+      // NOTE: Use notes (from approval) if approved, otherwise use comment (from submission)
+      // Translate if not number/date (following extl2.js pattern)
+      const noteTextRaw = isApproved && status.notes
+        ? status.notes
+        : status.comment || "";
+      const noteText = noteTextRaw && typeof noteTextRaw === 'string' && !isNumberOrDate(noteTextRaw)
+        ? t(noteTextRaw, translations)
+        : noteTextRaw;
       doc
         .fillColor(GREY)
         .text(noteText, x + wPOS + wDATE + wDESC + wSTATUS, rowTop, {
@@ -3449,10 +4958,24 @@ async function page9(doc, dynamic) {
           lineGap: 1,
         });
 
-      // CONTROL/ID
-      const controlText =
-        item["Independent      inspektion"] ||
-        "Independent control of self-\nmonitoring.";
+      // CONTROL/ID: Show independent controller name if approved, otherwise show default text
+      // Translate if not number/date (following extl2.js pattern)
+      let controlTextRaw = "Independent control of self-\nmonitoring.";
+      if (isApproved && status.independentController) {
+        // If independentController is an object with name property
+        if (typeof status.independentController === 'object' && status.independentController.name) {
+          controlTextRaw = status.independentController.name;
+        } 
+        // If independentController is already a string (name)
+        else if (typeof status.independentController === 'string') {
+          controlTextRaw = status.independentController;
+        }
+      } else if (item["Independent      inspektion"]) {
+        controlTextRaw = item["Independent      inspektion"];
+      }
+      const controlText = controlTextRaw && typeof controlTextRaw === 'string' && !isNumberOrDate(controlTextRaw)
+        ? t(controlTextRaw, translations)
+        : controlTextRaw;
       doc
         .fillColor(GREY)
         .text(controlText, x + wPOS + wDATE + wDESC + wSTATUS + wNOTE, rowTop, {
@@ -3466,8 +4989,8 @@ async function page9(doc, dynamic) {
         .save()
         .lineWidth(0.8)
         .strokeColor(LINE)
-        .moveTo(M.l, y)
-        .lineTo(M.l + CONTENT_W, y)
+        .moveTo(dynamicM.l, y)
+        .lineTo(dynamicM.l + dynamicContentW, y)
         .stroke()
         .restore();
       y += 4;
@@ -3479,8 +5002,8 @@ async function page9(doc, dynamic) {
   // --- 7.1 B1 ---
   if (b1Items.length > 0) {
     drawHeading(
-      "7.1 Verification of the basis for execution from design",
-      "B1"
+      t("7.1 Verification of the basis for execution from design", translations),
+      t("B1", translations)
     );
     drawTable(b1Items);
   }
@@ -3488,8 +5011,8 @@ async function page9(doc, dynamic) {
   // --- 7.2 B2 ---
   if (b2Items.length > 0) {
     drawHeading(
-      "7.2 Verification of the basis for execution of the work",
-      "B2"
+      t("7.2 Verification of the basis for execution of the work", translations),
+      t("B2", translations)
     );
     drawTable(b2Items);
   }
@@ -3501,8 +5024,8 @@ async function page9(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(9.5)
       .fillColor(BLUE)
-      .text("7.3 Checking documentation of materials and products", M.l, y, {
-        width: CONTENT_W - 60,
+      .text(t("7.3 Checking documentation of materials and products", translations), dynamicM.l, y, {
+        width: dynamicContentW - 60,
         align: "left",
       });
 
@@ -3510,13 +5033,13 @@ async function page9(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(9.5)
       .fillColor("black")
-      .text("B3", M.l, y, {
-        width: CONTENT_W - 18,
+      .text(t("B3", translations), dynamicM.l, y, {
+        width: dynamicContentW - 18,
         align: "right",
       });
 
     // green dot
-    const dotX = M.l + CONTENT_W - 8;
+    const dotX = dynamicM.l + dynamicContentW - 8;
     const dotY = y + 6;
     doc.save().fillColor(GREEN).circle(dotX, dotY, 4).fill().restore();
 
@@ -3526,8 +5049,8 @@ async function page9(doc, dynamic) {
       .save()
       .lineWidth(0.8)
       .strokeColor("#999")
-      .moveTo(M.l, y)
-      .lineTo(M.l + CONTENT_W, y)
+      .moveTo(dynamicM.l, y)
+      .lineTo(dynamicM.l + dynamicContentW, y)
       .stroke()
       .restore();
     y += 8;
@@ -3535,31 +5058,287 @@ async function page9(doc, dynamic) {
     drawTable(b3Items);
   }
 
-  // Footer – Side 8 af 24
-  footer(doc, 8);
+  // Footer – Use decimal notation for continuation pages (9, 9.1, 9.2, etc.)
+  // Use the current page number that we've been tracking
+  
+  footer(doc, currentPageNumber);
+  
+  // Return the number of pages created (0 means only the base page was used)
+  return pagesCreated;
 }
 
 // PAGE 10 – 7.4–7.6 B4–B6 tables (Side 9 af 24) - SAFE VERSION
 // PAGE 10 – 7.4–7.6 B4–B6 tables (Side 9 af 24) - SAFE + COLORED DOTS
-function page10(doc, dynamic) {
+async function page10(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY = "#5a5a5a";
   const LINE = "#d9d9d9";
-  const RED = "#cc0000";
+  const RED = "black";
 
   const DOT_B4 = "#FFBF00";
   const DOT_B5 = "#00AFEF";
-  const DOT_B6 = "#BF0000";
+  const DOT_B6 = "black";
 
-  let y = M.t;
+  // Dynamic margins and content width for A3 landscape
+  const pageMargin = 50;
+  const dynamicM = {
+    t: pageMargin,
+    b: pageMargin,
+    l: pageMargin,
+    r: pageMargin,
+  };
+  const dynamicContentW = doc.page.width - dynamicM.l - dynamicM.r;
+
+  let y = dynamicM.t;
+
+  // Fetch controls data from database
+  let b4Items = [];
+  let b5Items = [];
+  let b6Items = [];
+  let approvalStatus = {};
+  let submittedChecklistIds = [];
+
+  try {
+    const { project, subjectMatterId, projectId, companyId } = dynamic;
+    const dbToUse = dynamic.db || db;
+
+    if (dbToUse && projectId && subjectMatterId) {
+      // Fetch eurocodeRecord to get projectEuroCodes
+      
+      const eurocodeRecord = await dbToUse
+        .collection("projectprofessioneurocodes")
+        .findOne({
+          projectId: projectId,
+          companyId: companyId,
+          subjectMatterId: subjectMatterId,
+        });
+
+      if (eurocodeRecord) {
+
+      }
+
+      if (eurocodeRecord?.euroCodes && eurocodeRecord.euroCodes.length > 0) {
+        const projectEuroCodes = eurocodeRecord.euroCodes
+          .map((v) => String(v).trim())
+          .filter(Boolean);
+
+        // Build aggregation pipeline (same as get-controls-of-static-report API)
+        const matchConditions = {
+          euroCodeStr: { $in: projectEuroCodes },
+          subjectMatterId: subjectMatterId,
+        };
+
+        const pipeline = [
+          { $addFields: { euroCodeStr: { $toString: "$euroCode" } } },
+          { $match: matchConditions },
+          { $unwind: { path: "$entries", includeArrayIndex: "entryIndex" } },
+          {
+            $project: {
+              _id: 0,
+              entry: "$entries",
+              documentId: "$_id",
+              subjectMatterId: 1,
+              euroCode: 1,
+              language: 1,
+              entryIndex: 1,
+            },
+          },
+        ];
+
+        const rows = await dbToUse
+          .collection("controls of static report")
+          .aggregate(pipeline)
+          .toArray();
+
+        // Map entries and add metadata
+        let allEntries = rows.map((r) => ({
+          ...r.entry,
+          _id: `${r.documentId}_${r.entryIndex}`,
+          documentId: r.documentId,
+          subjectMatterId: r.subjectMatterId,
+          euroCode: r.euroCode,
+          language: r.language,
+          entryIndex: r.entryIndex,
+        }));
+
+        if (allEntries.length > 0) {
+
+        }
+
+        // Check for edited entries - match by originalEntryId, projectId, and profession (matching subjectMatterId)
+        if (projectId) {
+
+          const editedEntries = await dbToUse
+            .collection("editcontrols")
+            .find({
+              projectId: projectId,
+              profession: subjectMatterId, // Match profession with subjectMatterId
+            })
+            .toArray();
+
+          const editedMap = {};
+          editedEntries.forEach((edited) => {
+            // Map by originalEntryId for lookup
+            if (edited.originalEntryId) {
+              editedMap[edited.originalEntryId] = edited;
+            }
+          });
+
+          allEntries = allEntries.map((entry) => {
+            const edited = editedMap[entry._id];
+            if (edited && edited.editedFields) {
+              // Replace entry with edited fields (including subject from editedFields)
+              const updatedEntry = { ...entry, ...edited.editedFields };
+
+              return updatedEntry;
+            }
+            return entry;
+          });
+        }
+
+        // Group entries by pos prefix (7.4, 7.5, 7.6)
+        
+        b4Items = allEntries.filter(
+          (entry) => entry.pos && entry.pos.startsWith("7.4")
+        );
+        b5Items = allEntries.filter(
+          (entry) => entry.pos && entry.pos.startsWith("7.5")
+        );
+        b6Items = allEntries.filter(
+          (entry) => entry.pos && entry.pos.startsWith("7.6")
+        );
+
+        // Sort items by pos (same sorting function as page9)
+        const sortByPos = (a, b) => {
+          const posA = a.pos || "";
+          const posB = b.pos || "";
+
+          const partsA = posA.split(".").map((part) => {
+            const num = parseInt(part, 10);
+            return isNaN(num) ? part : num;
+          });
+          const partsB = posB.split(".").map((part) => {
+            const num = parseInt(part, 10);
+            return isNaN(num) ? part : num;
+          });
+
+          const maxLength = Math.max(partsA.length, partsB.length);
+          for (let i = 0; i < maxLength; i++) {
+            const partA = partsA[i] !== undefined ? partsA[i] : 0;
+            const partB = partsB[i] !== undefined ? partsB[i] : 0;
+
+            if (partA < partB) return -1;
+            if (partA > partB) return 1;
+          }
+
+          return 0;
+        };
+
+        b4Items.sort(sortByPos);
+        b5Items.sort(sortByPos);
+        b6Items.sort(sortByPos);
+
+        // Fetch approval status (similar to page9)
+        if (allEntries.length > 0) {
+          // The _id field is a composite string like "documentId_entryIndex", not an ObjectId
+          // We need to extract the documentId part and use it for querying
+          const checklistIds = allEntries.map((item) => {
+            // If _id is a composite string, extract the documentId part
+            if (item._id && typeof item._id === 'string' && item._id.includes('_')) {
+              return item._id.split('_')[0]; // Get the documentId part
+            }
+            return item._id ? item._id.toString() : null;
+          }).filter(Boolean);
+
+          // Also try with the full composite _id strings
+          const fullChecklistIds = allEntries.map((item) => item._id ? item._id.toString() : null).filter(Boolean);
+
+          // Query for approval status - try both formats
+          let submittedEntries = [];
+
+          // Try query with profession.SubjectMatterId and documentId checklistIds
+          try {
+            submittedEntries = await dbToUse
+              .collection("staticDocumentChecklistProjectAndProfessionWise")
+              .find({
+                projectId: projectId,
+                "profession.SubjectMatterId": subjectMatterId,
+                $or: [
+                  { staticDocumentCheckListId: { $in: checklistIds } },
+                  { staticDocumentCheckListId: { $in: fullChecklistIds } }
+                ]
+              })
+              .toArray();
+          } catch (error) {
+
+          }
+
+          submittedChecklistIds = submittedEntries.map((entry) =>
+            entry.staticDocumentCheckListId.toString()
+          );
+
+          submittedEntries.forEach((entry) => {
+            const checklistId = entry.staticDocumentCheckListId
+              ? (entry.staticDocumentCheckListId.toString ? entry.staticDocumentCheckListId.toString() : String(entry.staticDocumentCheckListId))
+              : null;
+
+            if (checklistId) {
+              approvalStatus[checklistId] = {
+                approvedBy: entry.approvedBy || false,
+                approvedDate: entry.approvedDate || null,
+                submittedDate:
+                  entry.submittedDate || entry.submissionCreatedDate || null,
+                selectedDate: entry.selectedDate || entry.date || null,
+                comment: entry.comment || null,
+                notes: entry.notes || null,
+                independentController: entry.independentController || null,
+              };
+            }
+          });
+        }
+      } else {
+
+      }
+    } else {
+
+    }
+  } catch (error) {
+
+  }
+
+  // Helper function to format date
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    } catch (e) {
+      return "";
+    }
+  };
+
+  // Helper function to get status text
+  const getStatusText = (itemId) => {
+    const status = approvalStatus[itemId];
+    if (status && status.approvedBy === true) {
+      return t("Approved", translations);
+    } else if (submittedChecklistIds.includes(itemId)) {
+      return t("Submitted", translations);
+    }
+    return t("Pending", translations);
+  };
 
   const underline = () => {
     doc
       .save()
       .lineWidth(0.8)
       .strokeColor("#999")
-      .moveTo(M.l, y)
-      .lineTo(M.l + CONTENT_W, y)
+      .moveTo(dynamicM.l, y)
+      .lineTo(dynamicM.l + dynamicContentW, y)
       .stroke()
       .restore();
     y += 8;
@@ -3572,8 +5351,8 @@ function page10(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(9.5)
       .fillColor(BLUE)
-      .text(titleLeft || "", M.l, startY, {
-        width: CONTENT_W - 70,
+      .text(titleLeft || "", dynamicM.l, startY, {
+        width: dynamicContentW - 70,
         align: "left",
       });
 
@@ -3583,13 +5362,13 @@ function page10(doc, dynamic) {
         .font("Helvetica-Bold")
         .fontSize(9.5)
         .fillColor("black")
-        .text(String(rightLabel), M.l, startY, {
-          width: CONTENT_W - 14,
+        .text(String(rightLabel), dynamicM.l, startY, {
+          width: dynamicContentW - 14,
           align: "right",
         });
 
       if (dotColor) {
-        const dotX = M.l + CONTENT_W - 6; // near right edge
+        const dotX = dynamicM.l + dynamicContentW - 6; // near right edge
         const dotY = startY + 7; // vertically aligned with label
         doc.save().fillColor(dotColor).circle(dotX, dotY, 4).fill().restore();
       }
@@ -3604,48 +5383,69 @@ function page10(doc, dynamic) {
       .font("Helvetica")
       .fontSize(7.6)
       .fillColor(RED)
-      .text(text || "", M.l, y, { width: CONTENT_W, lineGap: 2 });
+      .text(text || "", dynamicM.l, y, { width: dynamicContentW, lineGap: 2 });
     y = doc.y + 10;
   };
 
-  const drawListTable = (rows, opts = {}) => {
-    rows = Array.isArray(rows) ? rows : [];
-    const x = M.l;
+  const drawListTable = (items, opts = {}) => {
+    if (!items || items.length === 0) {
+      return;
+    }
 
-    const wPOS = 45;
-    const wDATE = 85;
-    const wDESC = 175;
-    const wSTATUS = 72;
-    const wNOTE = 115;
-    const wCTRL = Math.max(
-      60,
-      CONTENT_W - (wPOS + wDATE + wDESC + wSTATUS + wNOTE)
-    );
+    const x = dynamicM.l;
+
+    // Base widths (proportions)
+    const baseWidths = {
+      POS: 45,
+      DATE: 85,
+      DESC: 175,
+      STATUS: 72,
+      NOTE: 115,
+      CTRL: 200 // Base width for control column
+    };
+    const totalBaseWidth = baseWidths.POS + baseWidths.DATE + baseWidths.DESC + baseWidths.STATUS + baseWidths.NOTE + baseWidths.CTRL;
+    // Scale all columns to fill the full content width
+    const scale = dynamicContentW / totalBaseWidth;
+    const wPOS = baseWidths.POS * scale;
+    const wDATE = baseWidths.DATE * scale;
+    const wDESC = baseWidths.DESC * scale;
+    const wSTATUS = baseWidths.STATUS * scale;
+    const wNOTE = baseWidths.NOTE * scale;
+    const wCTRL = baseWidths.CTRL * scale;
 
     const headerY = y;
+    const headerHeight = 14;
+    
+    // Draw grey background for header row
+    const headerBgColor = "#e6e6e6"; // Light grey
+    doc.save()
+      .fillColor(headerBgColor)
+      .rect(x, headerY, dynamicContentW, headerHeight)
+      .fill()
+      .restore();
 
     doc.font("Helvetica-Bold").fontSize(7.2).fillColor(BLUE);
-    doc.text("POS.", x, headerY, { width: wPOS });
-    doc.text("DATE", x + wPOS, headerY, { width: wDATE });
-    doc.text("DESCRIPTION", x + wPOS + wDATE, headerY, { width: wDESC });
-    doc.text("STATUS", x + wPOS + wDATE + wDESC, headerY, { width: wSTATUS });
-    doc.text("NOTE", x + wPOS + wDATE + wDESC + wSTATUS, headerY, {
+    doc.text(t("POS.", translations), x, headerY, { width: wPOS });
+    doc.text(t("DATE", translations), x + wPOS, headerY, { width: wDATE });
+    doc.text(t("DESCRIPTION", translations), x + wPOS + wDATE, headerY, { width: wDESC });
+    doc.text(t("STATUS", translations), x + wPOS + wDATE + wDESC, headerY, { width: wSTATUS });
+    doc.text(t("NOTE", translations), x + wPOS + wDATE + wDESC + wSTATUS, headerY, {
       width: wNOTE,
     });
     doc.text(
-      "CONTROL/ID",
+      t("CONTROL/ID", translations),
       x + wPOS + wDATE + wDESC + wSTATUS + wNOTE,
       headerY,
       { width: wCTRL }
     );
 
-    y = headerY + 14;
+    y = headerY + headerHeight;
     doc
       .save()
       .lineWidth(0.8)
       .strokeColor(LINE)
-      .moveTo(M.l, y)
-      .lineTo(M.l + CONTENT_W, y)
+      .moveTo(dynamicM.l, y)
+      .lineTo(dynamicM.l + dynamicContentW, y)
       .stroke()
       .restore();
     y += 6;
@@ -3653,35 +5453,74 @@ function page10(doc, dynamic) {
     const rowH = opts.rowH || 22;
     doc.font("Helvetica").fontSize(7.2);
 
-    rows.forEach((r) => {
+    items.forEach((item, index) => {
       const top = y;
+      const itemId = item._id ? item._id.toString() : "";
+      const status = approvalStatus[itemId] || {};
+      const isSubmitted = submittedChecklistIds.includes(itemId);
+      const isApproved = status.approvedBy === true;
+      const statusText = getStatusText(itemId);
 
-      doc.fillColor(GREY).text(String(r?.pos ?? ""), x, top, { width: wPOS });
-      doc
-        .fillColor(GREY)
-        .text(String(r?.date ?? "[Select Date]"), x + wPOS, top, {
+      // Draw alternating row background (grey for even rows, white for odd rows)
+      const rowBgColor = index % 2 === 0 ? "#f5f5f5" : "#ffffff"; // Light grey for even, white for odd
+      doc.save()
+        .fillColor(rowBgColor)
+        .rect(x, top, dynamicContentW, rowH)
+        .fill()
+        .restore();
+
+      // POS (ItemId/pos)
+      doc.fillColor(GREY).text(String(item?.pos || item?.ItemId || ""), x, top, { width: wPOS });
+
+      // DATE: Use approvedDate if approved, otherwise use selectedDate or submittedDate
+      const dateText = isApproved && status.approvedDate
+        ? formatDate(status.approvedDate)
+        : status.selectedDate
+        ? formatDate(status.selectedDate)
+        : status.submittedDate
+        ? formatDate(status.submittedDate)
+        : "";
+
+      doc.fillColor(GREY).text(dateText || "[Select Date]", x + wPOS, top, {
           width: wDATE,
         });
 
-      doc.fillColor(GREY).text(String(r?.desc ?? ""), x + wPOS + wDATE, top, {
+      // DESCRIPTION: Use subject field
+      const desc = item?.subject || "";
+      doc.fillColor(GREY).text(String(desc), x + wPOS + wDATE, top, {
         width: wDESC,
         lineGap: 1,
       });
-      doc
-        .fillColor(GREY)
-        .text(String(r?.status ?? ""), x + wPOS + wDATE + wDESC, top, {
+
+      // STATUS: Show fixed text "Approved"
+      doc.fillColor(GREY).text(t("Approved", translations), x + wPOS + wDATE + wDESC, top, {
           width: wSTATUS,
         });
-      doc
-        .fillColor(GREY)
-        .text(String(r?.note ?? ""), x + wPOS + wDATE + wDESC + wSTATUS, top, {
+
+      // NOTE: Use notes if approved, otherwise use comment
+      const noteTextRaw = isApproved && status.notes
+        ? status.notes
+        : status.comment || "";
+      const noteText = t(noteTextRaw, translations);
+      doc.fillColor(GREY).text(String(noteText), x + wPOS + wDATE + wDESC + wSTATUS, top, {
           width: wNOTE,
           lineGap: 1,
         });
-      doc
-        .fillColor(GREY)
-        .text(
-          String(r?.ctrl ?? ""),
+
+      // CONTROL/ID: Show independent controller name if approved, otherwise show default
+      let controlTextRaw = "Independent control of self-\nmonitoring.";
+      if (isApproved && status.independentController) {
+        if (typeof status.independentController === 'object' && status.independentController.name) {
+          controlTextRaw = status.independentController.name;
+        } else if (typeof status.independentController === 'string') {
+          controlTextRaw = status.independentController;
+        }
+      } else if (item["Independent      inspektion"]) {
+        controlTextRaw = item["Independent      inspektion"];
+      }
+      const controlText = t(controlTextRaw, translations);
+      doc.fillColor(GREY).text(
+        String(controlText),
           x + wPOS + wDATE + wDESC + wSTATUS + wNOTE,
           top,
           { width: wCTRL, lineGap: 1 }
@@ -3692,8 +5531,8 @@ function page10(doc, dynamic) {
         .save()
         .lineWidth(0.8)
         .strokeColor(LINE)
-        .moveTo(M.l, y)
-        .lineTo(M.l + CONTENT_W, y)
+        .moveTo(dynamicM.l, y)
+        .lineTo(dynamicM.l + dynamicContentW, y)
         .stroke()
         .restore();
       y += 4;
@@ -3703,115 +5542,1462 @@ function page10(doc, dynamic) {
   };
 
   // ---- 7.4 / B4 (orange dot) ----
-  sectionHead("7.4 Receive control of deliveries", "B4", DOT_B4);
+  if (b4Items.length > 0) {
+  sectionHead(t("7.4 Receive control of deliveries", translations), t("B4", translations), DOT_B4);
 
-  redNote(
-    "B4 – B6 comes from the Excel sheets with the profession and Eurocode based controles. " +
-      "State date, change description, show status, change note, state control ID."
-  );
-
-  drawListTable([
-    {
-      pos: "7.4.1",
-      desc: "Reception control",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Independent control of self-\nmonitoring.",
-    },
-    {
-      pos: "7.4.2",
-      desc: "Delivery notes",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Independent control of self-\nmonitoring.",
-    },
-    {
-      pos: "7.4.3",
-      desc: "Supplies strength control",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Independent control of self-\nmonitoring.",
-    },
-  ]);
+    drawListTable(b4Items);
+  }
 
   // ---- 7.5 / B5 (blue dot) ----
-  sectionHead("7.5 Execution control", "B5", DOT_B5);
+  if (b5Items.length > 0) {
+  sectionHead(t("7.5 Execution control", translations), t("B5", translations), DOT_B5);
 
-  drawListTable([
-    {
-      pos: "7.5.1",
-      desc: "",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Select an item.",
-    },
-    {
-      pos: "7.5.2",
-      desc: "",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Select an item.",
-    },
-    {
-      pos: "7.5.3",
-      desc: "",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Select an item.",
-    },
-    {
-      pos: "7.5.4",
-      desc: "",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Select an item.",
-    },
-  ]);
+    drawListTable(b5Items);
+  }
 
   // ---- 7.6 / B6 (red dot) ----
-  sectionHead("7.6 Final Check", "B6", DOT_B6);
+  if (b6Items.length > 0) {
+  sectionHead(t("7.6 Final Check", translations), t("B6", translations), DOT_B6);
 
-  drawListTable([
-    {
-      pos: "7.6.1",
-      desc: "",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Select an item.",
-    },
-    {
-      pos: "7.6.2",
-      desc: "",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Select an item.",
-    },
-    {
-      pos: "7.6.3",
-      desc: "",
-      status: "Approved",
-      note: "Supplemented by inspection of selected\nparts",
-      ctrl: "Select an item.",
-    },
-  ]);
+    drawListTable(b6Items);
+  }
 
   footer(doc, 9);
 }
 
+// Helper function to fetch controls data for sections 7.4, 7.5, 7.6 (same as extl.js)
+async function fetchControlsDataForSections(dynamic, posPrefix) {
+  let rows = [];
+
+  try {
+    const { project, subjectMatterId, projectId, companyId } = dynamic;
+    const dbToUse = dynamic.db || db;
+
+    if (dbToUse && projectId && subjectMatterId) {
+      // Fetch eurocodeRecord to get projectEuroCodes
+      const eurocodeRecord = await dbToUse
+        .collection("projectprofessioneurocodes")
+        .findOne({
+          projectId: projectId,
+          companyId: companyId,
+          subjectMatterId: subjectMatterId,
+        });
+
+      if (eurocodeRecord?.euroCodes && eurocodeRecord.euroCodes.length > 0) {
+        const projectEuroCodes = eurocodeRecord.euroCodes
+          .map((v) => String(v).trim())
+          .filter(Boolean);
+
+        // Build aggregation pipeline (same as get-controls-of-static-report API)
+        const matchConditions = {
+          euroCodeStr: { $in: projectEuroCodes },
+          subjectMatterId: subjectMatterId,
+        };
+
+        const pipeline = [
+          { $addFields: { euroCodeStr: { $toString: "$euroCode" } } },
+          { $match: matchConditions },
+          { $unwind: { path: "$entries", includeArrayIndex: "entryIndex" } },
+          {
+            $project: {
+              _id: 0,
+              entry: "$entries",
+              documentId: "$_id",
+              subjectMatterId: 1,
+              euroCode: 1,
+              language: 1,
+              entryIndex: 1,
+            },
+          },
+        ];
+
+        const pipelineRows = await dbToUse
+          .collection("controls of static report")
+          .aggregate(pipeline)
+          .toArray();
+
+        // Map entries and add metadata
+        let entries = pipelineRows.map((r) => ({
+          ...r.entry,
+          _id: `${r.documentId}_${r.entryIndex}`,
+          documentId: r.documentId,
+          subjectMatterId: r.subjectMatterId,
+          euroCode: r.euroCode,
+          language: r.language,
+          entryIndex: r.entryIndex,
+        }));
+
+        // Check for edited data and replace entries (same logic as extl.js)
+        if (projectId) {
+          const editedControls = await dbToUse
+            .collection("editcontrols")
+            .find({
+              projectId: projectId,
+              subjectMatterId: subjectMatterId,
+            })
+            .toArray();
+
+          const editedDataMap = new Map();
+          editedControls.forEach((editedControl) => {
+            if (editedControl.editedFields && editedControl.editedFields.pos) {
+              const key = `${editedControl.projectId}_${editedControl.subjectMatterId}_${editedControl.editedFields.pos}`;
+              editedDataMap.set(key, editedControl.editedFields);
+            }
+          });
+
+          entries = entries.map((entry) => {
+            const key = `${projectId}_${subjectMatterId}_${entry.pos}`;
+            const editedData = editedDataMap.get(key);
+            if (editedData) {
+              return {
+                ...entry,
+                ...editedData,
+                _isEdited: true,
+              };
+            }
+            return entry;
+          });
+        }
+
+        // Helper function to map entry to table row (same as extl.js)
+        const mapEntryToRow = (entry) => {
+          // Convert circumference (0.2) to percentage string ("20%")
+          let scopeValue = "";
+          if (
+            entry.circumference !== undefined &&
+            entry.circumference !== null
+          ) {
+            scopeValue = `${entry.circumference * 100}%`;
+          } else if (entry.omfang !== undefined && entry.omfang !== null) {
+            // Danish field name
+            scopeValue = `${entry.omfang * 100}%`;
+          } else if (entry.scope) {
+            scopeValue = entry.scope;
+          } else if (entry.Scope) {
+            scopeValue = entry.Scope;
+          } else if (entry.extent) {
+            scopeValue = `${entry.extent * 100}%`;
+          }
+
+          return {
+            pos: entry.pos || "",
+            checkingThe:
+              entry.checkingThe ||
+              entry.kontrolAf || // Danish field name
+              entry["Control of"] ||
+              entry["Contol of"] ||
+              "",
+            subject:
+              entry.subject ||
+              entry.emne || // Danish field name
+              entry.Subject ||
+              "",
+            constructionPart:
+              entry.constructionPart ||
+              entry.konstruktionsdel || // Danish field name
+              entry["Construction part"] ||
+              "",
+            basis:
+              entry.basis ||
+              entry.grundlag || // Danish field name
+              entry.Basis ||
+              "",
+            method:
+              entry.controlMethod ||
+              entry.kontrolMetode || // Danish field name
+              entry["Control method"] ||
+              entry["Control methode"] ||
+              entry.method ||
+              "",
+            scope: scopeValue,
+            acceptance:
+              entry.acceptanceCriteria ||
+              entry.acceptkriterie || // Danish field name
+              entry["Acceptance criteria"] ||
+              entry.acceptance ||
+              "",
+            timeControl:
+              entry.time ||
+              entry.tid || // Danish field name
+              entry.Time ||
+              entry.timeControl ||
+              "",
+          };
+        };
+
+        // Filter and sort by pos prefix (7.4, 7.5, 7.6) - also handle 17.4, 17.5, 17.6
+        const altPrefix = posPrefix.replace("7.", "17.");
+        rows = entries
+          .filter(
+            (entry) =>
+              entry.pos &&
+              (entry.pos.startsWith(posPrefix) || entry.pos.startsWith(altPrefix))
+          )
+          .sort((a, b) => (a.pos || "").localeCompare(b.pos || ""))
+          .map(mapEntryToRow);
+      }
+    }
+  } catch (error) {
+
+  }
+
+  return rows;
+}
+
+// PAGE 23 – 7.4 RECEIPT CONTROL DELIVERIES B4 (LANDSCAPE - same template as 7.3)
+async function page23_7_4(doc, dynamic, translations = {}) {
+  // Base coordinates taken from your PDF page (landscape ~ 792x612)
+  const BASE = { w: 792, h: 612 };
+  const s = Math.min(doc.page.width / BASE.w, doc.page.height / BASE.h);
+  const oX = (doc.page.width - BASE.w * s) / 2;
+  const oY = (doc.page.height - BASE.h * s) / 2;
+
+  const X = (v) => oX + v * s;
+  const Y = (v) => oY + v * s;
+  const W = (v) => v * s;
+  const H = (v) => v * s;
+
+  // Colors (matched to PDF)
+  const BLUE = "#244061";
+  const LIGHT_BLUE = "#5989c1";
+  const GREY = "#d9d9d9";
+  const YELLOW = "#ffff00";
+  const TXT_GREY = "#666666";
+  const RED = "black";
+  const HEADER_TXT = "#1f2e46";
+
+  // ---------- helpers ----------
+  function fillRect(x, y, w, h, color) {
+    doc.save().fillColor(color).rect(X(x), Y(y), W(w), H(h)).fill().restore();
+  }
+
+  function strokeRect(x, y, w, h, color = "#000", lw = 1) {
+    doc
+      .save()
+      .lineWidth(lw * s)
+      .strokeColor(color)
+      .rect(X(x), Y(y), W(w), H(h))
+      .stroke()
+      .restore();
+  }
+
+  function cellTextFit(x0, y0, w, h, text, style = {}) {
+    const font = style.font || (style.bold ? "Helvetica-Bold" : "Helvetica");
+    const color = style.color || "black";
+    const align = style.align || "left";
+    const lineGap = style.lineGap != null ? style.lineGap : 1;
+
+    const maxW = W(w);
+    const maxH = H(h);
+
+    let size = style.size || 8;
+
+    // shrink until it fits the cell height (so NO text is cut)
+    for (let i = 0; i < 22; i++) {
+      doc.font(font).fontSize(size * s);
+      const needed = doc.heightOfString(String(text ?? ""), {
+        width: maxW,
+        lineGap: lineGap * s,
+      });
+      if (needed <= maxH) break;
+      size -= 0.25;
+      if (size < 6) break;
+    }
+
+    doc
+      .font(font)
+      .fontSize(size * s)
+      .fillColor(color)
+      .text(String(text ?? ""), X(x0), Y(y0), {
+        width: maxW,
+        height: maxH,
+        lineGap: lineGap * s,
+        align,
+      });
+  }
+
+  // ---------- TOP BAR ----------
+  // From PDF: x 53.76..737.40, y 54.60..75.96
+  fillRect(53.76, 54.6, 737.4 - 53.76, 75.96 - 54.6, BLUE);
+
+  cellTextFit(
+    60.9,
+    58.4,
+    737.4 - 60.9 - 70,
+    16,
+    t("7.4 RECEIPT CONTROL DELIVERIES", translations),
+    { bold: true, size: 11, color: "white" }
+  );
+
+  cellTextFit(53.76, 58.4, 737.4 - 53.76 - 10, 16, t("B4", translations), {
+    bold: true,
+    size: 11,
+    color: "white",
+    align: "right",
+  });
+
+  // ---------- TABLE COLS (exact from PDF - same as 7.3) ----------
+  const COLS = [
+    { key: "pos", x0: 54.0, x1: 82.32, title: "POS" },
+    { key: "check", x0: 82.32, x1: 146.4, title: "CHECKING THE" },
+    { key: "subject", x0: 146.4, x1: 265.68, title: "SUBJECT" },
+    { key: "part", x0: 265.68, x1: 350.88, title: "CONSTRUCTION PART" },
+    { key: "basis", x0: 350.88, x1: 415.92, title: "BASIS" },
+    { key: "method", x0: 415.92, x1: 488.16, title: "CONTROL METHOD" },
+    { key: "scope", x0: 488.16, x1: 524.52, title: "SCOPE" },
+    { key: "acc", x0: 524.52, x1: 646.56, title: "ACCEPTANCE CRITERIA" },
+    { key: "time", x0: 646.56, x1: 695.88, title: "TIME CONTROL" },
+    { key: "control", x0: 695.88, x1: 737.16, title: "CONTROL" },
+  ];
+
+  // Header Y positions (6 blocks) from PDF
+  const headerYs = [88.44, 156.36, 216.6, 294.36, 372.12, 449.88];
+  const headerH = 14.16; // matches 88.44..102.60
+  const contentStartOffset = 16.56; // header->content (matches PDF text start)
+  const lastBlockEndY = 522.0; // stop before legend boxes
+
+  // Fetch controls data for section 7.4
+  const b4Rows = await fetchControlsDataForSections(dynamic, "7.4");
+
+  // Determine scope based on gamma.cc value and append "Planned Sample Checks"
+  const ccValue = dynamic.gamma?.cc
+    ? String(dynamic.gamma.cc).toLowerCase()
+    : "";
+  const plannedSampleChecksText = "Planned Sample Checks";
+  let dynamicScope = "";
+  if (ccValue === "kk1" || ccValue === "kk2") {
+    dynamicScope = `10% ${plannedSampleChecksText}`;
+  } else if (ccValue === "kk3" || ccValue === "kk4") {
+    dynamicScope = `20% ${plannedSampleChecksText}`;
+  }
+
+  // Get construction part (special text) from gamma
+  const specialText = dynamic?.gamma?.special || dynamic?.specialText || "Special text";
+
+  // Map B4 rows to table format
+  const rows = b4Rows.map((r) => ({
+      pos: r.pos || "",
+    check: r.checkingThe || "",
+      subject: r.subject || "",
+    part: specialText, // Use special text from gamma
+      basis: r.basis || "",
+      method: r.method || "",
+    scope: dynamicScope || r.scope || "10%", // Use dynamic scope or default
+    acc: r.acceptance || "",
+    time: r.timeControl || "",
+    control: "IC", // Always IC for B4
+  }));
+
+  const pad = 5;
+
+  // draw blocks - only process rows that exist
+  const rowsToShow = Math.min(rows.length, headerYs.length);
+  for (let i = 0; i < rowsToShow; i++) {
+    const hy = headerYs[i];
+    const row = rows[i];
+
+    // grey headers
+    for (const c of COLS) {
+      fillRect(c.x0, hy, c.x1 - c.x0, headerH, GREY);
+    }
+
+    // header labels (no yellow highlights)
+    for (const c of COLS) {
+      cellTextFit(
+        c.x0 + pad,
+        hy + 2.2,
+        c.x1 - c.x0 - pad * 2,
+        headerH - 2,
+        c.title,
+        { bold: true, size: 8, color: HEADER_TXT }
+      );
+    }
+
+    // content height for this block
+    const contentY = hy + contentStartOffset;
+    const blockEnd = i < headerYs.length - 1 ? headerYs[i + 1] : lastBlockEndY;
+    const contentH = Math.max(22, blockEnd - contentY - 2);
+
+    // cells (auto-fit to never cut text)
+    cellTextFit(
+      COLS[0].x0 + pad,
+      contentY,
+      COLS[0].x1 - COLS[0].x0 - pad * 2,
+      contentH,
+      row.pos,
+      { size: 8, color: "#333" }
+    );
+
+    cellTextFit(
+      COLS[1].x0 + pad,
+      contentY,
+      COLS[1].x1 - COLS[1].x0 - pad * 2,
+      contentH,
+      t(row.check, translations),
+      { size: 8, bold: true, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[2].x0 + pad,
+      contentY,
+      COLS[2].x1 - COLS[2].x0 - pad * 2,
+      contentH,
+      t(row.subject, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    // CONSTRUCTION PART (black, not red)
+    cellTextFit(
+      COLS[3].x0 + pad,
+      contentY,
+      COLS[3].x1 - COLS[3].x0 - pad * 2,
+      contentH,
+      t(row.part, translations),
+      { size: 8, color: "black" }
+    );
+
+    cellTextFit(
+      COLS[4].x0 + pad,
+      contentY,
+      COLS[4].x1 - COLS[4].x0 - pad * 2,
+      contentH,
+      t(row.basis, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[5].x0 + pad,
+      contentY,
+      COLS[5].x1 - COLS[5].x0 - pad * 2,
+      contentH,
+      t(row.method, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[6].x0 + pad,
+      contentY,
+      COLS[6].x1 - COLS[6].x0 - pad * 2,
+      contentH,
+      row.scope,
+      { size: 8, color: "#000" }
+    );
+
+    cellTextFit(
+      COLS[7].x0 + pad,
+      contentY,
+      COLS[7].x1 - COLS[7].x0 - pad * 2,
+      contentH,
+      t(row.acc, translations),
+      { size: 8, color: TXT_GREY, lineGap: 1 }
+    );
+
+    cellTextFit(
+      COLS[8].x0 + pad,
+      contentY,
+      COLS[8].x1 - COLS[8].x0 - pad * 2,
+      contentH,
+      t(row.time, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[9].x0 + pad,
+      contentY,
+      COLS[9].x1 - COLS[9].x0 - pad * 2,
+      contentH,
+      row.control,
+      { size: 8, color: "#000" }
+    );
+  }
+
+  // ---------- FOOTER (blue bar + texts) ----------
+  // thin light-blue line (from PDF)
+  fillRect(48.36, 557.28, 733.44 - 48.36, 557.76 - 557.28, LIGHT_BLUE);
+
+  // footer bar (from PDF)
+  fillRect(53.04, 557.52, 741.6 - 53.04, 585.0 - 557.52, BLUE);
+
+  // left brand
+  cellTextFit(80, 563.2, 220, 16, "Assurement", {
+    bold: true,
+    size: 10,
+    color: "white",
+  });
+
+  // center
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04,
+    16,
+    "Part of Kvalitetssikring Danmark ApS",
+    {
+      bold: true,
+      size: 9,
+      color: "white",
+      align: "center",
+    }
+  );
+
+  // right page number
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04 - 10,
+    16,
+    `Page 22 af ${TOTAL_PAGES}`,
+    {
+      size: 10,
+      color: "white",
+      align: "right",
+    }
+  );
+}
+
+// PAGE 24 – 7.5 EXECUTION CONTROL B5 (LANDSCAPE - same template as 7.3)
+async function page24_7_5(doc, dynamic, translations = {}) {
+  // Base coordinates taken from your PDF page (landscape ~ 792x612)
+  const BASE = { w: 792, h: 612 };
+  const s = Math.min(doc.page.width / BASE.w, doc.page.height / BASE.h);
+  const oX = (doc.page.width - BASE.w * s) / 2;
+  const oY = (doc.page.height - BASE.h * s) / 2;
+
+  const X = (v) => oX + v * s;
+  const Y = (v) => oY + v * s;
+  const W = (v) => v * s;
+  const H = (v) => v * s;
+
+  // Colors (matched to PDF)
+  const BLUE = "#244061";
+  const LIGHT_BLUE = "#5989c1";
+  const GREY = "#d9d9d9";
+  const YELLOW = "#ffff00";
+  const TXT_GREY = "#666666";
+  const RED = "black";
+  const HEADER_TXT = "#1f2e46";
+
+  // ---------- helpers ----------
+  function fillRect(x, y, w, h, color) {
+    doc.save().fillColor(color).rect(X(x), Y(y), W(w), H(h)).fill().restore();
+  }
+
+  function strokeRect(x, y, w, h, color = "#000", lw = 1) {
+    doc
+      .save()
+      .lineWidth(lw * s)
+      .strokeColor(color)
+      .rect(X(x), Y(y), W(w), H(h))
+      .stroke()
+      .restore();
+  }
+
+  function cellTextFit(x0, y0, w, h, text, style = {}) {
+    const font = style.font || (style.bold ? "Helvetica-Bold" : "Helvetica");
+    const color = style.color || "black";
+    const align = style.align || "left";
+    const lineGap = style.lineGap != null ? style.lineGap : 1;
+
+    const maxW = W(w);
+    const maxH = H(h);
+
+    let size = style.size || 8;
+
+    // shrink until it fits the cell height (so NO text is cut)
+    for (let i = 0; i < 22; i++) {
+      doc.font(font).fontSize(size * s);
+      const needed = doc.heightOfString(String(text ?? ""), {
+        width: maxW,
+        lineGap: lineGap * s,
+      });
+      if (needed <= maxH) break;
+      size -= 0.25;
+      if (size < 6) break;
+    }
+
+    doc
+      .font(font)
+      .fontSize(size * s)
+      .fillColor(color)
+      .text(String(text ?? ""), X(x0), Y(y0), {
+        width: maxW,
+        height: maxH,
+        lineGap: lineGap * s,
+        align,
+      });
+  }
+
+  // ---------- TOP BAR ----------
+  // From PDF: x 53.76..737.40, y 54.60..75.96
+  fillRect(53.76, 54.6, 737.4 - 53.76, 75.96 - 54.6, BLUE);
+
+  cellTextFit(
+    60.9,
+    58.4,
+    737.4 - 60.9 - 70,
+    16,
+    t("7.5 PERFORMANCE CONTROL", translations),
+    { bold: true, size: 11, color: "white" }
+  );
+
+  cellTextFit(53.76, 58.4, 737.4 - 53.76 - 10, 16, t("B5", translations), {
+    bold: true,
+    size: 11,
+    color: "white",
+    align: "right",
+  });
+
+  // ---------- TABLE COLS (exact from PDF - same as 7.3) ----------
+  const COLS = [
+    { key: "pos", x0: 54.0, x1: 82.32, title: "POS" },
+    { key: "check", x0: 82.32, x1: 146.4, title: "CHECKING THE" },
+    { key: "subject", x0: 146.4, x1: 265.68, title: "SUBJECT" },
+    { key: "part", x0: 265.68, x1: 350.88, title: "CONSTRUCTION PART" },
+    { key: "basis", x0: 350.88, x1: 415.92, title: "BASIS" },
+    { key: "method", x0: 415.92, x1: 488.16, title: "CONTROL METHOD" },
+    { key: "scope", x0: 488.16, x1: 524.52, title: "SCOPE" },
+    { key: "acc", x0: 524.52, x1: 646.56, title: "ACCEPTANCE CRITERIA" },
+    { key: "time", x0: 646.56, x1: 695.88, title: "TIME CONTROL" },
+    { key: "control", x0: 695.88, x1: 737.16, title: "CONTROL" },
+  ];
+
+  // Header Y positions (6 blocks) from PDF
+  const headerYs = [88.44, 156.36, 216.6, 294.36, 372.12, 449.88];
+  const headerH = 14.16; // matches 88.44..102.60
+  const contentStartOffset = 16.56; // header->content (matches PDF text start)
+  const lastBlockEndY = 522.0; // stop before legend boxes
+
+  // Fetch controls data for section 7.5
+  const b5Rows = await fetchControlsDataForSections(dynamic, "7.5");
+
+  // Determine scope based on gamma.cc value and append "Planned Sample Checks"
+  const ccValue = dynamic.gamma?.cc
+    ? String(dynamic.gamma.cc).toLowerCase()
+    : "";
+  const plannedSampleChecksText = "Planned Sample Checks";
+  let dynamicScope = "";
+  if (ccValue === "kk1" || ccValue === "kk2") {
+    dynamicScope = `10% ${plannedSampleChecksText}`;
+  } else if (ccValue === "kk3" || ccValue === "kk4") {
+    dynamicScope = `20% ${plannedSampleChecksText}`;
+  }
+
+  // Get construction part (special text) from gamma
+  const specialText = dynamic?.gamma?.special || dynamic?.specialText || "Special text";
+
+  // Map B5 rows to table format
+  const rows = b5Rows.map((r) => ({
+      pos: r.pos || "",
+    check: r.checkingThe || "",
+      subject: r.subject || "",
+    part: specialText, // Use special text from gamma
+      basis: r.basis || "",
+      method: r.method || "",
+    scope: dynamicScope || r.scope || "10%", // Use dynamic scope or default
+    acc: r.acceptance || "",
+    time: r.timeControl || "",
+    control: "IC", // Always IC for B5
+  }));
+
+  const pad = 5;
+
+  // draw blocks - only process rows that exist
+  const rowsToShow = Math.min(rows.length, headerYs.length);
+  for (let i = 0; i < rowsToShow; i++) {
+    const hy = headerYs[i];
+    const row = rows[i];
+
+    // grey headers
+    for (const c of COLS) {
+      fillRect(c.x0, hy, c.x1 - c.x0, headerH, GREY);
+    }
+
+    // header labels (no yellow highlights)
+    for (const c of COLS) {
+      cellTextFit(
+        c.x0 + pad,
+        hy + 2.2,
+        c.x1 - c.x0 - pad * 2,
+        headerH - 2,
+        c.title,
+        { bold: true, size: 8, color: HEADER_TXT }
+      );
+    }
+
+    // content height for this block
+    const contentY = hy + contentStartOffset;
+    const blockEnd = i < headerYs.length - 1 ? headerYs[i + 1] : lastBlockEndY;
+    const contentH = Math.max(22, blockEnd - contentY - 2);
+
+    // cells (auto-fit to never cut text)
+    cellTextFit(
+      COLS[0].x0 + pad,
+      contentY,
+      COLS[0].x1 - COLS[0].x0 - pad * 2,
+      contentH,
+      row.pos,
+      { size: 8, color: "#333" }
+    );
+
+    cellTextFit(
+      COLS[1].x0 + pad,
+      contentY,
+      COLS[1].x1 - COLS[1].x0 - pad * 2,
+      contentH,
+      t(row.check, translations),
+      { size: 8, bold: true, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[2].x0 + pad,
+      contentY,
+      COLS[2].x1 - COLS[2].x0 - pad * 2,
+      contentH,
+      t(row.subject, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    // CONSTRUCTION PART (black, not red)
+    cellTextFit(
+      COLS[3].x0 + pad,
+      contentY,
+      COLS[3].x1 - COLS[3].x0 - pad * 2,
+      contentH,
+      t(row.part, translations),
+      { size: 8, color: "black" }
+    );
+
+    cellTextFit(
+      COLS[4].x0 + pad,
+      contentY,
+      COLS[4].x1 - COLS[4].x0 - pad * 2,
+      contentH,
+      t(row.basis, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[5].x0 + pad,
+      contentY,
+      COLS[5].x1 - COLS[5].x0 - pad * 2,
+      contentH,
+      t(row.method, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[6].x0 + pad,
+      contentY,
+      COLS[6].x1 - COLS[6].x0 - pad * 2,
+      contentH,
+      row.scope,
+      { size: 8, color: "#000" }
+    );
+
+    cellTextFit(
+      COLS[7].x0 + pad,
+      contentY,
+      COLS[7].x1 - COLS[7].x0 - pad * 2,
+      contentH,
+      t(row.acc, translations),
+      { size: 8, color: TXT_GREY, lineGap: 1 }
+    );
+
+    cellTextFit(
+      COLS[8].x0 + pad,
+      contentY,
+      COLS[8].x1 - COLS[8].x0 - pad * 2,
+      contentH,
+      t(row.time, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[9].x0 + pad,
+      contentY,
+      COLS[9].x1 - COLS[9].x0 - pad * 2,
+      contentH,
+      row.control,
+      { size: 8, color: "#000" }
+    );
+  }
+
+  // ---------- FOOTER (blue bar + texts) ----------
+  // thin light-blue line (from PDF)
+  fillRect(48.36, 557.28, 733.44 - 48.36, 557.76 - 557.28, LIGHT_BLUE);
+
+  // footer bar (from PDF)
+  fillRect(53.04, 557.52, 741.6 - 53.04, 585.0 - 557.52, BLUE);
+
+  // left brand
+  cellTextFit(80, 563.2, 220, 16, "Assurement", {
+    bold: true,
+    size: 10,
+    color: "white",
+  });
+
+  // center
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04,
+    16,
+    "Part of Kvalitetssikring Danmark ApS",
+    {
+      bold: true,
+      size: 9,
+      color: "white",
+      align: "center",
+    }
+  );
+
+  // right page number
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04 - 10,
+    16,
+    `Page 23 af ${TOTAL_PAGES}`,
+    {
+      size: 10,
+      color: "white",
+      align: "right",
+    }
+  );
+}
+
+// PAGE 25 – 7.6 FINAL CHECK B6 (LANDSCAPE - same template as 7.3)
+async function page25_7_6(doc, dynamic, translations = {}) {
+  // Base coordinates taken from your PDF page (landscape ~ 792x612)
+  const BASE = { w: 792, h: 612 };
+  const s = Math.min(doc.page.width / BASE.w, doc.page.height / BASE.h);
+  const oX = (doc.page.width - BASE.w * s) / 2;
+  const oY = (doc.page.height - BASE.h * s) / 2;
+
+  const X = (v) => oX + v * s;
+  const Y = (v) => oY + v * s;
+  const W = (v) => v * s;
+  const H = (v) => v * s;
+
+  // Colors (matched to PDF)
+  const BLUE = "#244061";
+  const LIGHT_BLUE = "#5989c1";
+  const GREY = "#d9d9d9";
+  const YELLOW = "#ffff00";
+  const TXT_GREY = "#666666";
+  const RED = "black";
+  const HEADER_TXT = "#1f2e46";
+
+  // ---------- helpers ----------
+  function fillRect(x, y, w, h, color) {
+    doc.save().fillColor(color).rect(X(x), Y(y), W(w), H(h)).fill().restore();
+  }
+
+  function strokeRect(x, y, w, h, color = "#000", lw = 1) {
+    doc
+      .save()
+      .lineWidth(lw * s)
+      .strokeColor(color)
+      .rect(X(x), Y(y), W(w), H(h))
+      .stroke()
+      .restore();
+  }
+
+  function cellTextFit(x0, y0, w, h, text, style = {}) {
+    const font = style.font || (style.bold ? "Helvetica-Bold" : "Helvetica");
+    const color = style.color || "black";
+    const align = style.align || "left";
+    const lineGap = style.lineGap != null ? style.lineGap : 1;
+
+    const maxW = W(w);
+    const maxH = H(h);
+
+    let size = style.size || 8;
+
+    // shrink until it fits the cell height (so NO text is cut)
+    for (let i = 0; i < 22; i++) {
+      doc.font(font).fontSize(size * s);
+      const needed = doc.heightOfString(String(text ?? ""), {
+        width: maxW,
+        lineGap: lineGap * s,
+      });
+      if (needed <= maxH) break;
+      size -= 0.25;
+      if (size < 6) break;
+    }
+
+    doc
+      .font(font)
+      .fontSize(size * s)
+      .fillColor(color)
+      .text(String(text ?? ""), X(x0), Y(y0), {
+        width: maxW,
+        height: maxH,
+        lineGap: lineGap * s,
+        align,
+      });
+  }
+
+  // ---------- TOP BAR ----------
+  // From PDF: x 53.76..737.40, y 54.60..75.96
+  fillRect(53.76, 54.6, 737.4 - 53.76, 75.96 - 54.6, BLUE);
+
+  cellTextFit(
+    60.9,
+    58.4,
+    737.4 - 60.9 - 70,
+    16,
+    t("7.6 FINAL INSPECTION", translations),
+    { bold: true, size: 11, color: "white" }
+  );
+
+  cellTextFit(53.76, 58.4, 737.4 - 53.76 - 10, 16, t("B6", translations), {
+    bold: true,
+    size: 11,
+    color: "white",
+    align: "right",
+  });
+
+  // ---------- TABLE COLS (exact from PDF - same as 7.3) ----------
+  const COLS = [
+    { key: "pos", x0: 54.0, x1: 82.32, title: "POS" },
+    { key: "check", x0: 82.32, x1: 146.4, title: "CHECKING THE" },
+    { key: "subject", x0: 146.4, x1: 265.68, title: "SUBJECT" },
+    { key: "part", x0: 265.68, x1: 350.88, title: "CONSTRUCTION PART" },
+    { key: "basis", x0: 350.88, x1: 415.92, title: "BASIS" },
+    { key: "method", x0: 415.92, x1: 488.16, title: "CONTROL METHOD" },
+    { key: "scope", x0: 488.16, x1: 524.52, title: "SCOPE" },
+    { key: "acc", x0: 524.52, x1: 646.56, title: "ACCEPTANCE CRITERIA" },
+    { key: "time", x0: 646.56, x1: 695.88, title: "TIME CONTROL" },
+    { key: "control", x0: 695.88, x1: 737.16, title: "CONTROL" },
+  ];
+
+  // Header Y positions (6 blocks) from PDF
+  const headerYs = [88.44, 156.36, 216.6, 294.36, 372.12, 449.88];
+  const headerH = 14.16; // matches 88.44..102.60
+  const contentStartOffset = 16.56; // header->content (matches PDF text start)
+  const lastBlockEndY = 522.0; // stop before legend boxes
+
+  // Fetch controls data for section 7.6
+  const b6Rows = await fetchControlsDataForSections(dynamic, "7.6");
+
+  // Get construction part (special text) from gamma
+  const specialText = dynamic?.gamma?.special || dynamic?.specialText || "Special text";
+
+  // Map B6 rows to table format - Page 25 always shows "100% Max" in scope column
+  const rows = b6Rows.map((r) => ({
+      pos: r.pos || "",
+    check: r.checkingThe || "",
+      subject: r.subject || "",
+    part: specialText, // Use special text from gamma
+      basis: r.basis || "",
+      method: r.method || "",
+    scope: r.scope || "100% Max", // Use scope from row, default to "100% Max" for 7.6
+    acc: r.acceptance || "",
+    time: r.timeControl || "",
+    control: "IC", // Always IC for B6
+  }));
+
+  const pad = 5;
+
+  // draw blocks - only process rows that exist
+  const rowsToShow = Math.min(rows.length, headerYs.length);
+  for (let i = 0; i < rowsToShow; i++) {
+    const hy = headerYs[i];
+    const row = rows[i];
+
+    // grey headers
+    for (const c of COLS) {
+      fillRect(c.x0, hy, c.x1 - c.x0, headerH, GREY);
+    }
+
+    // header labels (no yellow highlights)
+    for (const c of COLS) {
+      cellTextFit(
+        c.x0 + pad,
+        hy + 2.2,
+        c.x1 - c.x0 - pad * 2,
+        headerH - 2,
+        c.title,
+        { bold: true, size: 8, color: HEADER_TXT }
+      );
+    }
+
+    // content height for this block
+    const contentY = hy + contentStartOffset;
+    const blockEnd = i < headerYs.length - 1 ? headerYs[i + 1] : lastBlockEndY;
+    const contentH = Math.max(22, blockEnd - contentY - 2);
+
+    // cells (auto-fit to never cut text)
+    cellTextFit(
+      COLS[0].x0 + pad,
+      contentY,
+      COLS[0].x1 - COLS[0].x0 - pad * 2,
+      contentH,
+      row.pos,
+      { size: 8, color: "#333" }
+    );
+
+    cellTextFit(
+      COLS[1].x0 + pad,
+      contentY,
+      COLS[1].x1 - COLS[1].x0 - pad * 2,
+      contentH,
+      t(row.check, translations),
+      { size: 8, bold: true, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[2].x0 + pad,
+      contentY,
+      COLS[2].x1 - COLS[2].x0 - pad * 2,
+      contentH,
+      t(row.subject, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    // CONSTRUCTION PART (black, not red)
+    cellTextFit(
+      COLS[3].x0 + pad,
+      contentY,
+      COLS[3].x1 - COLS[3].x0 - pad * 2,
+      contentH,
+      t(row.part, translations),
+      { size: 8, color: "black" }
+    );
+
+    cellTextFit(
+      COLS[4].x0 + pad,
+      contentY,
+      COLS[4].x1 - COLS[4].x0 - pad * 2,
+      contentH,
+      t(row.basis, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[5].x0 + pad,
+      contentY,
+      COLS[5].x1 - COLS[5].x0 - pad * 2,
+      contentH,
+      t(row.method, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[6].x0 + pad,
+      contentY,
+      COLS[6].x1 - COLS[6].x0 - pad * 2,
+      contentH,
+      row.scope,
+      { size: 8, color: "#000" }
+    );
+
+    cellTextFit(
+      COLS[7].x0 + pad,
+      contentY,
+      COLS[7].x1 - COLS[7].x0 - pad * 2,
+      contentH,
+      t(row.acc, translations),
+      { size: 8, color: TXT_GREY, lineGap: 1 }
+    );
+
+    cellTextFit(
+      COLS[8].x0 + pad,
+      contentY,
+      COLS[8].x1 - COLS[8].x0 - pad * 2,
+      contentH,
+      t(row.time, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[9].x0 + pad,
+      contentY,
+      COLS[9].x1 - COLS[9].x0 - pad * 2,
+      contentH,
+      row.control,
+      { size: 8, color: "#000" }
+    );
+  }
+
+  // ---------- FOOTER (blue bar + texts) ----------
+  // thin light-blue line (from PDF)
+  fillRect(48.36, 557.28, 733.44 - 48.36, 557.76 - 557.28, LIGHT_BLUE);
+
+  // footer bar (from PDF)
+  fillRect(53.04, 557.52, 741.6 - 53.04, 585.0 - 557.52, BLUE);
+
+  // left brand
+  cellTextFit(80, 563.2, 220, 16, "Assurement", {
+    bold: true,
+    size: 10,
+    color: "white",
+  });
+
+  // center
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04,
+    16,
+    "Part of Kvalitetssikring Danmark ApS",
+    {
+      bold: true,
+      size: 9,
+      color: "white",
+      align: "center",
+    }
+  );
+
+  // right page number
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04 - 10,
+    16,
+    `Page 24 af ${TOTAL_PAGES}`,
+    {
+      size: 10,
+      color: "white",
+      align: "right",
+    }
+  );
+}
+
 // PAGE 11 – 8.1 OWN CONTROL B4
 // PAGE 11 – 8.A OWN CONTROL B4  (Side 10 af 24)
-function page11(doc, dynamic) {
+// Helper function to sort by pos (numeric sort)
+const sortByPos = (a, b) => {
+  const posA = a.displayPos || a.entryData?.pos || "";
+  const posB = b.displayPos || b.entryData?.pos || "";
+
+  const partsA = posA.split(".").map((part) => {
+    const num = parseInt(part, 10);
+    return isNaN(num) ? part : num;
+  });
+  const partsB = posB.split(".").map((part) => {
+    const num = parseInt(part, 10);
+    return isNaN(num) ? part : num;
+  });
+
+  const maxLength = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < maxLength; i++) {
+    const partA = partsA[i] !== undefined ? partsA[i] : 0;
+    const partB = partsB[i] !== undefined ? partsB[i] : 0;
+
+    if (partA < partB) return -1;
+    if (partA > partB) return 1;
+  }
+
+  return 0;
+};
+
+async function page11(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#cfcfcf";
   const DOT_B4 = "#FFBF00"; // orange/yellow dot
-  const RED = "#cc0000";
-
-  const constructionPart = dynamic.constructionPart || "SPECIAL TEXT.";
-  const profession = dynamic.profession || "PROJECT SETUP";
-  const mainComments = dynamic.mainComments || "MAIN COMMENTS";
+  const RED = "black";
 
   let y = M.t;
 
+  // Fetch entries from StaticReportRegistrationEntries collection
+  let entries = [];
+  let firstEntry = null;
+    const { project, subjectMatterId, projectId, companyId } = dynamic;
+    const dbToUse = dynamic.db || db;
+
+  try {
+
+    if (dbToUse && projectId && subjectMatterId) {
+      // Query entries matching projectId and profession/subjectMatterId
+      const query = {
+        projectId: new ObjectId(projectId),
+        $or: [
+          { "profession.SubjectMatterId": subjectMatterId },
+          { professionKey: subjectMatterId },
+          { subjectMatterId: subjectMatterId },
+        ],
+      };
+
+      // Try both collection names
+      let rawEntries = [];
+      try {
+        rawEntries = await dbToUse
+          .collection("StaticReportRegistrationEntries")
+          .find(query)
+          .toArray();
+      } catch (error) {
+        try {
+          rawEntries = await dbToUse
+            .collection("StaticReportRegistration")
+            .find(query)
+            .toArray();
+        } catch (error2) {
+          // Collection not found
+        }
+      }
+
+      // Filter for 7.4, 7.5, and 7.6 pos entries with selectedWorkers object
+      const filteredEntries74 = rawEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        const hasSelectedWorkers = entry.selectedWorkers && 
+          typeof entry.selectedWorkers === 'object' && 
+          !Array.isArray(entry.selectedWorkers);
+        return pos.startsWith("7.4") && hasSelectedWorkers;
+      });
+
+      const filteredEntries75 = rawEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        const hasSelectedWorkers = entry.selectedWorkers && 
+          typeof entry.selectedWorkers === 'object' && 
+          !Array.isArray(entry.selectedWorkers);
+        return pos.startsWith("7.5") && hasSelectedWorkers;
+      });
+
+      const filteredEntries76 = rawEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        const hasSelectedWorkers = entry.selectedWorkers && 
+          typeof entry.selectedWorkers === 'object' && 
+          !Array.isArray(entry.selectedWorkers);
+        return pos.startsWith("7.6") && hasSelectedWorkers;
+      });
+
+      // Filter for 7.4, 7.5, and 7.6 pos entries with independentController object
+      const filteredEntries74IC = rawEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        const hasIndependentController = entry.independentController && 
+          typeof entry.independentController === 'object' && 
+          !Array.isArray(entry.independentController);
+        return pos.startsWith("7.4") && hasIndependentController;
+      });
+
+      const filteredEntries75IC = rawEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        const hasIndependentController = entry.independentController && 
+          typeof entry.independentController === 'object' && 
+          !Array.isArray(entry.independentController);
+        return pos.startsWith("7.5") && hasIndependentController;
+      });
+
+      const filteredEntries76IC = rawEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        const hasIndependentController = entry.independentController && 
+          typeof entry.independentController === 'object' && 
+          !Array.isArray(entry.independentController);
+        return pos.startsWith("7.6") && hasIndependentController;
+      });
+
+      // Process 7.4 entries
+      const processEntries = (filteredEntries) => {
+        // Group by pos, then sort by createdAt within each group
+        const groupedByPos = {};
+        filteredEntries.forEach(entry => {
+          const pos = entry.entryData?.pos || "";
+          if (!groupedByPos[pos]) {
+            groupedByPos[pos] = [];
+          }
+          groupedByPos[pos].push(entry);
+        });
+
+        // Sort each group by createdAt (ascending)
+        Object.keys(groupedByPos).forEach(pos => {
+          groupedByPos[pos].sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateA - dateB;
+          });
+        });
+
+        // Flatten and assign sequential IDs
+        const sortedPosKeys = Object.keys(groupedByPos).sort((a, b) => {
+          return sortByPos({ entryData: { pos: a } }, { entryData: { pos: b } });
+        });
+
+        const processedEntries = [];
+        sortedPosKeys.forEach(pos => {
+          const groupEntries = groupedByPos[pos];
+          groupEntries.forEach((entry, index) => {
+            // Assign sequential ID: 7.4.1 -> 7.4.1.1, 7.4.1.2, etc.
+            const entryId = index === 0 ? pos : `${pos}.${index + 1}`;
+            processedEntries.push({
+          ...entry,
+              displayPos: entryId,
+              originalPos: pos,
+            });
+          });
+        });
+
+        return processedEntries;
+      };
+
+      const entries74 = processEntries(filteredEntries74);
+      const entries75 = processEntries(filteredEntries75);
+      const entries76 = processEntries(filteredEntries76);
+      const entries74IC = processEntries(filteredEntries74IC);
+      const entries75IC = processEntries(filteredEntries75IC);
+      const entries76IC = processEntries(filteredEntries76IC);
+
+      if (entries74.length > 0) {
+        firstEntry = entries74[0];
+      } else if (entries75.length > 0) {
+        firstEntry = entries75[0];
+      } else if (entries76.length > 0) {
+        firstEntry = entries76[0];
+      } else if (entries74IC.length > 0) {
+        firstEntry = entries74IC[0];
+      } else if (entries75IC.length > 0) {
+        firstEntry = entries75IC[0];
+      } else if (entries76IC.length > 0) {
+        firstEntry = entries76IC[0];
+      }
+      
+      // Store in dynamic for access outside try block
+      dynamic._entries74 = entries74;
+      dynamic._entries75 = entries75;
+      dynamic._entries76 = entries76;
+      dynamic._entries74IC = entries74IC;
+      dynamic._entries75IC = entries75IC;
+      dynamic._entries76IC = entries76IC;
+    }
+  } catch (error) {
+    // Error handling
+  }
+  
+  // Get entries from dynamic
+  const entries74 = dynamic._entries74 || [];
+  const entries75 = dynamic._entries75 || [];
+  const entries76 = dynamic._entries76 || [];
+  const entries74IC = dynamic._entries74IC || [];
+  const entries75IC = dynamic._entries75IC || [];
+  const entries76IC = dynamic._entries76IC || [];
+
+  // Get construction part from gamma (fetch if not in dynamic)
+  let gamma = dynamic.gamma;
+  if (!gamma && dbToUse && projectId && companyId && subjectMatterId) {
+    try {
+      let gammaResults = await dbToUse
+        .collection("gammas")
+        .find({
+          companyId: companyId,
+          $or: [
+            { projectsId: { $in: [projectId] } },
+            { projectsId: { $in: [new ObjectId(projectId)] } },
+          ],
+          "profession.SubjectMatterId": subjectMatterId,
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+      
+      if (gammaResults.length > 0) {
+        gamma = gammaResults[0];
+      } else {
+        gammaResults = await dbToUse
+          .collection("gammas")
+          .find({
+            companyId: companyId,
+            $or: [
+              { projectsId: { $in: [projectId] } },
+              { projectsId: { $in: [new ObjectId(projectId)] } },
+            ],
+          })
+          .sort({ createdAt: -1 })
+          .limit(1)
+          .toArray();
+        if (gammaResults.length > 0) {
+          gamma = gammaResults[0];
+        }
+      }
+    } catch (error) {
+      // Use dynamic.gamma as fallback
+      gamma = dynamic.gamma || {};
+    }
+  }
+  
+  // Get values from entries or use defaults
+  const constructionPartRaw = gamma?.special ? String(gamma.special) : (dynamic.constructionPart || "SPECIAL TEXT.");
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw =
+    entries.length > 0 && (entries[0]?.profession?.GroupName || entries[0]?.profession?.groupName || entries[0]?.professionName)
+      ? entries[0].profession?.GroupName || entries[0].profession?.groupName || entries[0].professionName
+      : dynamic.profession || "PROJECT SETUP";
+  const profession = professionRaw && typeof professionRaw === 'string' && !isNumberOrDate(professionRaw)
+    ? t(professionRaw, translations)
+    : professionRaw;
+
+  // Get baseUrl for constructing full URL
+  const baseUrl = dynamic?.baseUrl 
+    || process.env.BASE_URL 
+    || process.env.BACKEND_URL 
+    || "http://localhost:3000";
+
+  // If no entries at all, show placeholder
+  if (entries74.length === 0 && entries75.length === 0 && entries76.length === 0) {
+    // Show headers and placeholder
+    y = drawSectionBar(
+      doc,
+      y,
+      "8.A OWN CONTROL REGISTRATIONS/DOCUMENTATION/PHOTOS, CF. SECTION 7"
+    );
+
+    const rowY = y - 2;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor(BLUE)
+      .text(t("8.1 Receive control of deliveries", translations), M.l, rowY, {
+        width: CONTENT_W * 0.55,
+        align: "left",
+      });
+
+    const leftText = t("8.1 Receive control of deliveries", translations);
+    const leftTextWidth = doc.widthOfString(leftText);
+    const centerX = M.l + leftTextWidth + 20;
+    const centerWidth = CONTENT_W - centerX - 50;
+    
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("black")
+      .text(t("OWN CONTROL", translations), centerX, rowY, { width: centerWidth, align: "center" });
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("black")
+      .text(t("B4", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+
+    doc
+      .save()
+      .fillColor(DOT_B4)
+      .circle(M.l + CONTENT_W - 6, rowY + 8, 6)
+      .fill()
+      .restore();
+
+    footer(doc, 10);
+    return;
+  }
+
+  // Loop through each entry and create a page for each
+  let pageNumber = 10;
+  let isFirstPage = true;
+
+  // Process 7.4 entries first
+  for (let entryIndex = 0; entryIndex < entries74.length; entryIndex++) {
+    const entry = entries74[entryIndex];
+    
+    // If not first page, create new page
+    if (!isFirstPage) {
+      doc.addPage({ size: "A4", margin: 0 });
+      y = M.t;
+      pageNumber++;
+    } else {
+      isFirstPage = false;
+    }
+
+    // Show headers only on first page
+    if (entryIndex === 0) {
   // 1) Top blue bar
   y = drawSectionBar(
     doc,
@@ -3826,24 +7012,28 @@ function page11(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(BLUE)
-    .text("8.1 Receive control of deliveries", M.l, rowY, {
+    .text(t("8.1 Receive control of deliveries", translations), M.l, rowY, {
       width: CONTENT_W * 0.55,
       align: "left",
     });
 
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor(RED)
-    .text("OWN CONTROL", M.l, rowY, { width: CONTENT_W, align: "center" });
+      const leftText = t("8.1 Receive control of deliveries", translations);
+      const leftTextWidth = doc.widthOfString(leftText);
+      const centerX = M.l + leftTextWidth + 20;
+      const centerWidth = CONTENT_W - centerX - 50;
 
   doc
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor("black")
-    .text("B4", M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+        .text(t("OWN CONTROL", translations), centerX, rowY, { width: centerWidth, align: "center" });
 
-  // dot
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(12)
+    .fillColor("black")
+    .text(t("B4", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+
   doc
     .save()
     .fillColor(DOT_B4)
@@ -3863,6 +7053,7 @@ function page11(doc, dynamic) {
     .stroke()
     .restore();
   y += 10;
+    }
 
   // 3) Header info block (3 rows, 4 columns, only horizontal lines)
   const c1 = 110;
@@ -3879,13 +7070,13 @@ function page11(doc, dynamic) {
 
   // Row 1 headings
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("DATE/ID", x1, y, { width: c1 });
-  doc.text("CONTROL TYPE", x2, y, { width: c2 });
-  doc.text("CONSTRUCTION PART:", x3, y, { width: c3, continued: true });
-  doc.fillColor(RED).text(` ${constructionPart}`, { continued: false });
+  doc.text(t("DATE/ID", translations), x1, y, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y, { width: c2 });
+  doc.text(t("CONSTRUCTION PART:", translations), x3, y, { width: c3, continued: true });
+  doc.fillColor("black").text(` ${constructionPart}`, { continued: false });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ACCEPTANCE", x4, y, { width: c4, align: "right" });
+  doc.text(t("ACCEPTANCE", translations), x4, y, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -3898,36 +7089,56 @@ function page11(doc, dynamic) {
     .restore();
   y += 6;
 
-  // Row 2 values
+    // Row 2 values - show current entry data
+    const entryDate = entry?.date ? new Date(entry.date).toLocaleDateString() : (entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString() : "[Select Date]");
+    const entryControlTypeRaw = entry?.entryData?.subject || "Select an item.";
+    const entryControlType = entryControlTypeRaw && typeof entryControlTypeRaw === 'string' && !isNumberOrDate(entryControlTypeRaw)
+      ? t(entryControlTypeRaw, translations)
+      : entryControlTypeRaw;
+
+  const row2StartY = y;
+
   doc
     .font("Helvetica")
     .fontSize(9)
     .fillColor(BLUE)
-    .text("[Select Date]", x1, y, { width: c1 });
+      .text(entryDate, x1, y, { width: c1 });
+  
+  // Draw CONTROL TYPE text and measure its height
+  const controlTypeStartY = y;
   doc
     .font("Helvetica")
     .fontSize(9)
     .fillColor("black")
-    .text("Select an item.", x2, y, { width: c2 });
+      .text(entryControlType, x2, y, { width: c2, lineGap: 1 });
+  const controlTypeEndY = doc.y;
+
+  // Reset y to row start for other columns
+  y = row2StartY;
 
   doc
     .font("Helvetica-Bold")
     .fontSize(8)
     .fillColor(BLUE)
-    .text("PROFFESSION:", x3, y, { width: c3, continued: true });
+    .text(t("PROFFESSION:", translations), x3, y, { width: c3, continued: true });
   doc
     .font("Helvetica-Bold")
     .fontSize(8)
-    .fillColor(RED)
+    .fillColor("black")
     .text(` ${profession}`, { continued: false });
 
   doc
     .font("Helvetica-Bold")
     .fontSize(8)
     .fillColor(BLUE)
-    .text("ENDORSEMENT", x4, y, { width: c4, align: "right" });
+    .text(t("ENDORSEMENT", translations), x4, y, { width: c4, align: "right" });
 
-  y += rH;
+  // Calculate row height based on the tallest column (CONTROL TYPE)
+  const row2ActualHeight = controlTypeEndY - controlTypeStartY;
+  const row2Height = Math.max(rH, row2ActualHeight + 4);
+  
+  // Move y to after this row using the calculated height
+  y = row2StartY + row2Height;
   doc
     .save()
     .lineWidth(1)
@@ -3938,162 +7149,3121 @@ function page11(doc, dynamic) {
     .restore();
   y += 6;
 
-  // Row 3
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(9)
-    .fillColor(BLUE)
-    .text("ID  7.4.", x1, y, { width: c1 });
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(8)
-    .fillColor(BLUE)
-    .text("LOCALIZATION OF CONTROLS", x2, y, { width: c2 + 30 });
+    // Row 3 - Entry ID and comment
+    const entryDisplayPos = entry.displayPos || entry.entryData?.pos || "7.4.";
+    const entryCommentRaw = entry.comment || "";
+    const entryComment = entryCommentRaw && typeof entryCommentRaw === 'string' && !isNumberOrDate(entryCommentRaw)
+      ? t(entryCommentRaw, translations)
+      : entryCommentRaw;
 
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(8)
-    .fillColor(BLUE)
-    .text("COMMENT:", x3, y, { width: c3, continued: true });
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(8)
-    .fillColor(RED)
-    .text(` ${mainComments}`, { continued: false });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor(BLUE)
+      .text(`ID  ${entryDisplayPos}`, x1, y, { width: c1 });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("LOCALIZATION OF CONTROLS", translations), x2, y, { width: c2 + 30 });
 
-  y += rH;
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor(GREY_LINE)
-    .moveTo(M.l, y)
-    .lineTo(M.l + CONTENT_W, y)
-    .stroke()
-    .restore();
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("COMMENT:", translations), x3, y, { width: c3, continued: true });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor("black")
+      .text(` ${entryComment}`, { continued: false });
+
+    y += rH;
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(GREY_LINE)
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 6;
+
+    y += 10;
+
+    // Marked drawing - show annotated PDF from current entry
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black")
+      .text(t("Marked drawing", translations), M.l, y);
+
+    y += 12;
+
+    // Calculate available space for marked drawing
+    const gridReservedSpace = 500;
+    const footerSpace = 50;
+    const availableHeight = PAGE.h - y - gridReservedSpace - footerSpace;
+    const markedDrawingHeight = Math.max(250, availableHeight);
+
+    const entryAnnotatedPdf = entry?.annotatedPdfs?.[0] || null;
+    let imageUrl = null;
+    
+    if (entryAnnotatedPdf) {
+      // Try s3Location first, then path
+      imageUrl = entryAnnotatedPdf?.s3Location || entryAnnotatedPdf?.s3location || entryAnnotatedPdf?.location || null;
+      
+      // If no s3Location but path exists, construct full URL
+      if (!imageUrl && entryAnnotatedPdf?.path) {
+        const path = entryAnnotatedPdf.path;
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          imageUrl = path;
+        } else {
+          const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+          imageUrl = `${baseUrl}/${cleanPath}`;
+        }
+      }
+    }
+
+    if (imageUrl) {
+      try {
+        const imgBuffer = await fetchImageBuffer(imageUrl);
+        const imageX = M.l;
+        const imageY = y;
+        const imageWidth = CONTENT_W;
+        const imageHeight = markedDrawingHeight;
+        const borderWidth = 2;
+        const padding = 5;
+
+        // Draw border
+        doc
+          .save()
+          .lineWidth(borderWidth)
+          .strokeColor("#444")
+          .rect(imageX, imageY, imageWidth, imageHeight)
+          .stroke()
+          .restore();
+
+        // Use clipping to ensure image stays within border boundaries
+        doc.save();
+        const clipX = imageX + padding;
+        const clipY = imageY + padding;
+        const clipW = imageWidth - (padding * 2);
+        const clipH = imageHeight - (padding * 2);
+        doc.rect(clipX, clipY, clipW, clipH).clip();
+        
+        // Display image with padding inside border, maintaining aspect ratio
+        doc.image(imgBuffer, clipX, clipY, {
+          fit: [clipW, clipH],
+          align: "center",
+          valign: "center",
+        });
+        
+        doc.restore();
+
+        y = imageY + imageHeight + 10;
+      } catch (error) {
+        // Draw empty box with border if image fails to load
+        const imageX = M.l;
+        const imageY = y;
+        const imageWidth = CONTENT_W;
+        const imageHeight = markedDrawingHeight;
+        const borderWidth = 2;
+
+        doc
+          .save()
+          .lineWidth(borderWidth)
+          .strokeColor("#444")
+          .rect(imageX, imageY, imageWidth, imageHeight)
+          .stroke()
+          .restore();
+
+        y = imageY + imageHeight + 10;
+      }
+    } else {
+      // Draw empty box with border if no image
+      const imageX = M.l;
+      const imageY = y;
+      const imageWidth = CONTENT_W;
+      const imageHeight = markedDrawingHeight;
+      const borderWidth = 2;
+
+      doc
+        .save()
+        .lineWidth(borderWidth)
+        .strokeColor("#444")
+        .rect(imageX, imageY, imageWidth, imageHeight)
+        .stroke()
+        .restore();
+
+      y = imageY + imageHeight + 10;
+    }
+
+    // Collect markPictures for current entry with proper IDs
+    const entryMarkPictures = [];
+    if (entry.markPictures && Array.isArray(entry.markPictures)) {
+      entry.markPictures.forEach((markPic, markIndex) => {
+        // ID format: {entryId}.{markPictureIndex + 1}
+        entryMarkPictures.push({
+          ...markPic,
+          pictureId: `${entry.displayPos}.${markIndex + 1}`,
+          entryDisplayPos: entry.displayPos,
+        });
+      });
+    }
+
+    // Display mark pictures in grids with pagination (max 2 per row)
+    if (entryMarkPictures.length > 0) {
+      const gridW = CONTENT_W;
+      const quadW = gridW / 2; // Each grid takes half the width (fixed)
+      const headerH = 32; // Height for picture ID section
+      const baseCommentH = 30; // Base height for comments section
+      const idW = 95; // Width for picture ID column
+      const photoH = 200; // Height for photo area
+      const maxGridsPerPage = 2; // Maximum 2 grids per row (one row per page)
+      const footerSpace = 50;
+      
+      // Helper function to calculate fixed comment height (max 3 lines)
+      const calculateCommentHeight = (description, availableWidth) => {
+        if (!description) return baseCommentH;
+        
+        doc.font("Helvetica").fontSize(8);
+        const lineHeight = 10; // Approximate line height for font size 8
+        const maxLines = 3;
+        const fixedHeight = 8 + (lineHeight * maxLines) + 10; // 8px top padding + 3 lines + 10px bottom padding
+        
+        return fixedHeight;
+      };
+      
+      // Helper function to truncate text to maximum 3 lines
+      const truncateToMaxLines = (text, maxWidth, maxLines = 3) => {
+        if (!text) return "";
+        
+        doc.font("Helvetica").fontSize(8);
+        const lineHeight = 10;
+        const availableWidth = maxWidth - 20;
+        
+        // Split text into lines manually to control line count
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+        
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const testWidth = doc.widthOfString(testLine);
+          
+          if (testWidth <= availableWidth && lines.length < maxLines) {
+            currentLine = testLine;
+          } else {
+            if (currentLine) {
+              lines.push(currentLine);
+              currentLine = word;
+              if (lines.length >= maxLines) {
+                break;
+              }
+            }
+          }
+        }
+        
+        if (currentLine && lines.length < maxLines) {
+          lines.push(currentLine);
+        }
+        
+        return lines.join('\n');
+      };
+      
+      // Helper function to draw a single mark picture grid
+      const drawMarkPictureGrid = async (qx, qy, markPic, width = quadW) => {
+        const description = markPic.description || "";
+        
+        // Calculate fixed comment height (max 3 lines) - same for all grids
+        const commentH = calculateCommentHeight(description, width);
+        const quadH = headerH + commentH + photoH; // Fixed total height per grid
+        
+        // Draw outer border
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .rect(qx, qy, width, quadH)
+          .stroke()
+          .restore();
+
+        // Draw horizontal separator between picture ID and comments
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .moveTo(qx, qy + headerH)
+          .lineTo(qx + width, qy + headerH)
+          .stroke()
+          .restore();
+
+        // Draw horizontal separator between comments and photo area (at calculated comment height)
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .moveTo(qx, qy + headerH + commentH)
+          .lineTo(qx + width, qy + headerH + commentH)
+          .stroke()
+          .restore();
+
+      // Draw vertical separator for picture ID column
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor("#333")
+        .moveTo(qx + idW, qy)
+        .lineTo(qx + idW, qy + headerH)
+        .stroke()
+        .restore();
+
+      // Picture ID text (top-left box)
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor(RED)
+        .text(markPic.pictureId, qx + 8, qy + 6, {
+          width: idW - 16,
+          align: "left",
+        });
+
+      // Comments on picture (middle box) - limited to 3 lines
+      if (description) {
+        const truncatedDescription = truncateToMaxLines(description, width, 3);
+        doc
+          .font("Helvetica")
+          .fontSize(8)
+          .fillColor("black")
+          .text(truncatedDescription, qx + 10, qy + headerH + 8, {
+            width: width - 20,
+            lineGap: 1,
+            ellipsis: false, // Don't add ellipsis, just truncate
+          });
+      }
+
+      // Display image in photo area
+      let imageUrl = null;
+      if (markPic.s3Location || markPic.s3location || markPic.location) {
+        imageUrl = markPic.s3Location || markPic.s3location || markPic.location;
+      } else if (markPic.path) {
+        const path = markPic.path;
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          imageUrl = path;
+        } else {
+          const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+          imageUrl = `${baseUrl}/${cleanPath}`;
+        }
+      }
+
+      if (imageUrl) {
+        try {
+          const imgBuffer = await fetchImageBuffer(imageUrl);
+          const imageX = qx + 10;
+          const imageY = qy + headerH + commentH + 10;
+          const imageW = width - 20; // Available width with padding
+          const imageH = photoH - 20; // Available height with padding
+
+          // Use clipping to ensure image stays within bounds
+          doc.save();
+          doc.rect(imageX, imageY, imageW, imageH).clip();
+          
+          // Fit image within the available space, maintaining aspect ratio
+          doc.image(imgBuffer, imageX, imageY, {
+            fit: [imageW, imageH],
+            align: "center",
+            valign: "center",
+          });
+          
+          doc.restore();
+        } catch (error) {
+          // If image fails to load, show placeholder text
+          doc
+            .font("Helvetica")
+            .fontSize(10)
+            .fillColor(RED)
+            .text(t("Photo from registration.", translations), qx + 10, qy + headerH + commentH + 12);
+        }
+      } else {
+        // No image, show placeholder text
+        doc
+          .font("Helvetica")
+          .fontSize(10)
+          .fillColor(RED)
+          .text(t("Photo from registration.", translations), qx + 10, qy + headerH + commentH + 12);
+      }
+    };
+
+      // Display mark pictures with pagination - always 2 per row
+      let pictureIndex = 0;
+      let currentPageStartY = y + 10;
+      
+      // Fixed comment height (max 3 lines) - same for all grids
+      const fixedCommentH = calculateCommentHeight("", quadW); // Use empty string to get fixed height
+      const fixedQuadH = headerH + fixedCommentH + photoH; // Fixed height for all grids
+
+      while (pictureIndex < entryMarkPictures.length) {
+        // Always try to show 2 grids per row (or 1 if it's the last item)
+        const remainingPictures = entryMarkPictures.length - pictureIndex;
+        const gridsInThisRow = remainingPictures >= 2 ? 2 : 1;
+        const currentQuadW = quadW; // Always use fixed half width
+        
+        // Use fixed height for all grids
+        const maxQuadH = fixedQuadH;
+
+        // Check if we need a new page
+        const availableHeight = PAGE.h - currentPageStartY - footerSpace;
+        const requiredHeight = maxQuadH + 20; // Grid height + spacing
+
+        if (currentPageStartY + requiredHeight > PAGE.h - footerSpace && pictureIndex > 0) {
+          // Add footer to current page
+          footer(doc, pageNumber);
+          pageNumber++;
+          
+          // Start new page
+          doc.addPage({ size: "A4", margin: 0 });
+          currentPageStartY = M.t + 10;
+        }
+
+        const gridX = M.l;
+        const gridY = currentPageStartY;
+        const midX = gridX + quadW; // Always use fixed half width
+
+        // Draw vertical separator if showing 2 grids
+        if (gridsInThisRow === 2) {
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(midX, gridY)
+            .lineTo(midX, gridY + maxQuadH)
+            .stroke()
+            .restore();
+        }
+
+        // Draw grid(s) for this row - always use fixed width
+        for (let i = 0; i < gridsInThisRow && pictureIndex < entryMarkPictures.length; i++) {
+          const currentMarkPic = entryMarkPictures[pictureIndex];
+          const qx = i === 0 ? gridX : midX;
+          
+          // Always use fixed half width (quadW)
+          await drawMarkPictureGrid(qx, gridY, currentMarkPic, quadW);
+          pictureIndex++;
+        }
+
+        currentPageStartY = gridY + maxQuadH + 15;
+      }
+
+      y = currentPageStartY;
+    } else {
+      // No mark pictures, just update y position
+      y += 10;
+    }
+
+    // Add footer to current page before moving to next entry
+    footer(doc, pageNumber);
+  }
+
+  // Process 7.5 entries - add heading first
+  if (entries75.length > 0) {
+    // Create new page for 7.5 section
+    doc.addPage({ size: "A4", margin: 0 });
+    pageNumber++;
+    let y = M.t;
+    isFirstPage = true;
+
+    // Add 8.2 heading
+    // 2) Row: 8.2 Execution control (left), OWN CONTROL (center), B5 + dot (right)
+    const rowY = y - 2;
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor(BLUE)
+      .text(t("8.2 Execution control", translations), M.l, rowY, {
+        width: CONTENT_W * 0.55,
+        align: "left",
+      });
+
+    const leftText = t("8.2 Execution control", translations);
+    const leftTextWidth = doc.widthOfString(leftText);
+    const centerX = M.l + leftTextWidth + 20;
+    const centerWidth = CONTENT_W - centerX - 50;
+    
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("black")
+      .text(t("OWN CONTROL", translations), centerX, rowY, { width: centerWidth, align: "center" });
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("black")
+      .text(t("B5", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+
+    const DOT_B5 = "#00AFEF"; // blue dot for B5
+    doc
+      .save()
+      .fillColor(DOT_B5)
+      .circle(M.l + CONTENT_W - 6, rowY + 8, 6)
+      .fill()
+      .restore();
+
+    y = rowY + 20;
+
+    // thin line
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(GREY_LINE)
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 10;
+
+    // Now process 7.5 entries (same structure as 7.4)
+    for (let entryIndex = 0; entryIndex < entries75.length; entryIndex++) {
+      const entry = entries75[entryIndex];
+      
+      // If not first entry, create new page
+      if (entryIndex > 0) {
+        doc.addPage({ size: "A4", margin: 0 });
+        y = M.t;
+        pageNumber++;
+      }
+
+      // 3) Header info block (3 rows, 4 columns, only horizontal lines)
+      const c1 = 110;
+      const c2 = 150;
+      const c3 = 160;
+      const c4 = CONTENT_W - (c1 + c2 + c3);
+
+      const x1 = M.l;
+      const x2 = x1 + c1;
+      const x3 = x2 + c2;
+      const x4 = x3 + c3;
+
+      const rH = 18;
+
+      // Row 1 headings
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+      doc.text(t("DATE/ID", translations), x1, y, { width: c1 });
+      doc.text(t("CONTROL TYPE", translations), x2, y, { width: c2 });
+      doc.text(t("CONSTRUCTION PART:", translations), x3, y, { width: c3, continued: true });
+      doc.fillColor("black").text(` ${constructionPart}`, { continued: false });
+
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+      doc.text(t("ACCEPTANCE", translations), x4, y, { width: c4, align: "right" });
+
+      y += rH;
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 6;
+
+      // Row 2 values - show current entry data
+      const entryDate = entry?.date ? new Date(entry.date).toLocaleDateString() : (entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString() : "[Select Date]");
+      const entryControlTypeRaw = entry?.entryData?.subject || "Select an item.";
+      const entryControlType = t(entryControlTypeRaw, translations);
+
+      const row2StartY = y;
+
+      doc
+        .font("Helvetica")
+      .fontSize(9)
+      .fillColor(BLUE)
+        .text(entryDate, x1, y, { width: c1 });
+    
+      // Draw CONTROL TYPE text and measure its height
+      const controlTypeStartY = y;
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor("black")
+        .text(entryControlType, x2, y, { width: c2, lineGap: 1 });
+      const controlTypeEndY = doc.y;
+
+      // Reset y to row start for other columns
+      y = row2StartY;
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor(BLUE)
+        .text(t("PROFFESSION:", translations), x3, y, { width: c3, continued: true });
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor("black")
+        .text(` ${profession}`, { continued: false });
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor(BLUE)
+        .text(t("ENDORSEMENT", translations), x4, y, { width: c4, align: "right" });
+
+      // Calculate row height based on the tallest column (CONTROL TYPE)
+      const row2ActualHeight = controlTypeEndY - controlTypeStartY;
+      const row2Height = Math.max(rH, row2ActualHeight + 4);
+      
+      // Move y to after this row using the calculated height
+      y = row2StartY + row2Height;
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 6;
+
+      // Row 3 - Entry ID and comment
+      const entryDisplayPos = entry.displayPos || entry.entryData?.pos || "7.5.";
+      const entryCommentRaw = entry.comment || "";
+      const entryComment = t(entryCommentRaw, translations);
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9)
+        .fillColor(BLUE)
+        .text(`ID  ${entryDisplayPos}`, x1, y, { width: c1 });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("LOCALIZATION OF CONTROLS", translations), x2, y, { width: c2 + 30 });
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("COMMENT:", translations), x3, y, { width: c3, continued: true });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor("black")
+        .text(` ${entryComment}`, { continued: false });
+
+    y += rH;
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(GREY_LINE)
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 6;
+
   y += 10;
 
-  // Marked drawing (red)
+      // Marked drawing - show annotated PDF from current entry
   doc
     .font("Helvetica")
     .fontSize(9)
-    .fillColor(RED)
-    .text("Marked drawing", M.l, y);
-  y = doc.y + 10;
+    .fillColor("black")
+    .text(t("Marked drawing", translations), M.l, y);
 
-  // 4) Big 2x2 photo grid
-  const gridX = M.l;
-  const gridY = y + 110; // matches the big blank space in your PDF
-  const gridW = CONTENT_W;
-  const gridH = 470;
+  y += 12;
 
-  const midX = gridX + gridW / 2;
-  const midY = gridY + gridH / 2;
+  // Calculate available space for marked drawing
+  const gridReservedSpace = 500;
+  const footerSpace = 50;
+  const availableHeight = PAGE.h - y - gridReservedSpace - footerSpace;
+      const markedDrawingHeight = Math.max(250, availableHeight);
 
-  const headerH = 60;
+      const entryAnnotatedPdf = entry?.annotatedPdfs?.[0] || null;
+      let imageUrl = null;
+      
+      if (entryAnnotatedPdf) {
+        // Try s3Location first, then path
+        imageUrl = entryAnnotatedPdf?.s3Location || entryAnnotatedPdf?.s3location || entryAnnotatedPdf?.location || null;
+        
+        // If no s3Location but path exists, construct full URL
+        if (!imageUrl && entryAnnotatedPdf?.path) {
+          const path = entryAnnotatedPdf.path;
+          if (path.startsWith('http://') || path.startsWith('https://')) {
+            imageUrl = path;
+          } else {
+            const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+            imageUrl = `${baseUrl}/${cleanPath}`;
+          }
+        }
+      }
 
-  // outer border
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor("#444")
-    .rect(gridX, gridY, gridW, gridH)
-    .stroke()
-    .restore();
+      if (imageUrl) {
+        try {
+          const imgBuffer = await fetchImageBuffer(imageUrl);
+      const imageX = M.l;
+      const imageY = y;
+      const imageWidth = CONTENT_W;
+      const imageHeight = markedDrawingHeight;
+      const borderWidth = 2;
+      const padding = 5;
 
-  // main split lines
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor("#444")
-    .moveTo(midX, gridY)
-    .lineTo(midX, gridY + gridH)
-    .stroke()
-    .restore();
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor("#444")
-    .moveTo(gridX, midY)
-    .lineTo(gridX + gridW, midY)
-    .stroke()
-    .restore();
+      // Draw border
+      doc
+        .save()
+        .lineWidth(borderWidth)
+        .strokeColor("#444")
+        .rect(imageX, imageY, imageWidth, imageHeight)
+        .stroke()
+        .restore();
 
-  // header separators inside each quadrant
-  // top row
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor("#444")
-    .moveTo(gridX, gridY + headerH)
-    .lineTo(midX, gridY + headerH)
-    .stroke()
-    .restore();
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor("#444")
-    .moveTo(midX, gridY + headerH)
-    .lineTo(gridX + gridW, gridY + headerH)
-    .stroke()
-    .restore();
-  // bottom row
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor("#444")
-    .moveTo(gridX, midY + headerH)
-    .lineTo(midX, midY + headerH)
-    .stroke()
-    .restore();
-  doc
-    .save()
-    .lineWidth(1)
-    .strokeColor("#444")
-    .moveTo(midX, midY + headerH)
-    .lineTo(gridX + gridW, midY + headerH)
-    .stroke()
-    .restore();
+      // Display image with padding inside border
+      doc.image(imgBuffer, imageX + padding, imageY + padding, {
+        fit: [imageWidth - (padding * 2), imageHeight - (padding * 2)],
+        align: "center",
+        valign: "center",
+      });
 
-  const quadText = (qx, qy, title) => {
+      y = imageY + imageHeight + 10;
+    } catch (error) {
+      // Draw empty box with border if image fails to load
+      const imageX = M.l;
+      const imageY = y;
+      const imageWidth = CONTENT_W;
+      const imageHeight = markedDrawingHeight;
+      const borderWidth = 2;
+
+      doc
+        .save()
+        .lineWidth(borderWidth)
+        .strokeColor("#444")
+        .rect(imageX, imageY, imageWidth, imageHeight)
+        .stroke()
+        .restore();
+
+      y = imageY + imageHeight + 10;
+    }
+  } else {
+    // Draw empty box with border if no image
+    const imageX = M.l;
+    const imageY = y;
+    const imageWidth = CONTENT_W;
+    const imageHeight = markedDrawingHeight;
+    const borderWidth = 2;
+
     doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor(RED)
-      .text(title, qx + 10, qy + 10, { width: gridW / 2 - 20 });
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor(RED)
-      .text("Comments on picture", qx + 10, qy + 35);
-    doc
-      .font("Helvetica")
-      .fontSize(10)
-      .fillColor(RED)
-      .text("Photo from registration.", qx + 10, qy + headerH + 40);
-  };
+      .save()
+      .lineWidth(borderWidth)
+      .strokeColor("#444")
+      .rect(imageX, imageY, imageWidth, imageHeight)
+      .stroke()
+      .restore();
 
-  quadText(gridX, gridY, "7.4.3.unique\npicture ID.");
-  quadText(midX, gridY, "7.4.3.Eunique\npicture ID.");
-  quadText(gridX, midY, "7.4.3.unique\npicture ID.");
-  quadText(midX, midY, "7.4.3.unique\npicture ID.");
+    y = imageY + imageHeight + 10;
+  }
 
-  // Footer – Side 10 af 24
-  footer(doc, 10);
+      // Collect markPictures for current entry with proper IDs
+      const entryMarkPictures = [];
+    if (entry.markPictures && Array.isArray(entry.markPictures)) {
+      entry.markPictures.forEach((markPic, markIndex) => {
+          // ID format: {entryId}.{markPictureIndex + 1}
+          entryMarkPictures.push({
+          ...markPic,
+            pictureId: `${entry.displayPos}.${markIndex + 1}`,
+          entryDisplayPos: entry.displayPos,
+        });
+      });
+    }
+
+      // Display mark pictures in grids with pagination (max 2 per row) - reuse the same logic
+      if (entryMarkPictures.length > 0) {
+        const gridW = CONTENT_W;
+        const quadW = gridW / 2; // Each grid takes half the width
+        const headerH = 32; // Height for picture ID section
+        const baseCommentH = 30; // Base height for comments section
+        const idW = 95; // Width for picture ID column
+        const photoH = 200; // Height for photo area
+        const maxGridsPerPage = 2; // Maximum 2 grids per row (one row per page)
+        const footerSpace = 50;
+        
+        // Helper function to calculate comment height based on text
+        const calculateCommentHeight = (description, availableWidth) => {
+          if (!description) return baseCommentH;
+          
+          doc.font("Helvetica").fontSize(8);
+          const textHeight = doc.heightOfString(description, {
+            width: availableWidth - 20,
+            lineGap: 1,
+          });
+          
+          // Add padding: 8px top (label) + text height + 10px bottom
+          return Math.max(baseCommentH, 8 + textHeight + 10);
+        };
+        
+        // Helper function to draw a single mark picture grid
+        const drawMarkPictureGrid = async (qx, qy, markPic, width = quadW) => {
+          const description = markPic.description || "";
+          
+          // Calculate actual comment height based on text
+          const commentH = calculateCommentHeight(description, width);
+          const quadH = headerH + commentH + photoH; // Dynamic total height per grid
+          
+          // Draw outer border
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .rect(qx, qy, width, quadH)
+            .stroke()
+            .restore();
+
+          // Draw horizontal separator between picture ID and comments
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(qx, qy + headerH)
+            .lineTo(qx + width, qy + headerH)
+            .stroke()
+            .restore();
+
+          // Draw horizontal separator between comments and photo area (at calculated comment height)
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(qx, qy + headerH + commentH)
+            .lineTo(qx + width, qy + headerH + commentH)
+            .stroke()
+            .restore();
+
+          // Draw vertical separator for picture ID column
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(qx + idW, qy)
+            .lineTo(qx + idW, qy + headerH)
+            .stroke()
+            .restore();
+
+          // Picture ID text (top-left box)
+          doc
+            .font("Helvetica")
+            .fontSize(9)
+            .fillColor(RED)
+            .text(markPic.pictureId, qx + 8, qy + 6, {
+              width: idW - 16,
+              align: "left",
+            });
+
+          // Comments on picture (middle box)
+          if (description) {
+            doc
+              .font("Helvetica")
+              .fontSize(8)
+              .fillColor("black")
+              .text(description, qx + 10, qy + headerH + 8, {
+                width: width - 20,
+                lineGap: 1,
+              });
+          }
+
+          // Calculate photo area position based on actual comment height
+          const photoAreaY = qy + headerH + commentH + 10;
+          
+          // Get image URL for this mark picture
+          let markPicImageUrl = null;
+          if (markPic.s3Location || markPic.s3location || markPic.location) {
+            markPicImageUrl = markPic.s3Location || markPic.s3location || markPic.location;
+          } else if (markPic.path) {
+            const path = markPic.path;
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+              markPicImageUrl = path;
+            } else {
+              const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+              markPicImageUrl = `${baseUrl}/${cleanPath}`;
+            }
+          }
+          
+          if (markPicImageUrl) {
+            try {
+              const imgBuffer = await fetchImageBuffer(markPicImageUrl);
+              const imageX = qx + 10;
+              const imageY = photoAreaY;
+              const imageW = width - 20;
+              const imageH = photoH - 20;
+
+              doc.image(imgBuffer, imageX, imageY, {
+                fit: [imageW, imageH],
+                align: "left",
+                valign: "top",
+              });
+            } catch (error) {
+              // If image fails to load, show placeholder text
+              doc
+                .font("Helvetica")
+                .fontSize(10)
+                .fillColor(RED)
+                .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+            }
+          } else {
+            // No image, show placeholder text
+            doc
+              .font("Helvetica")
+              .fontSize(10)
+              .fillColor(RED)
+              .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+          }
+        };
+
+        // Display mark pictures with pagination
+        let pictureIndex = 0;
+        let currentPageStartY = y + 10;
+
+        while (pictureIndex < entryMarkPictures.length) {
+          const markPic = entryMarkPictures[pictureIndex];
+          const description = markPic.description || "";
+          
+          // Check if comment is big (more than 80 characters or likely to wrap)
+          // Also check visual width using doc.widthOfString
+          doc.font("Helvetica").fontSize(8);
+          const commentWidth = doc.widthOfString(description);
+          const maxCommentWidth = (quadW - 20) * 1.5; // Allow some wrapping
+          const isBigComment = description.length > 80 || commentWidth > maxCommentWidth;
+          
+          // Determine how many grids to show in this row
+          // If comment is big, show only 1 grid (full width), otherwise try to show 2
+          let gridsInThisRow = 1;
+          let currentQuadW = gridW; // Full width for single grid
+          
+          if (!isBigComment && pictureIndex + 1 < entryMarkPictures.length) {
+            // Check if next picture also has short comment
+            const nextMarkPic = entryMarkPictures[pictureIndex + 1];
+            const nextDescription = nextMarkPic.description || "";
+            const nextCommentWidth = doc.widthOfString(nextDescription);
+            const nextIsBigComment = nextDescription.length > 80 || nextCommentWidth > maxCommentWidth;
+            
+            if (!nextIsBigComment) {
+              gridsInThisRow = 2; // Can show 2 side by side
+              currentQuadW = quadW; // Half width for two grids
+            }
+          }
+
+          // Calculate max height needed for this row (check all grids in this row)
+          let maxQuadH = 0;
+          for (let i = 0; i < gridsInThisRow && pictureIndex + i < entryMarkPictures.length; i++) {
+            const checkMarkPic = entryMarkPictures[pictureIndex + i];
+            const checkDescription = checkMarkPic.description || "";
+            const checkCommentH = calculateCommentHeight(checkDescription, currentQuadW);
+            const checkQuadH = headerH + checkCommentH + photoH;
+            if (checkQuadH > maxQuadH) {
+              maxQuadH = checkQuadH;
+            }
+          }
+
+          // Check if we need a new page
+          const availableHeight = PAGE.h - currentPageStartY - footerSpace;
+          const requiredHeight = maxQuadH + 20; // Grid height + spacing
+
+          if (currentPageStartY + requiredHeight > PAGE.h - footerSpace && pictureIndex > 0) {
+            // Add footer to current page
+            footer(doc, pageNumber);
+            pageNumber++;
+            
+            // Start new page
+            doc.addPage({ size: "A4", margin: 0 });
+            currentPageStartY = M.t + 10;
+          }
+
+    const gridX = M.l;
+          const gridY = currentPageStartY;
+          const midX = gridX + currentQuadW;
+
+          // Draw vertical separator if showing 2 grids
+          if (gridsInThisRow === 2) {
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(midX, gridY)
+              .lineTo(midX, gridY + maxQuadH)
+              .stroke()
+              .restore();
+          }
+
+          // Draw grid(s) for this row
+          for (let i = 0; i < gridsInThisRow && pictureIndex < entryMarkPictures.length; i++) {
+            const currentMarkPic = entryMarkPictures[pictureIndex];
+            const qx = i === 0 ? gridX : midX;
+            
+            // Use full width if single grid, otherwise use half width
+            await drawMarkPictureGrid(qx, gridY, currentMarkPic, currentQuadW);
+            pictureIndex++;
+          }
+
+          currentPageStartY = gridY + maxQuadH + 15;
+        }
+
+        y = currentPageStartY;
+    } else {
+        // No mark pictures, just update y position
+        y += 10;
+      }
+
+      // Add footer to current page before moving to next entry
+      footer(doc, pageNumber);
+    }
+  }
+
+  // Process 7.6 entries - add heading first
+  if (entries76.length > 0) {
+    // Create new page for 7.6 section
+    doc.addPage({ size: "A4", margin: 0 });
+    pageNumber++;
+    let y = M.t;
+    isFirstPage = true;
+
+    // Add 8.3 heading
+    // 2) Row: 8.3 Final Check (left), OWN CONTROL (center), B6 + dot (right)
+    const rowY = y - 2;
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor(BLUE)
+      .text(t("8.3 Final Check", translations), M.l, rowY, {
+        width: CONTENT_W * 0.55,
+        align: "left",
+      });
+
+    const leftText = t("8.3 Final Check", translations);
+    const leftTextWidth = doc.widthOfString(leftText);
+    const centerX = M.l + leftTextWidth + 20;
+    const centerWidth = CONTENT_W - centerX - 50;
+    
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("black")
+      .text(t("OWN CONTROL", translations), centerX, rowY, { width: centerWidth, align: "center" });
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .fillColor("black")
+      .text(t("B6", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+
+    const DOT_B6 = "black"; // black dot for B6
+    doc
+      .save()
+      .fillColor(DOT_B6)
+      .circle(M.l + CONTENT_W - 6, rowY + 8, 6)
+      .fill()
+      .restore();
+
+    y = rowY + 20;
+
+    // thin line
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(GREY_LINE)
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 10;
+
+    // Now process 7.6 entries (same structure as 7.4 and 7.5)
+    for (let entryIndex = 0; entryIndex < entries76.length; entryIndex++) {
+      const entry = entries76[entryIndex];
+      
+      // If not first entry, create new page
+      if (entryIndex > 0) {
+        doc.addPage({ size: "A4", margin: 0 });
+        y = M.t;
+        pageNumber++;
+      }
+
+      // 3) Header info block (3 rows, 4 columns, only horizontal lines)
+      const c1 = 110;
+      const c2 = 150;
+      const c3 = 160;
+      const c4 = CONTENT_W - (c1 + c2 + c3);
+
+      const x1 = M.l;
+      const x2 = x1 + c1;
+      const x3 = x2 + c2;
+      const x4 = x3 + c3;
+
+      const rH = 18;
+
+      // Row 1 headings
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+      doc.text(t("DATE/ID", translations), x1, y, { width: c1 });
+      doc.text(t("CONTROL TYPE", translations), x2, y, { width: c2 });
+      doc.text(t("CONSTRUCTION PART:", translations), x3, y, { width: c3, continued: true });
+      doc.fillColor("black").text(` ${constructionPart}`, { continued: false });
+
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+      doc.text(t("ACCEPTANCE", translations), x4, y, { width: c4, align: "right" });
+
+      y += rH;
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 6;
+
+      // Row 2 values - show current entry data
+      const entryDate = entry?.date ? new Date(entry.date).toLocaleDateString() : (entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString() : "[Select Date]");
+      const entryControlTypeRaw = entry?.entryData?.subject || "Select an item.";
+      const entryControlType = t(entryControlTypeRaw, translations);
+
+      const row2StartY = y;
+
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor(BLUE)
+        .text(entryDate, x1, y, { width: c1 });
+    
+      // Draw CONTROL TYPE text and measure its height
+      const controlTypeStartY = y;
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor("black")
+        .text(entryControlType, x2, y, { width: c2, lineGap: 1 });
+      const controlTypeEndY = doc.y;
+
+      // Reset y to row start for other columns
+      y = row2StartY;
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor(BLUE)
+        .text(t("PROFFESSION:", translations), x3, y, { width: c3, continued: true });
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor("black")
+        .text(` ${profession}`, { continued: false });
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor(BLUE)
+        .text(t("ENDORSEMENT", translations), x4, y, { width: c4, align: "right" });
+
+      // Calculate row height based on the tallest column (CONTROL TYPE)
+      const row2ActualHeight = controlTypeEndY - controlTypeStartY;
+      const row2Height = Math.max(rH, row2ActualHeight + 4);
+      
+      // Move y to after this row using the calculated height
+      y = row2StartY + row2Height;
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 6;
+
+      // Row 3 - Entry ID and comment
+      const entryDisplayPos = entry.displayPos || entry.entryData?.pos || "7.6.";
+      const entryCommentRaw = entry.comment || "";
+      const entryComment = t(entryCommentRaw, translations);
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9)
+        .fillColor(BLUE)
+        .text(`ID  ${entryDisplayPos}`, x1, y, { width: c1 });
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor(BLUE)
+        .text(t("LOCALIZATION OF CONTROLS", translations), x2, y, { width: c2 + 30 });
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor(BLUE)
+        .text(t("COMMENT:", translations), x3, y, { width: c3, continued: true });
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(8)
+        .fillColor("black")
+        .text(` ${entryComment}`, { continued: false });
+
+      y += rH;
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 6;
+
+      y += 10;
+
+      // Marked drawing - show annotated PDF from current entry
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor("black")
+        .text(t("Marked drawing", translations), M.l, y);
+
+      y += 12;
+
+      // Calculate available space for marked drawing
+      const gridReservedSpace = 500;
+      const footerSpace = 50;
+      const availableHeight = PAGE.h - y - gridReservedSpace - footerSpace;
+      const markedDrawingHeight = Math.max(250, availableHeight);
+
+      const entryAnnotatedPdf = entry?.annotatedPdfs?.[0] || null;
+      let imageUrl = null;
+      
+      if (entryAnnotatedPdf) {
+        // Try s3Location first, then path
+        imageUrl = entryAnnotatedPdf?.s3Location || entryAnnotatedPdf?.s3location || entryAnnotatedPdf?.location || null;
+        
+        // If no s3Location but path exists, construct full URL
+        if (!imageUrl && entryAnnotatedPdf?.path) {
+          const path = entryAnnotatedPdf.path;
+          if (path.startsWith('http://') || path.startsWith('https://')) {
+            imageUrl = path;
+          } else {
+            const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+            imageUrl = `${baseUrl}/${cleanPath}`;
+          }
+        }
+      }
+
+      if (imageUrl) {
+        try {
+          const imgBuffer = await fetchImageBuffer(imageUrl);
+          const imageX = M.l;
+          const imageY = y;
+          const imageWidth = CONTENT_W;
+          const imageHeight = markedDrawingHeight;
+          const borderWidth = 2;
+          const padding = 5;
+
+          // Draw border
+          doc
+            .save()
+            .lineWidth(borderWidth)
+        .strokeColor("#444")
+            .rect(imageX, imageY, imageWidth, imageHeight)
+            .stroke()
+            .restore();
+
+          // Display image with padding inside border
+          doc.image(imgBuffer, imageX + padding, imageY + padding, {
+            fit: [imageWidth - (padding * 2), imageHeight - (padding * 2)],
+            align: "center",
+            valign: "center",
+          });
+
+          y = imageY + imageHeight + 10;
+        } catch (error) {
+          // Draw empty box with border if image fails to load
+          const imageX = M.l;
+          const imageY = y;
+          const imageWidth = CONTENT_W;
+          const imageHeight = markedDrawingHeight;
+          const borderWidth = 2;
+
+          doc
+            .save()
+            .lineWidth(borderWidth)
+            .strokeColor("#444")
+            .rect(imageX, imageY, imageWidth, imageHeight)
+            .stroke()
+            .restore();
+
+          y = imageY + imageHeight + 10;
+        }
+      } else {
+        // Draw empty box with border if no image
+        const imageX = M.l;
+        const imageY = y;
+        const imageWidth = CONTENT_W;
+        const imageHeight = markedDrawingHeight;
+        const borderWidth = 2;
+
+        doc
+          .save()
+          .lineWidth(borderWidth)
+          .strokeColor("#444")
+          .rect(imageX, imageY, imageWidth, imageHeight)
+          .stroke()
+          .restore();
+
+        y = imageY + imageHeight + 10;
+      }
+
+      // Collect markPictures for current entry with proper IDs
+      const entryMarkPictures = [];
+      if (entry.markPictures && Array.isArray(entry.markPictures)) {
+        entry.markPictures.forEach((markPic, markIndex) => {
+          // ID format: {entryId}.{markPictureIndex + 1}
+          entryMarkPictures.push({
+            ...markPic,
+            pictureId: `${entry.displayPos}.${markIndex + 1}`,
+            entryDisplayPos: entry.displayPos,
+          });
+        });
+      }
+
+      // Display mark pictures in grids with pagination (max 2 per row) - reuse the same logic
+      if (entryMarkPictures.length > 0) {
+        const gridW = CONTENT_W;
+        const quadW = gridW / 2; // Each grid takes half the width
+        const headerH = 32; // Height for picture ID section
+        const baseCommentH = 30; // Base height for comments section
+        const idW = 95; // Width for picture ID column
+        const photoH = 200; // Height for photo area
+        const maxGridsPerPage = 2; // Maximum 2 grids per row (one row per page)
+        const footerSpace = 50;
+        
+        // Helper function to calculate comment height based on text
+        const calculateCommentHeight = (description, availableWidth) => {
+          if (!description) return baseCommentH;
+          
+          doc.font("Helvetica").fontSize(8);
+          const textHeight = doc.heightOfString(description, {
+            width: availableWidth - 20,
+            lineGap: 1,
+          });
+          
+          // Add padding: 8px top (label) + text height + 10px bottom
+          return Math.max(baseCommentH, 8 + textHeight + 10);
+        };
+        
+        // Helper function to draw a single mark picture grid
+        const drawMarkPictureGrid = async (qx, qy, markPic, width = quadW) => {
+          const description = markPic.description || "";
+          
+          // Calculate actual comment height based on text
+          const commentH = calculateCommentHeight(description, width);
+          const quadH = headerH + commentH + photoH; // Dynamic total height per grid
+          
+          // Draw outer border
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .rect(qx, qy, width, quadH)
+            .stroke()
+            .restore();
+
+          // Draw horizontal separator between picture ID and comments
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(qx, qy + headerH)
+            .lineTo(qx + width, qy + headerH)
+            .stroke()
+            .restore();
+
+          // Draw horizontal separator between comments and photo area (at calculated comment height)
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(qx, qy + headerH + commentH)
+            .lineTo(qx + width, qy + headerH + commentH)
+            .stroke()
+            .restore();
+
+          // Draw vertical separator for picture ID column
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(qx + idW, qy)
+            .lineTo(qx + idW, qy + headerH)
+            .stroke()
+            .restore();
+
+          // Picture ID text (top-left box)
+          doc
+            .font("Helvetica")
+            .fontSize(9)
+            .fillColor(RED)
+            .text(markPic.pictureId, qx + 8, qy + 6, {
+              width: idW - 16,
+              align: "left",
+            });
+
+          // Comments on picture (middle box)
+          if (description) {
+            doc
+              .font("Helvetica")
+              .fontSize(8)
+              .fillColor("black")
+              .text(description, qx + 10, qy + headerH + 8, {
+                width: width - 20,
+                lineGap: 1,
+              });
+          }
+
+          // Calculate photo area position based on actual comment height
+          const photoAreaY = qy + headerH + commentH + 10;
+          
+          // Get image URL for this mark picture
+          let markPicImageUrl = null;
+          if (markPic.s3Location || markPic.s3location || markPic.location) {
+            markPicImageUrl = markPic.s3Location || markPic.s3location || markPic.location;
+          } else if (markPic.path) {
+            const path = markPic.path;
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+              markPicImageUrl = path;
+            } else {
+              const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+              markPicImageUrl = `${baseUrl}/${cleanPath}`;
+            }
+          }
+          
+          if (markPicImageUrl) {
+            try {
+              const imgBuffer = await fetchImageBuffer(markPicImageUrl);
+              const imageX = qx + 10;
+              const imageY = photoAreaY;
+              const imageW = width - 20;
+              const imageH = photoH - 20;
+
+              doc.image(imgBuffer, imageX, imageY, {
+                fit: [imageW, imageH],
+                align: "left",
+                valign: "top",
+              });
+            } catch (error) {
+              // If image fails to load, show placeholder text
+              doc
+                .font("Helvetica")
+                .fontSize(10)
+                .fillColor(RED)
+                .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+            }
+          } else {
+            // No image, show placeholder text
+            doc
+              .font("Helvetica")
+              .fontSize(10)
+              .fillColor(RED)
+              .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+          }
+        };
+
+        // Display mark pictures with pagination
+        let pictureIndex = 0;
+        let currentPageStartY = y + 10;
+
+        while (pictureIndex < entryMarkPictures.length) {
+          const markPic = entryMarkPictures[pictureIndex];
+          const description = markPic.description || "";
+          
+          // Check if comment is big (more than 80 characters or likely to wrap)
+          // Also check visual width using doc.widthOfString
+          doc.font("Helvetica").fontSize(8);
+          const commentWidth = doc.widthOfString(description);
+          const maxCommentWidth = (quadW - 20) * 1.5; // Allow some wrapping
+          const isBigComment = description.length > 80 || commentWidth > maxCommentWidth;
+          
+          // Determine how many grids to show in this row
+          // If comment is big, show only 1 grid (full width), otherwise try to show 2
+          let gridsInThisRow = 1;
+          let currentQuadW = gridW; // Full width for single grid
+          
+          if (!isBigComment && pictureIndex + 1 < entryMarkPictures.length) {
+            // Check if next picture also has short comment
+            const nextMarkPic = entryMarkPictures[pictureIndex + 1];
+            const nextDescription = nextMarkPic.description || "";
+            const nextCommentWidth = doc.widthOfString(nextDescription);
+            const nextIsBigComment = nextDescription.length > 80 || nextCommentWidth > maxCommentWidth;
+            
+            if (!nextIsBigComment) {
+              gridsInThisRow = 2; // Can show 2 side by side
+              currentQuadW = quadW; // Half width for two grids
+            }
+          }
+
+          // Calculate max height needed for this row (check all grids in this row)
+          let maxQuadH = 0;
+          for (let i = 0; i < gridsInThisRow && pictureIndex + i < entryMarkPictures.length; i++) {
+            const checkMarkPic = entryMarkPictures[pictureIndex + i];
+            const checkDescription = checkMarkPic.description || "";
+            const checkCommentH = calculateCommentHeight(checkDescription, currentQuadW);
+            const checkQuadH = headerH + checkCommentH + photoH;
+            if (checkQuadH > maxQuadH) {
+              maxQuadH = checkQuadH;
+            }
+          }
+
+          // Check if we need a new page
+          const availableHeight = PAGE.h - currentPageStartY - footerSpace;
+          const requiredHeight = maxQuadH + 20; // Grid height + spacing
+
+          if (currentPageStartY + requiredHeight > PAGE.h - footerSpace && pictureIndex > 0) {
+            // Add footer to current page
+            footer(doc, pageNumber);
+            pageNumber++;
+            
+            // Start new page
+            doc.addPage({ size: "A4", margin: 0 });
+            currentPageStartY = M.t + 10;
+          }
+
+          const gridX = M.l;
+          const gridY = currentPageStartY;
+          const midX = gridX + currentQuadW;
+
+          // Draw vertical separator if showing 2 grids
+          if (gridsInThisRow === 2) {
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+        .moveTo(midX, gridY)
+              .lineTo(midX, gridY + maxQuadH)
+        .stroke()
+        .restore();
+    }
+
+          // Draw grid(s) for this row
+          for (let i = 0; i < gridsInThisRow && pictureIndex < entryMarkPictures.length; i++) {
+            const currentMarkPic = entryMarkPictures[pictureIndex];
+            const qx = i === 0 ? gridX : midX;
+            
+            // Use full width if single grid, otherwise use half width
+            await drawMarkPictureGrid(qx, gridY, currentMarkPic, currentQuadW);
+            pictureIndex++;
+          }
+
+          currentPageStartY = gridY + maxQuadH + 15;
+        }
+
+        y = currentPageStartY;
+      } else {
+        // No mark pictures, just update y position
+        y += 10;
+      }
+
+      // Add footer to current page before moving to next entry
+      footer(doc, pageNumber);
+    }
+  }
+
+  // Process independentController entries (EXTERNAL CONTROL) - 8.B section
+  if (entries74IC.length > 0 || entries75IC.length > 0 || entries76IC.length > 0) {
+    // Add 8.B heading first
+    doc.addPage({ size: "A4", margin: 0 });
+    pageNumber++;
+    let y = M.t;
+    
+    // 1) Top blue bar for 8.B
+    y = drawSectionBar(
+      doc,
+      y,
+      "8.B EXTERNAL CONTROL REPORT"
+    );
+    
+    footer(doc, pageNumber);
+    
+    // Process 7.4 entries with independentController
+    if (entries74IC.length > 0) {
+      // Create new page for 7.4 section
+      doc.addPage({ size: "A4", margin: 0 });
+      pageNumber++;
+      y = M.t;
+
+      // Add 8.1 heading
+      const rowY = y - 2;
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor(BLUE)
+        .text(t("8.1 Receive control of deliveries", translations), M.l, rowY, {
+          width: CONTENT_W * 0.55,
+          align: "left",
+        });
+
+      const leftText = t("8.1 Receive control of deliveries", translations);
+      const leftTextWidth = doc.widthOfString(leftText);
+      const centerX = M.l + leftTextWidth + 20;
+      const centerWidth = CONTENT_W - centerX - 50;
+      
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("black")
+        .text(t("EXTERNAL CONTROL", translations), centerX, rowY, { width: centerWidth, align: "center" });
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("black")
+        .text(t("B4", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+
+      const DOT_B4 = "#FFBF00";
+      doc
+        .save()
+        .fillColor(DOT_B4)
+        .circle(M.l + CONTENT_W - 6, rowY + 8, 6)
+        .fill()
+        .restore();
+
+      y = rowY + 20;
+
+      // thin line
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 10;
+
+      // Now process 7.4 entries with independentController (same structure as selectedWorkers)
+      for (let entryIndex = 0; entryIndex < entries74IC.length; entryIndex++) {
+        const entry = entries74IC[entryIndex];
+        
+        // If not first entry, create new page
+        if (entryIndex > 0) {
+          doc.addPage({ size: "A4", margin: 0 });
+          y = M.t;
+          pageNumber++;
+        }
+
+        // Header info block (same as selectedWorkers section)
+        const c1 = 110;
+        const c2 = 150;
+        const c3 = 160;
+        const c4 = CONTENT_W - (c1 + c2 + c3);
+
+        const x1 = M.l;
+        const x2 = x1 + c1;
+        const x3 = x2 + c2;
+        const x4 = x3 + c3;
+
+        const rH = 18;
+
+        // Row 1 headings
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+        doc.text(t("DATE/ID", translations), x1, y, { width: c1 });
+        doc.text(t("CONTROL TYPE", translations), x2, y, { width: c2 });
+        doc.text(t("CONSTRUCTION PART:", translations), x3, y, { width: c3, continued: true });
+        doc.fillColor("black").text(` ${constructionPart}`, { continued: false });
+
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+        doc.text(t("ACCEPTANCE", translations), x4, y, { width: c4, align: "right" });
+
+        y += rH;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        // Row 2 values
+        const entryDate = entry?.date ? new Date(entry.date).toLocaleDateString() : (entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString() : "[Select Date]");
+        const entryControlType = entry?.entryData?.subject || "Select an item.";
+
+        const row2StartY = y;
+
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor(BLUE)
+          .text(entryDate, x1, y, { width: c1 });
+      
+        const controlTypeStartY = y;
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("black")
+          .text(entryControlType, x2, y, { width: c2, lineGap: 1 });
+        const controlTypeEndY = doc.y;
+
+        y = row2StartY;
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("PROFFESSION:", translations), x3, y, { width: c3, continued: true });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor("black")
+          .text(` ${profession}`, { continued: false });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("ENDORSEMENT", translations), x4, y, { width: c4, align: "right" });
+
+        const row2ActualHeight = controlTypeEndY - controlTypeStartY;
+        const row2Height = Math.max(rH, row2ActualHeight + 4);
+        
+        y = row2StartY + row2Height;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        // Row 3 - Entry ID and comment
+        const entryDisplayPos = entry.displayPos || entry.entryData?.pos || "7.4.";
+        const entryCommentRaw = entry.comment || "";
+        const entryComment = t(entryCommentRaw, translations);
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor(BLUE)
+          .text(`ID  ${entryDisplayPos}`, x1, y, { width: c1 });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("LOCALIZATION OF CONTROLS", translations), x2, y, { width: c2 + 30 });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("COMMENT:", translations), x3, y, { width: c3, continued: true });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor("black")
+          .text(` ${entryComment}`, { continued: false });
+
+        y += rH;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        y += 10;
+
+        // Marked drawing
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("black")
+          .text(t("Marked drawing", translations), M.l, y);
+
+        y += 12;
+
+        const gridReservedSpace = 500;
+        const footerSpace = 50;
+        const availableHeight = PAGE.h - y - gridReservedSpace - footerSpace;
+        const markedDrawingHeight = Math.max(250, availableHeight);
+
+        const entryAnnotatedPdf = entry?.annotatedPdfs?.[0] || null;
+        let imageUrl = null;
+        
+        if (entryAnnotatedPdf) {
+          imageUrl = entryAnnotatedPdf?.s3Location || entryAnnotatedPdf?.s3location || entryAnnotatedPdf?.location || null;
+          
+          if (!imageUrl && entryAnnotatedPdf?.path) {
+            const path = entryAnnotatedPdf.path;
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+              imageUrl = path;
+            } else {
+              const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+              imageUrl = `${baseUrl}/${cleanPath}`;
+            }
+          }
+        }
+
+        if (imageUrl) {
+          try {
+            const imgBuffer = await fetchImageBuffer(imageUrl);
+            const imageX = M.l;
+            const imageY = y;
+            const imageWidth = CONTENT_W;
+            const imageHeight = markedDrawingHeight;
+            const borderWidth = 2;
+            const padding = 5;
+
+            doc
+              .save()
+              .lineWidth(borderWidth)
+          .strokeColor("#444")
+              .rect(imageX, imageY, imageWidth, imageHeight)
+          .stroke()
+          .restore();
+
+            doc.image(imgBuffer, imageX + padding, imageY + padding, {
+              fit: [imageWidth - (padding * 2), imageHeight - (padding * 2)],
+              align: "center",
+              valign: "center",
+            });
+
+            y = imageY + imageHeight + 10;
+          } catch (error) {
+            const imageX = M.l;
+            const imageY = y;
+            const imageWidth = CONTENT_W;
+            const imageHeight = markedDrawingHeight;
+            const borderWidth = 2;
+
+            doc
+              .save()
+              .lineWidth(borderWidth)
+              .strokeColor("#444")
+              .rect(imageX, imageY, imageWidth, imageHeight)
+              .stroke()
+              .restore();
+
+            y = imageY + imageHeight + 10;
+          }
+      } else {
+          const imageX = M.l;
+          const imageY = y;
+          const imageWidth = CONTENT_W;
+          const imageHeight = markedDrawingHeight;
+          const borderWidth = 2;
+
+          doc
+            .save()
+            .lineWidth(borderWidth)
+            .strokeColor("#444")
+            .rect(imageX, imageY, imageWidth, imageHeight)
+            .stroke()
+            .restore();
+
+          y = imageY + imageHeight + 10;
+        }
+
+        // Collect markPictures for current entry
+        const entryMarkPictures = [];
+        if (entry.markPictures && Array.isArray(entry.markPictures)) {
+          entry.markPictures.forEach((markPic, markIndex) => {
+            entryMarkPictures.push({
+              ...markPic,
+              pictureId: `${entry.displayPos}.${markIndex + 1}`,
+              entryDisplayPos: entry.displayPos,
+            });
+          });
+        }
+
+        // Display mark pictures in grids with pagination (reuse same logic from selectedWorkers)
+        if (entryMarkPictures.length > 0) {
+          const gridW = CONTENT_W;
+          const quadW = gridW / 2;
+          const headerH = 32;
+          const baseCommentH = 30;
+          const idW = 95;
+          const photoH = 200;
+          const footerSpace = 50;
+          
+          const calculateCommentHeight = (description, availableWidth) => {
+            if (!description) return baseCommentH;
+            
+            doc.font("Helvetica").fontSize(8);
+            const textHeight = doc.heightOfString(description, {
+              width: availableWidth - 20,
+              lineGap: 1,
+            });
+            
+            return Math.max(baseCommentH, 8 + textHeight + 10);
+          };
+          
+          const drawMarkPictureGrid = async (qx, qy, markPic, width = quadW) => {
+            const description = markPic.description || "";
+            
+            const commentH = calculateCommentHeight(description, width);
+            const quadH = headerH + commentH + photoH;
+            
+        doc
+          .save()
+          .lineWidth(1)
+              .strokeColor("#333")
+              .rect(qx, qy, width, quadH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx, qy + headerH)
+              .lineTo(qx + width, qy + headerH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx, qy + headerH + commentH)
+              .lineTo(qx + width, qy + headerH + commentH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx + idW, qy)
+              .lineTo(qx + idW, qy + headerH)
+              .stroke()
+              .restore();
+
+            doc
+              .font("Helvetica")
+              .fontSize(9)
+              .fillColor(RED)
+              .text(markPic.pictureId, qx + 8, qy + 6, {
+                width: idW - 16,
+                align: "left",
+              });
+
+            if (description) {
+              doc
+                .font("Helvetica")
+                .fontSize(8)
+                .fillColor("black")
+                .text(description, qx + 10, qy + headerH + 8, {
+                  width: width - 20,
+                  lineGap: 1,
+                });
+            }
+
+            const photoAreaY = qy + headerH + commentH + 10;
+            
+            let markPicImageUrl = null;
+            if (markPic.s3Location || markPic.s3location || markPic.location) {
+              markPicImageUrl = markPic.s3Location || markPic.s3location || markPic.location;
+            } else if (markPic.path) {
+              const path = markPic.path;
+              if (path.startsWith('http://') || path.startsWith('https://')) {
+                markPicImageUrl = path;
+              } else {
+                const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+                markPicImageUrl = `${baseUrl}/${cleanPath}`;
+              }
+            }
+            
+            if (markPicImageUrl) {
+              try {
+                const imgBuffer = await fetchImageBuffer(markPicImageUrl);
+                const imageX = qx + 10;
+                const imageY = photoAreaY;
+                const imageW = width - 20;
+                const imageH = photoH - 20;
+
+                doc.image(imgBuffer, imageX, imageY, {
+                  fit: [imageW, imageH],
+                  align: "left",
+                  valign: "top",
+                });
+              } catch (error) {
+                doc
+                  .font("Helvetica")
+                  .fontSize(10)
+                  .fillColor(RED)
+                  .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+              }
+            } else {
+              doc
+                .font("Helvetica")
+                .fontSize(10)
+                .fillColor(RED)
+                .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+            }
+          };
+
+          let pictureIndex = 0;
+          let currentPageStartY = y + 10;
+
+          while (pictureIndex < entryMarkPictures.length) {
+            const markPic = entryMarkPictures[pictureIndex];
+            const description = markPic.description || "";
+            
+            doc.font("Helvetica").fontSize(8);
+            const commentWidth = doc.widthOfString(description);
+            const maxCommentWidth = (quadW - 20) * 1.5;
+            const isBigComment = description.length > 80 || commentWidth > maxCommentWidth;
+            
+            let gridsInThisRow = 1;
+            let currentQuadW = gridW;
+            
+            if (!isBigComment && pictureIndex + 1 < entryMarkPictures.length) {
+              const nextMarkPic = entryMarkPictures[pictureIndex + 1];
+              const nextDescription = nextMarkPic.description || "";
+              const nextCommentWidth = doc.widthOfString(nextDescription);
+              const nextIsBigComment = nextDescription.length > 80 || nextCommentWidth > maxCommentWidth;
+              
+              if (!nextIsBigComment) {
+                gridsInThisRow = 2;
+                currentQuadW = quadW;
+              }
+            }
+
+            let maxQuadH = 0;
+            for (let i = 0; i < gridsInThisRow && pictureIndex + i < entryMarkPictures.length; i++) {
+              const checkMarkPic = entryMarkPictures[pictureIndex + i];
+              const checkDescription = checkMarkPic.description || "";
+              const checkCommentH = calculateCommentHeight(checkDescription, currentQuadW);
+              const checkQuadH = headerH + checkCommentH + photoH;
+              if (checkQuadH > maxQuadH) {
+                maxQuadH = checkQuadH;
+              }
+            }
+
+            const availableHeight = PAGE.h - currentPageStartY - footerSpace;
+            const requiredHeight = maxQuadH + 20;
+
+            if (currentPageStartY + requiredHeight > PAGE.h - footerSpace && pictureIndex > 0) {
+              footer(doc, pageNumber);
+              pageNumber++;
+              
+              doc.addPage({ size: "A4", margin: 0 });
+              currentPageStartY = M.t + 10;
+            }
+
+            const gridX = M.l;
+            const gridY = currentPageStartY;
+            const midX = gridX + currentQuadW;
+
+            if (gridsInThisRow === 2) {
+              doc
+                .save()
+                .lineWidth(1)
+                .strokeColor("#333")
+                .moveTo(midX, gridY)
+                .lineTo(midX, gridY + maxQuadH)
+                .stroke()
+                .restore();
+            }
+
+            for (let i = 0; i < gridsInThisRow && pictureIndex < entryMarkPictures.length; i++) {
+              const currentMarkPic = entryMarkPictures[pictureIndex];
+              const qx = i === 0 ? gridX : midX;
+              
+              await drawMarkPictureGrid(qx, gridY, currentMarkPic, currentQuadW);
+              pictureIndex++;
+            }
+
+            currentPageStartY = gridY + maxQuadH + 15;
+          }
+
+          y = currentPageStartY;
+        } else {
+          y += 10;
+        }
+
+        footer(doc, pageNumber);
+      }
+    }
+
+    // Process 7.5 entries with independentController
+    if (entries75IC.length > 0) {
+      doc.addPage({ size: "A4", margin: 0 });
+      pageNumber++;
+      let y = M.t;
+
+      const rowY = y - 2;
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor(BLUE)
+        .text(t("8.2 Execution control", translations), M.l, rowY, {
+          width: CONTENT_W * 0.55,
+          align: "left",
+        });
+
+      const leftText = t("8.2 Execution control", translations);
+      const leftTextWidth = doc.widthOfString(leftText);
+      const centerX = M.l + leftTextWidth + 20;
+      const centerWidth = CONTENT_W - centerX - 50;
+      
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("black")
+        .text(t("EXTERNAL CONTROL", translations), centerX, rowY, { width: centerWidth, align: "center" });
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("black")
+        .text(t("B5", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+
+      const DOT_B5 = "#0066CC";
+      doc
+        .save()
+        .fillColor(DOT_B5)
+        .circle(M.l + CONTENT_W - 6, rowY + 8, 6)
+        .fill()
+        .restore();
+
+      y = rowY + 20;
+
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 10;
+
+      // Process 7.5 entries (same structure as 7.4 above - reuse the same loop logic)
+      for (let entryIndex = 0; entryIndex < entries75IC.length; entryIndex++) {
+        const entry = entries75IC[entryIndex];
+        
+        if (entryIndex > 0) {
+          doc.addPage({ size: "A4", margin: 0 });
+          y = M.t;
+          pageNumber++;
+        }
+
+        // Header info block (same as 7.4)
+        const c1 = 110;
+        const c2 = 150;
+        const c3 = 160;
+        const c4 = CONTENT_W - (c1 + c2 + c3);
+
+        const x1 = M.l;
+        const x2 = x1 + c1;
+        const x3 = x2 + c2;
+        const x4 = x3 + c3;
+
+        const rH = 18;
+
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+        doc.text(t("DATE/ID", translations), x1, y, { width: c1 });
+        doc.text(t("CONTROL TYPE", translations), x2, y, { width: c2 });
+        doc.text(t("CONSTRUCTION PART:", translations), x3, y, { width: c3, continued: true });
+        doc.fillColor("black").text(` ${constructionPart}`, { continued: false });
+
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+        doc.text(t("ACCEPTANCE", translations), x4, y, { width: c4, align: "right" });
+
+        y += rH;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        const entryDate = entry?.date ? new Date(entry.date).toLocaleDateString() : (entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString() : "[Select Date]");
+        const entryControlType = entry?.entryData?.subject || "Select an item.";
+
+        const row2StartY = y;
+
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor(BLUE)
+          .text(entryDate, x1, y, { width: c1 });
+      
+        const controlTypeStartY = y;
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("black")
+          .text(entryControlType, x2, y, { width: c2, lineGap: 1 });
+        const controlTypeEndY = doc.y;
+
+        y = row2StartY;
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("PROFFESSION:", translations), x3, y, { width: c3, continued: true });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor("black")
+          .text(` ${profession}`, { continued: false });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("ENDORSEMENT", translations), x4, y, { width: c4, align: "right" });
+
+        const row2ActualHeight = controlTypeEndY - controlTypeStartY;
+        const row2Height = Math.max(rH, row2ActualHeight + 4);
+        
+        y = row2StartY + row2Height;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        const entryDisplayPos = entry.displayPos || entry.entryData?.pos || "7.5.";
+        const entryCommentRaw = entry.comment || "";
+        const entryComment = t(entryCommentRaw, translations);
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor(BLUE)
+          .text(`ID  ${entryDisplayPos}`, x1, y, { width: c1 });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("LOCALIZATION OF CONTROLS", translations), x2, y, { width: c2 + 30 });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("COMMENT:", translations), x3, y, { width: c3, continued: true });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor("black")
+          .text(` ${entryComment}`, { continued: false });
+
+        y += rH;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        y += 10;
+
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("black")
+          .text(t("Marked drawing", translations), M.l, y);
+
+        y += 12;
+
+        const gridReservedSpace = 500;
+        const footerSpace = 50;
+        const availableHeight = PAGE.h - y - gridReservedSpace - footerSpace;
+        const markedDrawingHeight = Math.max(250, availableHeight);
+
+        const entryAnnotatedPdf = entry?.annotatedPdfs?.[0] || null;
+        let imageUrl = null;
+        
+        if (entryAnnotatedPdf) {
+          imageUrl = entryAnnotatedPdf?.s3Location || entryAnnotatedPdf?.s3location || entryAnnotatedPdf?.location || null;
+          
+          if (!imageUrl && entryAnnotatedPdf?.path) {
+            const path = entryAnnotatedPdf.path;
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+              imageUrl = path;
+            } else {
+              const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+              imageUrl = `${baseUrl}/${cleanPath}`;
+            }
+          }
+        }
+
+        if (imageUrl) {
+          try {
+            const imgBuffer = await fetchImageBuffer(imageUrl);
+            const imageX = M.l;
+            const imageY = y;
+            const imageWidth = CONTENT_W;
+            const imageHeight = markedDrawingHeight;
+            const borderWidth = 2;
+            const padding = 5;
+
+            doc
+              .save()
+              .lineWidth(borderWidth)
+          .strokeColor("#444")
+              .rect(imageX, imageY, imageWidth, imageHeight)
+          .stroke()
+          .restore();
+
+            doc.image(imgBuffer, imageX + padding, imageY + padding, {
+              fit: [imageWidth - (padding * 2), imageHeight - (padding * 2)],
+              align: "center",
+              valign: "center",
+            });
+
+            y = imageY + imageHeight + 10;
+          } catch (error) {
+            const imageX = M.l;
+            const imageY = y;
+            const imageWidth = CONTENT_W;
+            const imageHeight = markedDrawingHeight;
+            const borderWidth = 2;
+
+            doc
+              .save()
+              .lineWidth(borderWidth)
+              .strokeColor("#444")
+              .rect(imageX, imageY, imageWidth, imageHeight)
+              .stroke()
+              .restore();
+
+            y = imageY + imageHeight + 10;
+          }
+        } else {
+          const imageX = M.l;
+          const imageY = y;
+          const imageWidth = CONTENT_W;
+          const imageHeight = markedDrawingHeight;
+          const borderWidth = 2;
+
+          doc
+            .save()
+            .lineWidth(borderWidth)
+            .strokeColor("#444")
+            .rect(imageX, imageY, imageWidth, imageHeight)
+            .stroke()
+            .restore();
+
+          y = imageY + imageHeight + 10;
+        }
+
+        const entryMarkPictures = [];
+        if (entry.markPictures && Array.isArray(entry.markPictures)) {
+          entry.markPictures.forEach((markPic, markIndex) => {
+            entryMarkPictures.push({
+              ...markPic,
+              pictureId: `${entry.displayPos}.${markIndex + 1}`,
+              entryDisplayPos: entry.displayPos,
+            });
+          });
+        }
+
+        if (entryMarkPictures.length > 0) {
+          const gridW = CONTENT_W;
+          const quadW = gridW / 2;
+          const headerH = 32;
+          const baseCommentH = 30;
+          const idW = 95;
+          const photoH = 200;
+          const footerSpace = 50;
+          
+          const calculateCommentHeight = (description, availableWidth) => {
+            if (!description) return baseCommentH;
+            
+            doc.font("Helvetica").fontSize(8);
+            const textHeight = doc.heightOfString(description, {
+              width: availableWidth - 20,
+              lineGap: 1,
+            });
+            
+            return Math.max(baseCommentH, 8 + textHeight + 10);
+          };
+          
+          const drawMarkPictureGrid = async (qx, qy, markPic, width = quadW) => {
+            const description = markPic.description || "";
+            
+            const commentH = calculateCommentHeight(description, width);
+            const quadH = headerH + commentH + photoH;
+            
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .rect(qx, qy, width, quadH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx, qy + headerH)
+              .lineTo(qx + width, qy + headerH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx, qy + headerH + commentH)
+              .lineTo(qx + width, qy + headerH + commentH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx + idW, qy)
+              .lineTo(qx + idW, qy + headerH)
+              .stroke()
+              .restore();
+
+            doc
+              .font("Helvetica")
+              .fontSize(9)
+              .fillColor(RED)
+              .text(markPic.pictureId, qx + 8, qy + 6, {
+                width: idW - 16,
+                align: "left",
+              });
+
+            if (description) {
+              doc
+                .font("Helvetica")
+                .fontSize(8)
+                .fillColor("black")
+                .text(description, qx + 10, qy + headerH + 8, {
+                  width: width - 20,
+                  lineGap: 1,
+                });
+            }
+
+            const photoAreaY = qy + headerH + commentH + 10;
+            
+            let markPicImageUrl = null;
+            if (markPic.s3Location || markPic.s3location || markPic.location) {
+              markPicImageUrl = markPic.s3Location || markPic.s3location || markPic.location;
+            } else if (markPic.path) {
+              const path = markPic.path;
+              if (path.startsWith('http://') || path.startsWith('https://')) {
+                markPicImageUrl = path;
+              } else {
+                const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+                markPicImageUrl = `${baseUrl}/${cleanPath}`;
+              }
+            }
+            
+            if (markPicImageUrl) {
+              try {
+                const imgBuffer = await fetchImageBuffer(markPicImageUrl);
+                const imageX = qx + 10;
+                const imageY = photoAreaY;
+                const imageW = width - 20;
+                const imageH = photoH - 20;
+
+                doc.image(imgBuffer, imageX, imageY, {
+                  fit: [imageW, imageH],
+                  align: "left",
+                  valign: "top",
+                });
+              } catch (error) {
+                doc
+                  .font("Helvetica")
+                  .fontSize(10)
+                  .fillColor(RED)
+                  .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+              }
+            } else {
+              doc
+                .font("Helvetica")
+                .fontSize(10)
+                .fillColor(RED)
+                .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+            }
+          };
+
+          let pictureIndex = 0;
+          let currentPageStartY = y + 10;
+
+          while (pictureIndex < entryMarkPictures.length) {
+            const markPic = entryMarkPictures[pictureIndex];
+            const description = markPic.description || "";
+            
+            doc.font("Helvetica").fontSize(8);
+            const commentWidth = doc.widthOfString(description);
+            const maxCommentWidth = (quadW - 20) * 1.5;
+            const isBigComment = description.length > 80 || commentWidth > maxCommentWidth;
+            
+            let gridsInThisRow = 1;
+            let currentQuadW = gridW;
+            
+            if (!isBigComment && pictureIndex + 1 < entryMarkPictures.length) {
+              const nextMarkPic = entryMarkPictures[pictureIndex + 1];
+              const nextDescription = nextMarkPic.description || "";
+              const nextCommentWidth = doc.widthOfString(nextDescription);
+              const nextIsBigComment = nextDescription.length > 80 || nextCommentWidth > maxCommentWidth;
+              
+              if (!nextIsBigComment) {
+                gridsInThisRow = 2;
+                currentQuadW = quadW;
+              }
+            }
+
+            let maxQuadH = 0;
+            for (let i = 0; i < gridsInThisRow && pictureIndex + i < entryMarkPictures.length; i++) {
+              const checkMarkPic = entryMarkPictures[pictureIndex + i];
+              const checkDescription = checkMarkPic.description || "";
+              const checkCommentH = calculateCommentHeight(checkDescription, currentQuadW);
+              const checkQuadH = headerH + checkCommentH + photoH;
+              if (checkQuadH > maxQuadH) {
+                maxQuadH = checkQuadH;
+              }
+            }
+
+            const availableHeight = PAGE.h - currentPageStartY - footerSpace;
+            const requiredHeight = maxQuadH + 20;
+
+            if (currentPageStartY + requiredHeight > PAGE.h - footerSpace && pictureIndex > 0) {
+              footer(doc, pageNumber);
+              pageNumber++;
+              
+              doc.addPage({ size: "A4", margin: 0 });
+              currentPageStartY = M.t + 10;
+            }
+
+            const gridX = M.l;
+            const gridY = currentPageStartY;
+            const midX = gridX + currentQuadW;
+
+            if (gridsInThisRow === 2) {
+              doc
+                .save()
+                .lineWidth(1)
+                .strokeColor("#333")
+                .moveTo(midX, gridY)
+                .lineTo(midX, gridY + maxQuadH)
+                .stroke()
+                .restore();
+            }
+
+            for (let i = 0; i < gridsInThisRow && pictureIndex < entryMarkPictures.length; i++) {
+              const currentMarkPic = entryMarkPictures[pictureIndex];
+              const qx = i === 0 ? gridX : midX;
+              
+              await drawMarkPictureGrid(qx, gridY, currentMarkPic, currentQuadW);
+              pictureIndex++;
+            }
+
+            currentPageStartY = gridY + maxQuadH + 15;
+          }
+
+          y = currentPageStartY;
+        } else {
+          y += 10;
+        }
+
+        footer(doc, pageNumber);
+      }
+    }
+
+    // Process 7.6 entries with independentController
+    if (entries76IC.length > 0) {
+      doc.addPage({ size: "A4", margin: 0 });
+      pageNumber++;
+      let y = M.t;
+
+      const rowY = y - 2;
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor(BLUE)
+        .text(t("8.3 Final control", translations), M.l, rowY, {
+          width: CONTENT_W * 0.55,
+          align: "left",
+        });
+
+      const leftText = t("8.3 Final control", translations);
+      const leftTextWidth = doc.widthOfString(leftText);
+      const centerX = M.l + leftTextWidth + 20;
+      const centerWidth = CONTENT_W - centerX - 50;
+      
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("black")
+        .text(t("EXTERNAL CONTROL", translations), centerX, rowY, { width: centerWidth, align: "center" });
+
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(12)
+        .fillColor("black")
+        .text(t("B6", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+
+      const DOT_B6 = "black";
+      doc
+        .save()
+        .fillColor(DOT_B6)
+        .circle(M.l + CONTENT_W - 6, rowY + 8, 6)
+        .fill()
+        .restore();
+
+      y = rowY + 20;
+
+      doc
+        .save()
+        .lineWidth(1)
+        .strokeColor(GREY_LINE)
+        .moveTo(M.l, y)
+        .lineTo(M.l + CONTENT_W, y)
+        .stroke()
+        .restore();
+      y += 10;
+
+      // Process 7.6 entries (same structure as 7.4 and 7.5)
+      for (let entryIndex = 0; entryIndex < entries76IC.length; entryIndex++) {
+        const entry = entries76IC[entryIndex];
+        
+        if (entryIndex > 0) {
+          doc.addPage({ size: "A4", margin: 0 });
+          y = M.t;
+          pageNumber++;
+        }
+
+        // Header info block (same as 7.4 and 7.5)
+        const c1 = 110;
+        const c2 = 150;
+        const c3 = 160;
+        const c4 = CONTENT_W - (c1 + c2 + c3);
+
+        const x1 = M.l;
+        const x2 = x1 + c1;
+        const x3 = x2 + c2;
+        const x4 = x3 + c3;
+
+        const rH = 18;
+
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+        doc.text(t("DATE/ID", translations), x1, y, { width: c1 });
+        doc.text(t("CONTROL TYPE", translations), x2, y, { width: c2 });
+        doc.text(t("CONSTRUCTION PART:", translations), x3, y, { width: c3, continued: true });
+        doc.fillColor("black").text(` ${constructionPart}`, { continued: false });
+
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+        doc.text(t("ACCEPTANCE", translations), x4, y, { width: c4, align: "right" });
+
+        y += rH;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        const entryDate = entry?.date ? new Date(entry.date).toLocaleDateString() : (entry?.createdAt ? new Date(entry.createdAt).toLocaleDateString() : "[Select Date]");
+        const entryControlType = entry?.entryData?.subject || "Select an item.";
+
+        const row2StartY = y;
+
+        doc
+          .font("Helvetica")
+        .fontSize(9)
+        .fillColor(BLUE)
+          .text(entryDate, x1, y, { width: c1 });
+      
+        const controlTypeStartY = y;
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("black")
+          .text(entryControlType, x2, y, { width: c2, lineGap: 1 });
+        const controlTypeEndY = doc.y;
+
+        y = row2StartY;
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("PROFFESSION:", translations), x3, y, { width: c3, continued: true });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor("black")
+          .text(` ${profession}`, { continued: false });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("ENDORSEMENT", translations), x4, y, { width: c4, align: "right" });
+
+        const row2ActualHeight = controlTypeEndY - controlTypeStartY;
+        const row2Height = Math.max(rH, row2ActualHeight + 4);
+        
+        y = row2StartY + row2Height;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        const entryDisplayPos = entry.displayPos || entry.entryData?.pos || "7.6.";
+        const entryCommentRaw = entry.comment || "";
+        const entryComment = t(entryCommentRaw, translations);
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor(BLUE)
+          .text(`ID  ${entryDisplayPos}`, x1, y, { width: c1 });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("LOCALIZATION OF CONTROLS", translations), x2, y, { width: c2 + 30 });
+
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor(BLUE)
+          .text(t("COMMENT:", translations), x3, y, { width: c3, continued: true });
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(8)
+          .fillColor("black")
+          .text(` ${entryComment}`, { continued: false });
+
+        y += rH;
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor(GREY_LINE)
+          .moveTo(M.l, y)
+          .lineTo(M.l + CONTENT_W, y)
+          .stroke()
+          .restore();
+        y += 6;
+
+        y += 10;
+
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("black")
+          .text(t("Marked drawing", translations), M.l, y);
+
+        y += 12;
+
+        const gridReservedSpace = 500;
+        const footerSpace = 50;
+        const availableHeight = PAGE.h - y - gridReservedSpace - footerSpace;
+        const markedDrawingHeight = Math.max(250, availableHeight);
+
+        const entryAnnotatedPdf = entry?.annotatedPdfs?.[0] || null;
+        let imageUrl = null;
+        
+        if (entryAnnotatedPdf) {
+          imageUrl = entryAnnotatedPdf?.s3Location || entryAnnotatedPdf?.s3location || entryAnnotatedPdf?.location || null;
+          
+          if (!imageUrl && entryAnnotatedPdf?.path) {
+            const path = entryAnnotatedPdf.path;
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+              imageUrl = path;
+            } else {
+              const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+              imageUrl = `${baseUrl}/${cleanPath}`;
+            }
+          }
+        }
+
+        if (imageUrl) {
+          try {
+            const imgBuffer = await fetchImageBuffer(imageUrl);
+            const imageX = M.l;
+            const imageY = y;
+            const imageWidth = CONTENT_W;
+            const imageHeight = markedDrawingHeight;
+            const borderWidth = 2;
+            const padding = 5;
+
+            doc
+              .save()
+              .lineWidth(borderWidth)
+              .strokeColor("#444")
+              .rect(imageX, imageY, imageWidth, imageHeight)
+              .stroke()
+              .restore();
+
+            doc.image(imgBuffer, imageX + padding, imageY + padding, {
+              fit: [imageWidth - (padding * 2), imageHeight - (padding * 2)],
+              align: "center",
+              valign: "center",
+            });
+
+            y = imageY + imageHeight + 10;
+          } catch (error) {
+            const imageX = M.l;
+            const imageY = y;
+            const imageWidth = CONTENT_W;
+            const imageHeight = markedDrawingHeight;
+            const borderWidth = 2;
+
+            doc
+              .save()
+              .lineWidth(borderWidth)
+              .strokeColor("#444")
+              .rect(imageX, imageY, imageWidth, imageHeight)
+              .stroke()
+              .restore();
+
+            y = imageY + imageHeight + 10;
+          }
+        } else {
+          const imageX = M.l;
+          const imageY = y;
+          const imageWidth = CONTENT_W;
+          const imageHeight = markedDrawingHeight;
+          const borderWidth = 2;
+
+          doc
+            .save()
+            .lineWidth(borderWidth)
+            .strokeColor("#444")
+            .rect(imageX, imageY, imageWidth, imageHeight)
+            .stroke()
+            .restore();
+
+          y = imageY + imageHeight + 10;
+        }
+
+        const entryMarkPictures = [];
+        if (entry.markPictures && Array.isArray(entry.markPictures)) {
+          entry.markPictures.forEach((markPic, markIndex) => {
+            entryMarkPictures.push({
+              ...markPic,
+              pictureId: `${entry.displayPos}.${markIndex + 1}`,
+              entryDisplayPos: entry.displayPos,
+            });
+          });
+        }
+
+        if (entryMarkPictures.length > 0) {
+          const gridW = CONTENT_W;
+          const quadW = gridW / 2;
+          const headerH = 32;
+          const baseCommentH = 30;
+          const idW = 95;
+          const photoH = 200;
+          const footerSpace = 50;
+          
+          const calculateCommentHeight = (description, availableWidth) => {
+            if (!description) return baseCommentH;
+            
+            doc.font("Helvetica").fontSize(8);
+            const textHeight = doc.heightOfString(description, {
+              width: availableWidth - 20,
+              lineGap: 1,
+            });
+            
+            return Math.max(baseCommentH, 8 + textHeight + 10);
+          };
+          
+          const drawMarkPictureGrid = async (qx, qy, markPic, width = quadW) => {
+      const description = markPic.description || "";
+            
+            const commentH = calculateCommentHeight(description, width);
+            const quadH = headerH + commentH + photoH;
+            
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .rect(qx, qy, width, quadH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx, qy + headerH)
+              .lineTo(qx + width, qy + headerH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx, qy + headerH + commentH)
+              .lineTo(qx + width, qy + headerH + commentH)
+              .stroke()
+              .restore();
+
+            doc
+              .save()
+              .lineWidth(1)
+              .strokeColor("#333")
+              .moveTo(qx + idW, qy)
+              .lineTo(qx + idW, qy + headerH)
+              .stroke()
+              .restore();
+
+            doc
+              .font("Helvetica")
+              .fontSize(9)
+              .fillColor(RED)
+              .text(markPic.pictureId, qx + 8, qy + 6, {
+                width: idW - 16,
+                align: "left",
+              });
+
+            if (description) {
+      doc
+        .font("Helvetica")
+        .fontSize(8)
+        .fillColor("black")
+                .text(description, qx + 10, qy + headerH + 8, {
+                  width: width - 20,
+          lineGap: 1,
+        });
+            }
+
+            const photoAreaY = qy + headerH + commentH + 10;
+            
+            let markPicImageUrl = null;
+            if (markPic.s3Location || markPic.s3location || markPic.location) {
+              markPicImageUrl = markPic.s3Location || markPic.s3location || markPic.location;
+            } else if (markPic.path) {
+              const path = markPic.path;
+              if (path.startsWith('http://') || path.startsWith('https://')) {
+                markPicImageUrl = path;
+              } else {
+                const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+                markPicImageUrl = `${baseUrl}/${cleanPath}`;
+              }
+            }
+            
+            if (markPicImageUrl) {
+              try {
+                const imgBuffer = await fetchImageBuffer(markPicImageUrl);
+                const imageX = qx + 10;
+                const imageY = photoAreaY;
+                const imageW = width - 20;
+                const imageH = photoH - 20;
+
+          doc.image(imgBuffer, imageX, imageY, {
+            fit: [imageW, imageH],
+            align: "left",
+                  valign: "top",
+          });
+        } catch (error) {
+                doc
+                  .font("Helvetica")
+                  .fontSize(10)
+                  .fillColor(RED)
+                  .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+              }
+            } else {
+              doc
+                .font("Helvetica")
+                .fontSize(10)
+                .fillColor(RED)
+                .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+            }
+          };
+
+          let pictureIndex = 0;
+          let currentPageStartY = y + 10;
+
+          while (pictureIndex < entryMarkPictures.length) {
+            const markPic = entryMarkPictures[pictureIndex];
+            const description = markPic.description || "";
+            
+            doc.font("Helvetica").fontSize(8);
+            const commentWidth = doc.widthOfString(description);
+            const maxCommentWidth = (quadW - 20) * 1.5;
+            const isBigComment = description.length > 80 || commentWidth > maxCommentWidth;
+            
+            let gridsInThisRow = 1;
+            let currentQuadW = gridW;
+            
+            if (!isBigComment && pictureIndex + 1 < entryMarkPictures.length) {
+              const nextMarkPic = entryMarkPictures[pictureIndex + 1];
+              const nextDescription = nextMarkPic.description || "";
+              const nextCommentWidth = doc.widthOfString(nextDescription);
+              const nextIsBigComment = nextDescription.length > 80 || nextCommentWidth > maxCommentWidth;
+              
+              if (!nextIsBigComment) {
+                gridsInThisRow = 2;
+                currentQuadW = quadW;
+              }
+            }
+
+            let maxQuadH = 0;
+            for (let i = 0; i < gridsInThisRow && pictureIndex + i < entryMarkPictures.length; i++) {
+              const checkMarkPic = entryMarkPictures[pictureIndex + i];
+              const checkDescription = checkMarkPic.description || "";
+              const checkCommentH = calculateCommentHeight(checkDescription, currentQuadW);
+              const checkQuadH = headerH + checkCommentH + photoH;
+              if (checkQuadH > maxQuadH) {
+                maxQuadH = checkQuadH;
+              }
+            }
+
+            const availableHeight = PAGE.h - currentPageStartY - footerSpace;
+            const requiredHeight = maxQuadH + 20;
+
+            if (currentPageStartY + requiredHeight > PAGE.h - footerSpace && pictureIndex > 0) {
+              footer(doc, pageNumber);
+              pageNumber++;
+              
+              doc.addPage({ size: "A4", margin: 0 });
+              currentPageStartY = M.t + 10;
+            }
+
+            const gridX = M.l;
+            const gridY = currentPageStartY;
+            const midX = gridX + currentQuadW;
+
+            if (gridsInThisRow === 2) {
+              doc
+                .save()
+                .lineWidth(1)
+                .strokeColor("#333")
+                .moveTo(midX, gridY)
+                .lineTo(midX, gridY + maxQuadH)
+                .stroke()
+                .restore();
+            }
+
+            for (let i = 0; i < gridsInThisRow && pictureIndex < entryMarkPictures.length; i++) {
+              const currentMarkPic = entryMarkPictures[pictureIndex];
+              const qx = i === 0 ? gridX : midX;
+              
+              await drawMarkPictureGrid(qx, gridY, currentMarkPic, currentQuadW);
+              pictureIndex++;
+            }
+
+            currentPageStartY = gridY + maxQuadH + 15;
+          }
+
+          y = currentPageStartY;
+        } else {
+          y += 10;
+        }
+
+        footer(doc, pageNumber);
+      }
+    }
+  }
 }
 
 // PAGE 12 – 8.2 OWN CONTROL B5
 // PAGE 12 – 8.2 OWN CONTROL B5  (Side 11 af 24) - NO OVERFLOW VERSION
-function page12(doc, dynamic) {
+async function page12(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#cfcfcf";
-  const RED = "#cc0000";
+  const RED = "black";
   const DOT_B5 = "#00AFEF"; // blue dot for B5
 
-  const constructionPart = dynamic.constructionPart || "SPECIAL TEXT.";
-  const profession = dynamic.profession || "PROJECT SETUP";
-  const mainComments = dynamic.mainComments || "MAIN COMMENTS";
+  const constructionPartRaw = dynamic.constructionPart || "SPECIAL TEXT.";
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw = dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+  const mainCommentsRaw = dynamic.mainComments || "MAIN COMMENTS";
+  const mainComments = t(mainCommentsRaw, translations);
 
   let y = M.t;
+
+  // Fetch entries from StaticReportRegistrationEntries collection for B5 (pos 7.5)
+  let entries = [];
+  let firstEntry = null;
+
+  try {
+    const { project, subjectMatterId, projectId, companyId } = dynamic;
+    const dbToUse = dynamic.db || db;
+
+    if (dbToUse && projectId && subjectMatterId) {
+      const query = {
+        projectId: new ObjectId(projectId),
+        $or: [
+          { "profession.SubjectMatterId": subjectMatterId },
+          { professionKey: subjectMatterId },
+          { subjectMatterId: subjectMatterId },
+        ],
+      };
+
+      let allEntries = [];
+      try {
+        allEntries = await dbToUse
+          .collection("StaticReportRegistrationEntries")
+          .find(query)
+          .toArray();
+      } catch (error) {
+        try {
+          allEntries = await dbToUse
+            .collection("StaticReportRegistration")
+            .find(query)
+            .toArray();
+        } catch (error2) {
+
+        }
+      }
+
+      // Filter for B5 entries (pos starting with 7.5)
+      const rawEntries = allEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        return pos.startsWith("7.5");
+      });
+
+      if (rawEntries.length > 0) {
+        entries = rawEntries;
+        firstEntry = entries[0];
+      }
+    }
+  } catch (error) {
+
+  }
 
   // --- helper: truncate to single line within maxWidth ---
   function fitOneLine(text, maxWidth, font = "Helvetica-Bold", size = 8) {
@@ -4115,26 +10285,43 @@ function page12(doc, dynamic) {
   // -------------------------------------------------------
   const rowY = y;
 
+  // Draw left text: "8.2 Execution control"
+  const leftText = t("8.2 Execution control", translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(14)
     .fillColor(BLUE)
-    .text("8.2 Execution control", M.l, rowY, {
+    .text(leftText, M.l, rowY, {
       width: CONTENT_W * 0.55,
       align: "left",
     });
 
+  // Check if selectedWorkers is an object (not null, not undefined, and is an object)
+  const hasSelectedWorkers = firstEntry && 
+    firstEntry.selectedWorkers && 
+    typeof firstEntry.selectedWorkers === 'object' && 
+    !Array.isArray(firstEntry.selectedWorkers);
+  const controlText = hasSelectedWorkers ? t("OWN CONTROL", translations) : t("INDEPENDENT CONTROL", translations);
+
+  // Calculate position for center text to avoid overlap
+  doc.font("Helvetica-Bold").fontSize(14);
+  const leftTextWidth = doc.widthOfString(leftText);
+  const centerX = M.l + leftTextWidth + 20; // 20px spacing after left text
+  const centerWidth = CONTENT_W - centerX - 50; // Reserve 50px for B5 and dot on the right
+
+  // Draw center text: "OWN CONTROL" or "INDEPENDENT CONTROL"
   doc
     .font("Helvetica-Bold")
     .fontSize(14)
     .fillColor(RED)
-    .text("OWN CONTROL", M.l, rowY, { width: CONTENT_W, align: "center" });
+    .text(controlText, centerX, rowY, { width: centerWidth, align: "center" });
 
+  // Draw right text: "B5"
   doc
     .font("Helvetica-Bold")
     .fontSize(14)
     .fillColor(BLUE)
-    .text("B5", M.l, rowY, { width: CONTENT_W - 22, align: "right" });
+    .text(t("B5", translations), M.l, rowY, { width: CONTENT_W - 22, align: "right" });
 
   doc
     .save()
@@ -4175,11 +10362,11 @@ function page12(doc, dynamic) {
 
   // Row 1 headings
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("DATE/ID", x1, y + 1, { width: c1 });
-  doc.text("CONTROL TYPE", x2, y + 1, { width: c2 });
+  doc.text(t("DATE/ID", translations), x1, y + 1, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y + 1, { width: c2 });
 
   // CONSTRUCTION PART: + value (single line, truncated)
-  const label1 = "CONSTRUCTION PART:";
+  const label1 = t("CONSTRUCTION PART:", translations);
   doc.text(label1, x3, y + 1, { width: c3 });
 
   const label1W = doc.widthOfString(label1) + 3;
@@ -4191,7 +10378,7 @@ function page12(doc, dynamic) {
 
   // right heading
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ACCEPTANCE", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ACCEPTANCE", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -4206,14 +10393,14 @@ function page12(doc, dynamic) {
 
   // Row 2 values
   doc.font("Helvetica").fontSize(9).fillColor(BLUE);
-  doc.text("[Select Date]", x1, y, { width: c1 });
+  doc.text(t("[Select Date]", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text("Select an item.", x2, y, { width: c2 });
+  doc.text(t("Select an item.", translations), x2, y, { width: c2 });
 
   // PROFESSION: + value (single line, truncated)
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  const label2 = "PROFFESSION:";
+  const label2 = t("PROFFESSION:", translations);
   doc.text(label2, x3, y + 1, { width: c3 });
 
   const label2W = doc.widthOfString(label2) + 3;
@@ -4225,7 +10412,7 @@ function page12(doc, dynamic) {
 
   // right heading
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ENDORSEMENT", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ENDORSEMENT", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -4240,14 +10427,14 @@ function page12(doc, dynamic) {
 
   // Row 3
   doc.font("Helvetica-Bold").fontSize(9).fillColor(BLUE);
-  doc.text("ID  7.5.", x1, y, { width: c1 });
+  doc.text(t("ID  7.5.", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("LOCALIZATION OF CONTROLS", x2, y + 1, { width: c2 + 60 });
+  doc.text(t("LOCALIZATION OF CONTROLS", translations), x2, y + 1, { width: c2 + 60 });
 
   // COMMENT: + value (single line, truncated)
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  const label3 = "COMMENT:";
+  const label3 = t("COMMENT:", translations);
   doc.text(label3, x3, y + 1, { width: c3 });
 
   const label3W = doc.widthOfString(label3) + 3;
@@ -4273,7 +10460,7 @@ function page12(doc, dynamic) {
     .font("Helvetica")
     .fontSize(9)
     .fillColor(RED)
-    .text("Marked drawing", M.l, y);
+    .text(t("Marked drawing", translations), M.l, y);
 
   // -------------------------------------------------------
   // 3) 2x2 photo grid (same as before)
@@ -4354,7 +10541,7 @@ function page12(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(14)
       .fillColor(RED)
-      .text("OWN CONTROL", qx + idW + 10, qy + 7, {
+      .text(controlText, qx + idW + 10, qy + 7, {
         width: quadW - idW - 20,
         align: "left",
       });
@@ -4363,12 +10550,12 @@ function page12(doc, dynamic) {
       .font("Helvetica")
       .fontSize(9)
       .fillColor(RED)
-      .text("Comments on picture", qx + 10, qy + headerH + 8);
+      .text(t("Comments on picture", translations), qx + 10, qy + headerH + 8);
     doc
       .font("Helvetica")
       .fontSize(10)
       .fillColor(RED)
-      .text("Photo from registration.", qx + 10, qy + headerH + commentH + 12);
+      .text(t("Photo from registration.", translations), qx + 10, qy + headerH + commentH + 12);
   };
 
   drawQuad(gridX, gridY, "7.5.1.E1Uniq\nue picture ID");
@@ -4381,17 +10568,70 @@ function page12(doc, dynamic) {
 
 // PAGE 13 – 8.3 OWN CONTROL B6
 // PAGE 13 – 8.3 OWN CONTROL B6  (Side 12 af 24) - NO OVERFLOW VERSION
-function page13(doc, dynamic) {
+async function page13(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#cfcfcf";
-  const RED = "#cc0000";
-  const DOT_B6 = "#BF0000"; // red dot for B6
+  const RED = "black";
+  const DOT_B6 = "black"; // red dot for B6
 
-  const constructionPart = dynamic.constructionPart || "SPECIAL TEXT.";
-  const profession = dynamic.profession || "PROJECT SETUP";
-  const mainComments = dynamic.mainComments || "MAIN COMMENTS";
+  const constructionPartRaw = dynamic.constructionPart || "SPECIAL TEXT.";
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw = dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+  const mainCommentsRaw = dynamic.mainComments || "MAIN COMMENTS";
+  const mainComments = t(mainCommentsRaw, translations);
 
   let y = M.t;
+
+  // Fetch entries from StaticReportRegistrationEntries collection for B6 (pos 7.6)
+  let entries = [];
+  let firstEntry = null;
+
+  try {
+    const { project, subjectMatterId, projectId, companyId } = dynamic;
+    const dbToUse = dynamic.db || db;
+
+    if (dbToUse && projectId && subjectMatterId) {
+      const query = {
+        projectId: new ObjectId(projectId),
+        $or: [
+          { "profession.SubjectMatterId": subjectMatterId },
+          { professionKey: subjectMatterId },
+          { subjectMatterId: subjectMatterId },
+        ],
+      };
+
+      let allEntries = [];
+      try {
+        allEntries = await dbToUse
+          .collection("StaticReportRegistrationEntries")
+          .find(query)
+          .toArray();
+      } catch (error) {
+        try {
+          allEntries = await dbToUse
+            .collection("StaticReportRegistration")
+            .find(query)
+            .toArray();
+        } catch (error2) {
+
+        }
+      }
+
+      // Filter for B6 entries (pos starting with 7.6)
+      const rawEntries = allEntries.filter(entry => {
+        const pos = entry.entryData?.pos || "";
+        return pos.startsWith("7.6");
+      });
+
+      if (rawEntries.length > 0) {
+        entries = rawEntries;
+        firstEntry = entries[0];
+      }
+    }
+  } catch (error) {
+
+  }
 
   // --- helper: truncate to single line within maxWidth ---
   function fitOneLine(text, maxWidth, font = "Helvetica-Bold", size = 8) {
@@ -4413,26 +10653,43 @@ function page13(doc, dynamic) {
   // -------------------------------------------------------
   const rowY = y;
 
+  // Draw left text: "8.3 Final Check"
+  const leftText = t("8.3 Final Check", translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(14)
     .fillColor(BLUE)
-    .text("8.3 Final Check", M.l, rowY, {
+    .text(leftText, M.l, rowY, {
       width: CONTENT_W * 0.55,
       align: "left",
     });
 
+  // Check if selectedWorkers is an object (not null, not undefined, and is an object)
+  const hasSelectedWorkers = firstEntry && 
+    firstEntry.selectedWorkers && 
+    typeof firstEntry.selectedWorkers === 'object' && 
+    !Array.isArray(firstEntry.selectedWorkers);
+  const controlText = hasSelectedWorkers ? t("OWN CONTROL", translations) : t("INDEPENDENT CONTROL", translations);
+
+  // Calculate position for center text to avoid overlap
+  doc.font("Helvetica-Bold").fontSize(14);
+  const leftTextWidth = doc.widthOfString(leftText);
+  const centerX = M.l + leftTextWidth + 20; // 20px spacing after left text
+  const centerWidth = CONTENT_W - centerX - 50; // Reserve 50px for B6 and dot on the right
+
+  // Draw center text: "OWN CONTROL" or "INDEPENDENT CONTROL"
   doc
     .font("Helvetica-Bold")
     .fontSize(14)
     .fillColor(RED)
-    .text("OWN CONTROL", M.l, rowY, { width: CONTENT_W, align: "center" });
+    .text(controlText, centerX, rowY, { width: centerWidth, align: "center" });
 
+  // Draw right text: "B6"
   doc
     .font("Helvetica-Bold")
     .fontSize(14)
     .fillColor(BLUE)
-    .text("B6", M.l, rowY, { width: CONTENT_W - 22, align: "right" });
+    .text(t("B6", translations), M.l, rowY, { width: CONTENT_W - 22, align: "right" });
 
   doc
     .save()
@@ -4472,10 +10729,10 @@ function page13(doc, dynamic) {
 
   // Row 1 headings
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("DATE/ID", x1, y + 1, { width: c1 });
-  doc.text("CONTROL TYPE", x2, y + 1, { width: c2 });
+  doc.text(t("DATE/ID", translations), x1, y + 1, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y + 1, { width: c2 });
 
-  const label1 = "CONSTRUCTION PART:";
+  const label1 = t("CONSTRUCTION PART:", translations);
   doc.text(label1, x3, y + 1, { width: c3 });
 
   const label1W = doc.widthOfString(label1) + 3;
@@ -4486,7 +10743,7 @@ function page13(doc, dynamic) {
   doc.text(val1, x3 + label1W, y + 1, { width: val1MaxW });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ACCEPTANCE", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ACCEPTANCE", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -4501,12 +10758,12 @@ function page13(doc, dynamic) {
 
   // Row 2 values
   doc.font("Helvetica").fontSize(9).fillColor(BLUE);
-  doc.text("[Select Date]", x1, y, { width: c1 });
+  doc.text(t("[Select Date]", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text("Select an item.", x2, y, { width: c2 });
+  doc.text(t("Select an item.", translations), x2, y, { width: c2 });
 
-  const label2 = "PROFFESSION:";
+  const label2 = t("PROFFESSION:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label2, x3, y + 1, { width: c3 });
 
@@ -4518,7 +10775,7 @@ function page13(doc, dynamic) {
   doc.text(val2, x3 + label2W, y + 1, { width: val2MaxW });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ENDORSEMENT", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ENDORSEMENT", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -4533,12 +10790,12 @@ function page13(doc, dynamic) {
 
   // Row 3
   doc.font("Helvetica-Bold").fontSize(9).fillColor(BLUE);
-  doc.text("ID  7.6.", x1, y, { width: c1 });
+  doc.text(t("ID  7.6.", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("LOCALIZATION OF CONTROLS", x2, y + 1, { width: c2 + 60 });
+  doc.text(t("LOCALIZATION OF CONTROLS", translations), x2, y + 1, { width: c2 + 60 });
 
-  const label3 = "COMMENT:";
+  const label3 = t("COMMENT:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label3, x3, y + 1, { width: c3 });
 
@@ -4565,7 +10822,7 @@ function page13(doc, dynamic) {
     .font("Helvetica")
     .fontSize(9)
     .fillColor(RED)
-    .text("Marked drawing", M.l, y);
+    .text(t("Marked drawing", translations), M.l, y);
 
   // -------------------------------------------------------
   // 3) 2x2 photo grid (7.6.1.*)
@@ -4646,7 +10903,7 @@ function page13(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(14)
       .fillColor(RED)
-      .text("OWN CONTROL", qx + idW + 10, qy + 7, {
+      .text(controlText, qx + idW + 10, qy + 7, {
         width: quadW - idW - 20,
         align: "left",
       });
@@ -4655,12 +10912,12 @@ function page13(doc, dynamic) {
       .font("Helvetica")
       .fontSize(9)
       .fillColor(RED)
-      .text("Comments on picture", qx + 10, qy + headerH + 8);
+      .text(t("Comments on picture", translations), qx + 10, qy + headerH + 8);
     doc
       .font("Helvetica")
       .fontSize(10)
       .fillColor(RED)
-      .text("Photo from registration.", qx + 10, qy + headerH + commentH + 12);
+      .text(t("Photo from registration.", translations), qx + 10, qy + headerH + commentH + 12);
   };
 
   drawQuad(gridX, gridY, "7.6.1.E1Uniq\nue Picture ID");
@@ -4673,16 +10930,19 @@ function page13(doc, dynamic) {
 
 // PAGE 14 – 8.1 EXTERNAL CONTROL B4
 // PAGE 14 – 8.1 INDEPENDENT CONTROL B4  (Side 13 af 24) - NO OVERFLOW VERSION
-function page14(doc, dynamic) {
+function page14(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#cfcfcf";
-  const RED = "#cc0000";
+  const RED = "black";
   const GREEN = "#00A651"; // Independent control green (adjust if needed)
   const DOT_B4 = "#FFBF00"; // orange/yellow dot for B4
 
-  const constructionPart = dynamic.constructionPart || "SPECIAL TEXT.";
-  const profession = dynamic.profession || "PROJECT SETUP";
-  const mainComments = dynamic.mainComments || "MAIN COMMENTS";
+  const constructionPartRaw = dynamic.constructionPart || "SPECIAL TEXT.";
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw = dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+  const mainCommentsRaw = dynamic.mainComments || "MAIN COMMENTS";
+  const mainComments = t(mainCommentsRaw, translations);
 
   let y = M.t;
 
@@ -4704,36 +10964,46 @@ function page14(doc, dynamic) {
   // -------------------------------------------------------
   // 1) Top blue bar
   // -------------------------------------------------------
-  y = drawSectionBar(doc, y, "8.B EXTERNAL CONTROL REPORT");
+  y = drawSectionBar(doc, y, "8.B EXTERNAL CONTROL REPORT", undefined, translations);
 
   // -------------------------------------------------------
   // 2) Row: 8.1 Receive control of deliveries | INDEPENDENT CONTROL | B4 + dot
   // -------------------------------------------------------
   const rowY = y - 2;
 
+  // Draw left text: "8.1 Receive control of deliveries"
+  const leftText = t("8.1 Receive control of deliveries", translations);
   doc
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(BLUE)
-    .text("8.1 Receive control of deliveries", M.l, rowY, {
+    .text(leftText, M.l, rowY, {
       width: CONTENT_W * 0.55,
       align: "left",
     });
 
+  // Calculate position for center text to avoid overlap
+  doc.font("Helvetica-Bold").fontSize(12);
+  const leftTextWidth = doc.widthOfString(leftText);
+  const centerX = M.l + leftTextWidth + 20; // 20px spacing after left text
+  const centerWidth = CONTENT_W - centerX - 50; // Reserve 50px for B4 and dot on the right
+
+  // Draw center text: "INDEPENDENT CONTROL"
   doc
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(GREEN)
-    .text("INDEPENDENT CONTROL", M.l, rowY, {
-      width: CONTENT_W,
+    .text(t("INDEPENDENT CONTROL", translations), centerX, rowY, {
+      width: centerWidth,
       align: "center",
     });
 
+  // Draw right text: "B4"
   doc
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(BLUE)
-    .text("B4", M.l, rowY, { width: CONTENT_W - 18, align: "right" });
+    .text(t("B4", translations), M.l, rowY, { width: CONTENT_W - 18, align: "right" });
 
   // dot
   doc
@@ -4774,10 +11044,10 @@ function page14(doc, dynamic) {
 
   // Row 1 headings
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("DATE/ID", x1, y + 1, { width: c1 });
-  doc.text("CONTROL TYPE", x2, y + 1, { width: c2 });
+  doc.text(t("DATE/ID", translations), x1, y + 1, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y + 1, { width: c2 });
 
-  const label1 = "CONSTRUCTION PART:";
+  const label1 = t("CONSTRUCTION PART:", translations);
   doc.text(label1, x3, y + 1, { width: c3 });
 
   const label1W = doc.widthOfString(label1) + 3;
@@ -4788,7 +11058,7 @@ function page14(doc, dynamic) {
   doc.text(val1, x3 + label1W, y + 1, { width: val1MaxW });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ACCEPTANCE", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ACCEPTANCE", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -4803,12 +11073,12 @@ function page14(doc, dynamic) {
 
   // Row 2 values
   doc.font("Helvetica").fontSize(9).fillColor(BLUE);
-  doc.text("[Select Date]", x1, y, { width: c1 });
+  doc.text(t("[Select Date]", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text("Select an item.", x2, y, { width: c2 });
+  doc.text(t("Select an item.", translations), x2, y, { width: c2 });
 
-  const label2 = "PROFFESSION:";
+  const label2 = t("PROFFESSION:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label2, x3, y + 1, { width: c3 });
 
@@ -4820,7 +11090,7 @@ function page14(doc, dynamic) {
   doc.text(val2, x3 + label2W, y + 1, { width: val2MaxW });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ENDORSEMENT", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ENDORSEMENT", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -4835,12 +11105,12 @@ function page14(doc, dynamic) {
 
   // Row 3
   doc.font("Helvetica-Bold").fontSize(9).fillColor(BLUE);
-  doc.text("ID  7.4.", x1, y, { width: c1 });
+  doc.text(t("ID  7.4.", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("LOCALIZATION OF CONTROLS", x2, y + 1, { width: c2 + 60 });
+  doc.text(t("LOCALIZATION OF CONTROLS", translations), x2, y + 1, { width: c2 + 60 });
 
-  const label3 = "COMMENT:";
+  const label3 = t("COMMENT:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label3, x3, y + 1, { width: c3 });
 
@@ -4867,7 +11137,7 @@ function page14(doc, dynamic) {
     .font("Helvetica")
     .fontSize(9)
     .fillColor(RED)
-    .text("Marked drawing", M.l, y);
+    .text(t("Marked drawing", translations), M.l, y);
 
   // -------------------------------------------------------
   // 4) 2x2 photo grid (Independent control label in GREEN)
@@ -4948,7 +11218,7 @@ function page14(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(14)
       .fillColor(GREEN)
-      .text("INDEPENDENT CONTROL", qx + idW + 10, qy + 7, {
+      .text(t("INDEPENDENT CONTROL", translations), qx + idW + 10, qy + 7, {
         width: quadW - idW - 20,
         align: "left",
       });
@@ -4957,12 +11227,12 @@ function page14(doc, dynamic) {
       .font("Helvetica")
       .fontSize(9)
       .fillColor(RED)
-      .text("Comments on picture", qx + 10, qy + headerH + 8);
+      .text(t("Comments on picture", translations), qx + 10, qy + headerH + 8);
     doc
       .font("Helvetica")
       .fontSize(10)
       .fillColor(RED)
-      .text("Photo from registration.", qx + 10, qy + headerH + commentH + 12);
+      .text(t("Photo from registration.", translations), qx + 10, qy + headerH + commentH + 12);
   };
 
   // B4 / 7.4.3 ids
@@ -4976,16 +11246,19 @@ function page14(doc, dynamic) {
 
 // PAGE 15 – 8.2 EXTERNAL CONTROL B5
 // PAGE 15 – 8.2 Execution control (INDEPENDET CONTROL) B5  (Side 14 af 24)
-function page15(doc, dynamic) {
+function page15(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#d0d0d0"; // matches PDF line color
-  const RED = "#cc0000";
+  const RED = "black";
   const GREEN = "#00AF50"; // picked from your PDF
   const DOT_B5 = "#00AFEF"; // picked from your PDF (blue dot)
 
-  const constructionPart = dynamic.constructionPart || "SPECIAL TEXT.";
-  const profession = dynamic.profession || "PROJECT SETUP";
-  const mainComments = dynamic.mainComments || "MAIN COMMENTS";
+  const constructionPartRaw = dynamic.constructionPart || "SPECIAL TEXT.";
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw = dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+  const mainCommentsRaw = dynamic.mainComments || "MAIN COMMENTS";
+  const mainComments = t(mainCommentsRaw, translations);
 
   let y = M.t;
 
@@ -5012,7 +11285,7 @@ function page15(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(BLUE)
-    .text("8.2 Execution control", M.l, rowY, {
+    .text(t("8.2 Execution control", translations), M.l, rowY, {
       width: CONTENT_W * 0.55,
       align: "left",
     });
@@ -5021,7 +11294,7 @@ function page15(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(GREEN)
-    .text("INDEPENDET CONTROL", M.l, rowY, {
+    .text(t("INDEPENDET CONTROL", translations), M.l, rowY, {
       width: CONTENT_W,
       align: "center",
     });
@@ -5071,10 +11344,10 @@ function page15(doc, dynamic) {
 
   // Row 1 headings
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("DATE/ID", x1, y + 1, { width: c1 });
-  doc.text("CONTROL TYPE", x2, y + 1, { width: c2 });
+  doc.text(t("DATE/ID", translations), x1, y + 1, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y + 1, { width: c2 });
 
-  const label1 = "CONSTRUCTION PART:";
+  const label1 = t("CONSTRUCTION PART:", translations);
   doc.text(label1, x3, y + 1, { width: c3 });
 
   const label1W = doc.widthOfString(label1) + 3;
@@ -5091,7 +11364,7 @@ function page15(doc, dynamic) {
   );
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ACCEPTANCE", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ACCEPTANCE", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -5106,12 +11379,12 @@ function page15(doc, dynamic) {
 
   // Row 2 values
   doc.font("Helvetica").fontSize(9).fillColor(BLUE);
-  doc.text("[Select Date]", x1, y, { width: c1 });
+  doc.text(t("[Select Date]", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text("Select an item.", x2, y, { width: c2 });
+  doc.text(t("Select an item.", translations), x2, y, { width: c2 });
 
-  const label2 = "PROFFESSION:";
+  const label2 = t("PROFFESSION:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label2, x3, y + 1, { width: c3 });
 
@@ -5129,7 +11402,7 @@ function page15(doc, dynamic) {
   );
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ENDORSEMENT", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ENDORSEMENT", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -5144,12 +11417,12 @@ function page15(doc, dynamic) {
 
   // Row 3
   doc.font("Helvetica-Bold").fontSize(9).fillColor(BLUE);
-  doc.text("ID  7.5.", x1, y, { width: c1 });
+  doc.text(t("ID  7.5.", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("LOCALIZATION OF CONTROLS", x2, y + 1, { width: c2 + 60 });
+  doc.text(t("LOCALIZATION OF CONTROLS", translations), x2, y + 1, { width: c2 + 60 });
 
-  const label3 = "COMMENT:";
+  const label3 = t("COMMENT:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label3, x3, y + 1, { width: c3 });
 
@@ -5182,7 +11455,7 @@ function page15(doc, dynamic) {
     .font("Helvetica")
     .fontSize(9)
     .fillColor(RED)
-    .text("Marked drawing", M.l, y);
+    .text(t("Marked drawing", translations), M.l, y);
 
   // -------------------------------------------------------
   // 3) 2x2 photo grid (7.5.1.*) with green "INDEPENDET CONTROL"
@@ -5263,7 +11536,7 @@ function page15(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(14)
       .fillColor(GREEN)
-      .text("INDEPENDET CONTROL", qx + idW + 10, qy + 7, {
+      .text(t("INDEPENDET CONTROL", translations), qx + idW + 10, qy + 7, {
         width: quadW - idW - 20,
         align: "left",
       });
@@ -5272,12 +11545,12 @@ function page15(doc, dynamic) {
       .font("Helvetica")
       .fontSize(9)
       .fillColor(RED)
-      .text("Comments on picture", qx + 10, qy + headerH + 8);
+      .text(t("Comments on picture", translations), qx + 10, qy + headerH + 8);
     doc
       .font("Helvetica")
       .fontSize(10)
       .fillColor(RED)
-      .text("Photo from registration.", qx + 10, qy + headerH + commentH + 12);
+      .text(t("Photo from registration.", translations), qx + 10, qy + headerH + commentH + 12);
   };
 
   drawQuad(gridX, gridY, "7.5.1.E1Uniq\nue picture ID");
@@ -5290,16 +11563,19 @@ function page15(doc, dynamic) {
 
 // PAGE 16 – 8.3 EXTERNAL CONTROL B6
 // PAGE 16 – 8.3 Final Check (INDEPENDET CONTROL) B6  (Side 15 af 24)
-function page16(doc, dynamic) {
+function page16(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#d0d0d0";
-  const RED = "#cc0000";
+  const RED = "black";
   const GREEN = "#00AF50"; // same green as page14/15
-  const DOT_B6 = "#BF0000"; // red dot for B6
+  const DOT_B6 = "black"; // red dot for B6
 
-  const constructionPart = dynamic.constructionPart || "SPECIAL TEXT.";
-  const profession = dynamic.profession || "PROJECT SETUP";
-  const mainComments = dynamic.mainComments || "MAIN COMMENTS";
+  const constructionPartRaw = dynamic.constructionPart || "SPECIAL TEXT.";
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw = dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+  const mainCommentsRaw = dynamic.mainComments || "MAIN COMMENTS";
+  const mainComments = t(mainCommentsRaw, translations);
 
   let y = M.t;
 
@@ -5326,7 +11602,7 @@ function page16(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(BLUE)
-    .text("8.3 Final Check", M.l, rowY, {
+    .text(t("8.3 Final Check", translations), M.l, rowY, {
       width: CONTENT_W * 0.55,
       align: "left",
     });
@@ -5335,7 +11611,7 @@ function page16(doc, dynamic) {
     .font("Helvetica-Bold")
     .fontSize(12)
     .fillColor(GREEN)
-    .text("INDEPENDET CONTROL", M.l, rowY, {
+    .text(t("INDEPENDET CONTROL", translations), M.l, rowY, {
       width: CONTENT_W,
       align: "center",
     });
@@ -5385,10 +11661,10 @@ function page16(doc, dynamic) {
 
   // Row 1 headings
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("DATE/ID", x1, y + 1, { width: c1 });
-  doc.text("CONTROL TYPE", x2, y + 1, { width: c2 });
+  doc.text(t("DATE/ID", translations), x1, y + 1, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y + 1, { width: c2 });
 
-  const label1 = "CONSTRUCTION PART:";
+  const label1 = t("CONSTRUCTION PART:", translations);
   doc.text(label1, x3, y + 1, { width: c3 });
 
   const label1W = doc.widthOfString(label1) + 3;
@@ -5405,7 +11681,7 @@ function page16(doc, dynamic) {
   );
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ACCEPTANCE", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ACCEPTANCE", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -5420,12 +11696,12 @@ function page16(doc, dynamic) {
 
   // Row 2 values
   doc.font("Helvetica").fontSize(9).fillColor(BLUE);
-  doc.text("[Select Date]", x1, y, { width: c1 });
+  doc.text(t("[Select Date]", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica").fontSize(9).fillColor("black");
-  doc.text("Select an item.", x2, y, { width: c2 });
+  doc.text(t("Select an item.", translations), x2, y, { width: c2 });
 
-  const label2 = "PROFFESSION:";
+  const label2 = t("PROFFESSION:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label2, x3, y + 1, { width: c3 });
 
@@ -5443,7 +11719,7 @@ function page16(doc, dynamic) {
   );
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ENDORSEMENT", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ENDORSEMENT", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -5458,12 +11734,12 @@ function page16(doc, dynamic) {
 
   // Row 3
   doc.font("Helvetica-Bold").fontSize(9).fillColor(BLUE);
-  doc.text("ID  7.6.", x1, y, { width: c1 });
+  doc.text(t("ID  7.6.", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("LOCALIZATION OF CONTROLS", x2, y + 1, { width: c2 + 60 });
+  doc.text(t("LOCALIZATION OF CONTROLS", translations), x2, y + 1, { width: c2 + 60 });
 
-  const label3 = "COMMENT:";
+  const label3 = t("COMMENT:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label3, x3, y + 1, { width: c3 });
 
@@ -5496,7 +11772,7 @@ function page16(doc, dynamic) {
     .font("Helvetica")
     .fontSize(9)
     .fillColor(RED)
-    .text("Marked drawing", M.l, y);
+    .text(t("Marked drawing", translations), M.l, y);
 
   // -------------------------------------------------------
   // 3) 2x2 photo grid (7.6.3.*) with green "INDEPENDET CONTROL"
@@ -5577,7 +11853,7 @@ function page16(doc, dynamic) {
       .font("Helvetica-Bold")
       .fontSize(14)
       .fillColor(GREEN)
-      .text("INDEPENDET CONTROL", qx + idW + 10, qy + 7, {
+      .text(t("INDEPENDET CONTROL", translations), qx + idW + 10, qy + 7, {
         width: quadW - idW - 20,
         align: "left",
       });
@@ -5586,12 +11862,12 @@ function page16(doc, dynamic) {
       .font("Helvetica")
       .fontSize(9)
       .fillColor(RED)
-      .text("Comments on picture", qx + 10, qy + headerH + 8);
+      .text(t("Comments on picture", translations), qx + 10, qy + headerH + 8);
     doc
       .font("Helvetica")
       .fontSize(10)
       .fillColor(RED)
-      .text("Photo from registration.", qx + 10, qy + headerH + commentH + 12);
+      .text(t("Photo from registration.", translations), qx + 10, qy + headerH + commentH + 12);
   };
 
   drawQuad(gridX, gridY, "7.6.3.E1Uniq\nue Picture ID");
@@ -5604,14 +11880,726 @@ function page16(doc, dynamic) {
 
 // PAGE 17 – 8.4 DEVIATIONS B7
 // PAGE 17 – 8.4 DEVIATIONS B7  (Side 16 af 24)
-function page17(doc, dynamic) {
+async function page17(doc, dynamic, translations = {}) {
+  const BLUE = HEADING_COLOR;
+  const GREY_LINE = "#cfcfcf";
+  const RED = "black";
+
+  // Fetch deviations from collection
+  let deviations = [];
+  const { project, subjectMatterId, projectId, companyId } = dynamic;
+  const dbToUse = dynamic.db || db;
+
+  console.log("[8.4 DEVIATIONS] Starting data fetch...");
+  console.log("[8.4 DEVIATIONS] projectId:", projectId);
+  console.log("[8.4 DEVIATIONS] subjectMatterId:", subjectMatterId);
+  console.log("[8.4 DEVIATIONS] dbToUse:", dbToUse ? "exists" : "null");
+  console.log("[8.4 DEVIATIONS] db:", db ? "exists" : "null");
+
+  try {
+    if (dbToUse && projectId && subjectMatterId) {
+      // Try both projectId (single) and projectsId (array) fields
+      const query = {
+        $or: [
+          { projectId: new ObjectId(projectId) },
+          { projectId: projectId },
+          { projectsId: new ObjectId(projectId) },
+          { projectsId: projectId },
+          { "projectsId": { $in: [new ObjectId(projectId)] } },
+          { "projectsId": { $in: [projectId] } },
+        ],
+        type: "Static Report",
+        $and: [
+          {
+            $or: [
+              { "profession.SubjectMatterId": subjectMatterId },
+              { professionKey: subjectMatterId },
+              { subjectMatterId: subjectMatterId },
+            ],
+          },
+        ],
+      };
+
+      console.log("[8.4 DEVIATIONS] Query:", JSON.stringify(query, null, 2));
+
+      deviations = await dbToUse
+        .collection("deviations")
+        .find(query)
+        .toArray();
+      
+      // If still no results, try a simpler query to see what exists
+      if (deviations.length === 0) {
+        console.log("[8.4 DEVIATIONS] No results with full query, trying simpler query...");
+        const simpleQuery = {
+          type: "Static Report",
+        };
+        const allDeviations = await dbToUse
+          .collection("deviations")
+          .find(simpleQuery)
+          .limit(5)
+          .toArray();
+        console.log("[8.4 DEVIATIONS] Sample deviations with type 'Static Report':", allDeviations.length);
+        if (allDeviations.length > 0) {
+          console.log("[8.4 DEVIATIONS] Sample deviation structure:", {
+            _id: allDeviations[0]._id,
+            projectId: allDeviations[0].projectId,
+            projectsId: allDeviations[0].projectsId,
+            type: allDeviations[0].type,
+            profession: allDeviations[0].profession ? {
+              SubjectMatterId: allDeviations[0].profession.SubjectMatterId
+            } : null
+          });
+        }
+      }
+
+      console.log("[8.4 DEVIATIONS] Found deviations count:", deviations.length);
+      console.log("[8.4 DEVIATIONS] First deviation (if any):", deviations.length > 0 ? {
+        _id: deviations[0]._id,
+        projectId: deviations[0].projectId,
+        type: deviations[0].type,
+        comment: deviations[0].comment,
+        submittedDate: deviations[0].submittedDate,
+        markPictures: deviations[0].markPictures ? deviations[0].markPictures.length : 0,
+        markPictureDescriptions: deviations[0].markPictureDescriptions ? deviations[0].markPictureDescriptions.length : 0,
+        annotatedPdfs: deviations[0].annotatedPdfs ? deviations[0].annotatedPdfs.length : 0,
+        profession: deviations[0].profession ? {
+          SubjectMatterId: deviations[0].profession.SubjectMatterId,
+          GroupName: deviations[0].profession.GroupName
+        } : null
+      } : "none");
+    } else {
+      console.log("[8.4 DEVIATIONS] Missing required parameters:");
+      console.log("  - dbToUse:", dbToUse ? "OK" : "MISSING");
+      console.log("  - projectId:", projectId ? "OK" : "MISSING");
+      console.log("  - subjectMatterId:", subjectMatterId ? "OK" : "MISSING");
+    }
+  } catch (error) {
+    console.error("[8.4 DEVIATIONS] Error fetching deviations:", error);
+    console.error("[8.4 DEVIATIONS] Error stack:", error.stack);
+  }
+
+  // Get gamma data for construction part
+  let gamma = {};
+  if (dbToUse && projectId && subjectMatterId) {
+    try {
+      const gammaResults = await dbToUse
+        .collection("gamma")
+        .find({
+          projectId: new ObjectId(projectId),
+          $or: [
+            { "profession.SubjectMatterId": subjectMatterId },
+            { professionKey: subjectMatterId },
+            { subjectMatterId: subjectMatterId },
+          ],
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+      if (gammaResults.length > 0) {
+        gamma = gammaResults[0];
+      }
+    } catch (error) {
+      gamma = dynamic.gamma || {};
+    }
+  }
+
+  // Get values from deviations or use defaults
+  const constructionPartRaw = gamma?.special ? String(gamma.special) : (dynamic.constructionPart || "SPECIAL TEXT.");
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw =
+    deviations.length > 0 && (deviations[0]?.profession?.GroupName || deviations[0]?.profession?.groupName || deviations[0]?.professionName)
+      ? deviations[0].profession?.GroupName || deviations[0].profession?.groupName || deviations[0].professionName
+      : dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+
+  // Get baseUrl for constructing full URL
+  const baseUrl = dynamic?.baseUrl 
+    || process.env.BASE_URL 
+    || process.env.BACKEND_URL 
+    || "http://localhost:3000";
+
+  console.log("[8.4 DEVIATIONS] Final deviations array length:", deviations.length);
+
+  // If no deviations, show placeholder
+  if (deviations.length === 0) {
+    console.log("[8.4 DEVIATIONS] No deviations found, showing empty page");
+    await renderEmptyDeviationPage(doc, dynamic, 16, translations);
+    return;
+  }
+
+  console.log("[8.4 DEVIATIONS] Processing", deviations.length, "deviations");
+
+  // Loop through each deviation and create a page for each
+  let pageNumber = 16;
+  let isFirstPage = true;
+  let y = M.t;
+
+  for (let deviationIndex = 0; deviationIndex < deviations.length; deviationIndex++) {
+    const deviation = deviations[deviationIndex];
+    
+    console.log(`[8.4 DEVIATIONS] Processing deviation ${deviationIndex + 1}/${deviations.length}`);
+    console.log(`[8.4 DEVIATIONS] Deviation data:`, {
+      _id: deviation._id,
+      submittedDate: deviation.submittedDate,
+      comment: deviation.comment ? deviation.comment.substring(0, 50) + "..." : "no comment",
+      markPictures: deviation.markPictures ? deviation.markPictures.length : 0,
+      markPictureDescriptions: deviation.markPictureDescriptions ? deviation.markPictureDescriptions.length : 0,
+      annotatedPdfs: deviation.annotatedPdfs ? deviation.annotatedPdfs.length : 0
+    });
+    
+    // If not first page, create new page
+    if (!isFirstPage) {
+      doc.addPage({ size: "A4", margin: 0 });
+      y = M.t;
+      pageNumber++;
+    } else {
+      isFirstPage = false;
+    }
+
+    // Show headers only on first deviation
+    if (deviationIndex === 0) {
+      // Title row: 8.4 DEVIATIONS (left) + B7 (right)
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(13)
+        .fillColor(BLUE)
+        .text("8.4 DEVIATIONS", M.l, y, {
+          width: CONTENT_W * 0.7,
+          align: "left",
+        });
+
+      doc.font("Helvetica-Bold").fontSize(13).fillColor(BLUE).text("B7", M.l, y, {
+        width: CONTENT_W,
+        align: "right",
+      });
+
+      y += 22;
+    }
+
+    // Header info block (same structure as 8.A sections)
+    const c1 = 110;
+    const c2 = 150;
+    const c3 = 160;
+    const c4 = CONTENT_W - (c1 + c2 + c3);
+
+    const x1 = M.l;
+    const x2 = x1 + c1;
+    const x3 = x2 + c2;
+    const x4 = x3 + c3;
+
+    const rH = 18;
+
+    // Row 1 headings
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+    doc.text(t("DATE/ID", translations), x1, y, { width: c1 });
+    doc.text(t("CONTROL TYPE", translations), x2, y, { width: c2 });
+    doc.text(t("CONSTRUCTION PART:", translations), x3, y, { width: c3, continued: true });
+    doc.fillColor("black").text(` ${constructionPart}`, { continued: false });
+
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+    doc.text(t("ACCEPTANCE", translations), x4, y, { width: c4, align: "right" });
+
+    y += rH;
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(GREY_LINE)
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 6;
+
+    // Row 2 values - show current deviation data
+    const submittedDate = deviation?.submittedDate ? new Date(deviation.submittedDate).toLocaleDateString() : "[Select Date]";
+    const deviationControlType = deviation?.entryData?.subject || "Select an item.";
+
+    const row2StartY = y;
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(BLUE)
+      .text(submittedDate, x1, y, { width: c1 });
+  
+    // Draw CONTROL TYPE text and measure its height
+    const controlTypeStartY = y;
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black")
+      .text(deviationControlType, x2, y, { width: c2, lineGap: 1 });
+    const controlTypeEndY = doc.y;
+
+    // Reset y to row start for other columns
+    y = row2StartY;
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("PROFFESSION:", translations), x3, y, { width: c3, continued: true });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor("black")
+      .text(` ${profession}`, { continued: false });
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("ENDORSEMENT", translations), x4, y, { width: c4, align: "right" });
+
+    // Calculate row height based on the tallest column (CONTROL TYPE)
+    const row2ActualHeight = controlTypeEndY - controlTypeStartY;
+    const row2Height = Math.max(rH, row2ActualHeight + 4);
+    
+    // Move y to after this row using the calculated height
+    y = row2StartY + row2Height;
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(GREY_LINE)
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 6;
+
+    // Row 3 - Deviation ID and comment
+    const deviationDisplayId = `7.7.${deviationIndex + 1}`;
+    const deviationCommentRaw = deviation.comment || "";
+    const deviationComment = t(deviationCommentRaw, translations);
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor(BLUE)
+      .text(`ID  ${deviationDisplayId}`, x1, y, { width: c1 });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("LOCALIZATION OF CONTROLS", translations), x2, y, { width: c2 + 30 });
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor(BLUE)
+      .text(t("COMMENT:", translations), x3, y, { width: c3, continued: true });
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(8)
+      .fillColor("black")
+      .text(` ${deviationComment}`, { continued: false });
+
+    y += rH;
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor(GREY_LINE)
+      .moveTo(M.l, y)
+      .lineTo(M.l + CONTENT_W, y)
+      .stroke()
+      .restore();
+    y += 6;
+
+    y += 10;
+
+    // Marked drawing - show annotated PDF from current deviation
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("black")
+      .text(t("Marked drawing", translations), M.l, y);
+
+    y += 12;
+
+    // Calculate available space for marked drawing
+    const gridReservedSpace = 500;
+    const footerSpace = 50;
+    const availableHeight = PAGE.h - y - gridReservedSpace - footerSpace;
+    const markedDrawingHeight = Math.max(250, availableHeight);
+
+    const deviationAnnotatedPdf = deviation?.annotatedPdfs?.[0] || null;
+    let imageUrl = null;
+    
+    if (deviationAnnotatedPdf) {
+      // Try s3Location first, then path
+      imageUrl = deviationAnnotatedPdf?.s3Location || deviationAnnotatedPdf?.s3location || deviationAnnotatedPdf?.location || null;
+      
+      // If no s3Location but path exists, construct full URL with baseUrl
+      if (!imageUrl && deviationAnnotatedPdf?.path) {
+        const path = deviationAnnotatedPdf.path;
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          imageUrl = path;
+        } else {
+          const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+          imageUrl = `${baseUrl}/${cleanPath}`;
+        }
+      }
+    }
+
+    if (imageUrl) {
+      try {
+        const imgBuffer = await fetchImageBuffer(imageUrl);
+        const imageX = M.l;
+        const imageY = y;
+        const imageWidth = CONTENT_W;
+        const imageHeight = markedDrawingHeight;
+        const borderWidth = 2;
+        const padding = 5;
+
+        // Draw border
+        doc
+          .save()
+          .lineWidth(borderWidth)
+          .strokeColor("#444")
+          .rect(imageX, imageY, imageWidth, imageHeight)
+          .stroke()
+          .restore();
+
+        // Use clipping to ensure image stays within border boundaries
+        doc.save();
+        const clipX = imageX + padding;
+        const clipY = imageY + padding;
+        const clipW = imageWidth - (padding * 2);
+        const clipH = imageHeight - (padding * 2);
+        doc.rect(clipX, clipY, clipW, clipH).clip();
+        
+        // Display image with padding inside border, maintaining aspect ratio
+        doc.image(imgBuffer, clipX, clipY, {
+          fit: [clipW, clipH],
+          align: "center",
+          valign: "center",
+        });
+        
+        doc.restore();
+
+        y = imageY + imageHeight + 10;
+      } catch (error) {
+        // Draw empty box with border if image fails to load
+        const imageX = M.l;
+        const imageY = y;
+        const imageWidth = CONTENT_W;
+        const imageHeight = markedDrawingHeight;
+        const borderWidth = 2;
+
+        doc
+          .save()
+          .lineWidth(borderWidth)
+          .strokeColor("#444")
+          .rect(imageX, imageY, imageWidth, imageHeight)
+          .stroke()
+          .restore();
+
+        y = imageY + imageHeight + 10;
+      }
+    } else {
+      // Draw empty box with border if no image
+      const imageX = M.l;
+      const imageY = y;
+      const imageWidth = CONTENT_W;
+      const imageHeight = markedDrawingHeight;
+      const borderWidth = 2;
+
+      doc
+        .save()
+        .lineWidth(borderWidth)
+        .strokeColor("#444")
+        .rect(imageX, imageY, imageWidth, imageHeight)
+        .stroke()
+        .restore();
+
+      y = imageY + imageHeight + 10;
+    }
+
+    // Collect markPictures for current deviation with proper IDs
+    const deviationMarkPictures = [];
+    const markPictures = deviation.markPictures || [];
+    const markPictureDescriptions = deviation.markPictureDescriptions || [];
+    
+    console.log(`[8.4 DEVIATIONS] Deviation ${deviationIndex + 1} markPictures:`, markPictures.length);
+    console.log(`[8.4 DEVIATIONS] Deviation ${deviationIndex + 1} markPictureDescriptions:`, markPictureDescriptions.length);
+    
+    if (markPictures && Array.isArray(markPictures)) {
+      markPictures.forEach((markPic, markIndex) => {
+        // ID format: 7.7.{deviationIndex + 1}.{markPictureIndex + 1}
+        const pictureId = `${deviationDisplayId}.${markIndex + 1}`;
+        const description = markPictureDescriptions[markIndex] || "";
+        
+        console.log(`[8.4 DEVIATIONS] Mark picture ${markIndex + 1}:`, {
+          pictureId: pictureId,
+          path: markPic,
+          description: description.substring(0, 30) + "..."
+        });
+        
+        deviationMarkPictures.push({
+          pictureId: pictureId,
+          description: description,
+          path: markPic, // markPic is the filename/path string
+          entryDisplayPos: deviationDisplayId,
+        });
+      });
+    } else {
+      console.log(`[8.4 DEVIATIONS] No markPictures array found for deviation ${deviationIndex + 1}`);
+    }
+    
+    console.log(`[8.4 DEVIATIONS] Total deviationMarkPictures collected:`, deviationMarkPictures.length);
+
+    // Display mark pictures in grids with pagination (max 2 per row) - reuse the same logic from 8.A sections
+    if (deviationMarkPictures.length > 0) {
+      const gridW = CONTENT_W;
+      const quadW = gridW / 2; // Each grid takes half the width
+      const headerH = 32; // Height for picture ID section
+      const baseCommentH = 30; // Base height for comments section
+      const idW = 95; // Width for picture ID column
+      const photoH = 200; // Height for photo area
+      const maxGridsPerPage = 2; // Maximum 2 grids per row (one row per page)
+      const footerSpace = 50;
+      
+      // Helper function to calculate comment height based on text
+      const calculateCommentHeight = (description, availableWidth) => {
+        if (!description) return baseCommentH;
+        
+        doc.font("Helvetica").fontSize(8);
+        const textHeight = doc.heightOfString(description, {
+          width: availableWidth - 20,
+          lineGap: 1,
+        });
+        
+        // Add padding: 8px top (label) + text height + 10px bottom
+        return Math.max(baseCommentH, 8 + textHeight + 10);
+      };
+      
+      // Helper function to draw a single mark picture grid
+      const drawMarkPictureGrid = async (qx, qy, markPic, width = quadW) => {
+        const description = markPic.description || "";
+        
+        // Calculate actual comment height based on text
+        const commentH = calculateCommentHeight(description, width);
+        const quadH = headerH + commentH + photoH; // Dynamic total height per grid
+        
+        // Draw outer border
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .rect(qx, qy, width, quadH)
+          .stroke()
+          .restore();
+
+        // Draw horizontal separator between picture ID and comments
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .moveTo(qx, qy + headerH)
+          .lineTo(qx + width, qy + headerH)
+          .stroke()
+          .restore();
+
+        // Draw horizontal separator between comments and photo area (at calculated comment height)
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .moveTo(qx, qy + headerH + commentH)
+          .lineTo(qx + width, qy + headerH + commentH)
+          .stroke()
+          .restore();
+
+        // Draw vertical separator for picture ID column
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .moveTo(qx + idW, qy)
+          .lineTo(qx + idW, qy + headerH)
+          .stroke()
+          .restore();
+
+        // Picture ID text (top-left box)
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor(RED)
+          .text(markPic.pictureId, qx + 8, qy + 6, {
+            width: idW - 16,
+            align: "left",
+          });
+
+        // Comments on picture (middle box)
+        if (description) {
+          doc
+            .font("Helvetica")
+            .fontSize(8)
+            .fillColor("black")
+            .text(description, qx + 10, qy + headerH + 8, {
+              width: width - 20,
+              lineGap: 1,
+            });
+        }
+
+        // Calculate photo area position based on actual comment height
+        const photoAreaY = qy + headerH + commentH + 10;
+        
+        // Get image URL for this mark picture - construct as baseUrl + "/uploads/" + path
+        let markPicImageUrl = null;
+        if (markPic.path) {
+          const path = markPic.path;
+          if (path.startsWith('http://') || path.startsWith('https://')) {
+            markPicImageUrl = path;
+          } else {
+            // Construct URL: baseUrl + "/uploads/" + path
+            const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+            markPicImageUrl = `${baseUrl}/uploads/${cleanPath}`;
+          }
+        }
+        
+        if (markPicImageUrl) {
+          try {
+            const imgBuffer = await fetchImageBuffer(markPicImageUrl);
+            const imageX = qx + 10;
+            const imageY = photoAreaY;
+            const imageW = width - 20;
+            const imageH = photoH - 20;
+
+            doc.image(imgBuffer, imageX, imageY, {
+              fit: [imageW, imageH],
+              align: "left",
+              valign: "top",
+            });
+          } catch (error) {
+            // If image fails to load, show placeholder text
+            doc
+              .font("Helvetica")
+              .fontSize(10)
+              .fillColor(RED)
+              .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+          }
+        } else {
+          // No image, show placeholder text
+          doc
+            .font("Helvetica")
+            .fontSize(10)
+            .fillColor(RED)
+            .text(t("Photo from registration.", translations), qx + 10, photoAreaY);
+        }
+      };
+
+      // Display mark pictures with pagination
+      let pictureIndex = 0;
+      let currentPageStartY = y + 10;
+
+      while (pictureIndex < deviationMarkPictures.length) {
+        const markPic = deviationMarkPictures[pictureIndex];
+        const description = markPic.description || "";
+        
+        // Check if comment is big (more than 80 characters or likely to wrap)
+        // Also check visual width using doc.widthOfString
+        doc.font("Helvetica").fontSize(8);
+        const commentWidth = doc.widthOfString(description);
+        const maxCommentWidth = (quadW - 20) * 1.5; // Allow some wrapping
+        const isBigComment = description.length > 80 || commentWidth > maxCommentWidth;
+        
+        // Determine how many grids to show in this row
+        // If comment is big, show only 1 grid (full width), otherwise try to show 2
+        let gridsInThisRow = 1;
+        let currentQuadW = gridW; // Full width for single grid
+        
+        if (!isBigComment && pictureIndex + 1 < deviationMarkPictures.length) {
+          // Check if next picture also has short comment
+          const nextMarkPic = deviationMarkPictures[pictureIndex + 1];
+          const nextDescription = nextMarkPic.description || "";
+          const nextCommentWidth = doc.widthOfString(nextDescription);
+          const nextIsBigComment = nextDescription.length > 80 || nextCommentWidth > maxCommentWidth;
+          
+          if (!nextIsBigComment) {
+            gridsInThisRow = 2; // Can show 2 side by side
+            currentQuadW = quadW; // Half width for two grids
+          }
+        }
+
+        // Calculate max height needed for this row (check all grids in this row)
+        let maxQuadH = 0;
+        for (let i = 0; i < gridsInThisRow && pictureIndex + i < deviationMarkPictures.length; i++) {
+          const checkMarkPic = deviationMarkPictures[pictureIndex + i];
+          const checkDescription = checkMarkPic.description || "";
+          const checkCommentH = calculateCommentHeight(checkDescription, currentQuadW);
+          const checkQuadH = headerH + checkCommentH + photoH;
+          if (checkQuadH > maxQuadH) {
+            maxQuadH = checkQuadH;
+          }
+        }
+
+        // Check if we need a new page
+        const availableHeight = PAGE.h - currentPageStartY - footerSpace;
+        const requiredHeight = maxQuadH + 20; // Grid height + spacing
+
+        if (currentPageStartY + requiredHeight > PAGE.h - footerSpace && pictureIndex > 0) {
+          // Add footer to current page
+          footer(doc, pageNumber);
+          pageNumber++;
+          
+          // Start new page
+          doc.addPage({ size: "A4", margin: 0 });
+          currentPageStartY = M.t + 10;
+        }
+
+        const gridX = M.l;
+        const gridY = currentPageStartY;
+        const midX = gridX + currentQuadW;
+
+        // Draw vertical separator if showing 2 grids
+        if (gridsInThisRow === 2) {
+          doc
+            .save()
+            .lineWidth(1)
+            .strokeColor("#333")
+            .moveTo(midX, gridY)
+            .lineTo(midX, gridY + maxQuadH)
+            .stroke()
+            .restore();
+        }
+
+        // Draw grid(s) for this row
+        for (let i = 0; i < gridsInThisRow && pictureIndex < deviationMarkPictures.length; i++) {
+          const currentMarkPic = deviationMarkPictures[pictureIndex];
+          const qx = i === 0 ? gridX : midX;
+          
+          // Use full width if single grid, otherwise use half width
+          await drawMarkPictureGrid(qx, gridY, currentMarkPic, currentQuadW);
+          pictureIndex++;
+        }
+
+        currentPageStartY = gridY + maxQuadH + 15;
+      }
+
+      y = currentPageStartY;
+    } else {
+      // No mark pictures, just update y position
+      y += 10;
+    }
+
+    // Add footer to current page before moving to next deviation
+    footer(doc, pageNumber);
+  }
+}
+
+// Helper function to render empty deviation page
+async function renderEmptyDeviationPage(doc, dynamic, pageNumber, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#d0d0d0";
-  const RED = "#cc0000";
+  const RED = "black";
 
-  const constructionPart = dynamic.constructionPart || "SPECIAL TEXT";
-  const profession = dynamic.profession || "PROJECT SETUP";
-  const mainComments = dynamic.mainComments || "MAIN COMMENTS";
+  const constructionPartRaw = dynamic.constructionPart || dynamic.specialText || "SPECIAL TEXT";
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw = dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+  const mainCommentsRaw = dynamic.mainComments || "MAIN COMMENTS";
+  const mainComments = t(mainCommentsRaw, translations);
 
   let y = M.t;
 
@@ -5628,9 +12616,7 @@ function page17(doc, dynamic) {
     return out.length ? out + ell : ell;
   }
 
-  // -------------------------------------------------------
-  // 1) Title row: 8.4 DEVIATIONS (left) + B7 (right)
-  // -------------------------------------------------------
+  // Title row: 8.4 DEVIATIONS (left) + B7 (right)
   doc
     .font("Helvetica-Bold")
     .fontSize(13)
@@ -5647,9 +12633,7 @@ function page17(doc, dynamic) {
 
   y += 22;
 
-  // -------------------------------------------------------
-  // 2) Info rows (same style as your B4/B5/B6 pages)
-  // -------------------------------------------------------
+  // Info rows
   const c1 = 105; // DATE/ID
   const c2 = 145; // CONTROL TYPE
   const c4 = 105; // ACCEPTANCE/ENDORSEMENT
@@ -5676,10 +12660,10 @@ function page17(doc, dynamic) {
 
   // Row 1 headings
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("DATE/ID", x1, y + 1, { width: c1 });
-  doc.text("CONTROL TYPE", x2, y + 1, { width: c2 });
+  doc.text(t("DATE/ID", translations), x1, y + 1, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y + 1, { width: c2 });
 
-  const label1 = "CONSTRUCTION PART:";
+  const label1 = t("CONSTRUCTION PART:", translations);
   doc.text(label1, x3, y + 1, { width: c3 });
 
   const label1W = doc.widthOfString(label1) + 3;
@@ -5690,13 +12674,11 @@ function page17(doc, dynamic) {
     fitOneLine(constructionPart, val1MaxW, "Helvetica-Bold", 8),
     x3 + label1W,
     y + 1,
-    {
-      width: val1MaxW,
-    }
+    { width: val1MaxW }
   );
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ACCEPTANCE", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ACCEPTANCE", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -5711,12 +12693,12 @@ function page17(doc, dynamic) {
 
   // Row 2 values
   doc.font("Helvetica").fontSize(9).fillColor(BLUE);
-  doc.text("[Select Date]", x1, y, { width: c1 });
+  doc.text(t("[Select Date]", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica").fontSize(9).fillColor(BLUE);
-  doc.text("Select an item.", x2, y, { width: c2 });
+  doc.text(t("Select an item.", translations), x2, y, { width: c2 });
 
-  const label2 = "PROFFESSION:";
+  const label2 = t("PROFFESSION:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label2, x3, y + 1, { width: c3 });
 
@@ -5728,13 +12710,11 @@ function page17(doc, dynamic) {
     fitOneLine(profession, val2MaxW, "Helvetica-Bold", 8),
     x3 + label2W,
     y + 1,
-    {
-      width: val2MaxW,
-    }
+    { width: val2MaxW }
   );
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("ENDORSEMENT", x4, y + 1, { width: c4, align: "right" });
+  doc.text(t("ENDORSEMENT", translations), x4, y + 1, { width: c4, align: "right" });
 
   y += rH;
   doc
@@ -5747,14 +12727,14 @@ function page17(doc, dynamic) {
     .restore();
   y += gapAfterLine;
 
-  // Row 3 (note: your PDF shows "ID  7.6." here — keeping same)
+  // Row 3
   doc.font("Helvetica-Bold").fontSize(9).fillColor(BLUE);
-  doc.text("ID  7.6.", x1, y, { width: c1 });
+  doc.text(t("ID  7.7.", translations), x1, y, { width: c1 });
 
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
-  doc.text("LOCALIZATION OF CONTROLS", x2, y + 1, { width: c2 + 60 });
+  doc.text(t("LOCALIZATION OF CONTROLS", translations), x2, y + 1, { width: c2 + 60 });
 
-  const label3 = "COMMENT:";
+  const label3 = t("COMMENT:", translations);
   doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
   doc.text(label3, x3, y + 1, { width: c3 });
 
@@ -5766,9 +12746,7 @@ function page17(doc, dynamic) {
     fitOneLine(mainComments, val3MaxW, "Helvetica-Bold", 8),
     x3 + label3W,
     y + 1,
-    {
-      width: val3MaxW,
-    }
+    { width: val3MaxW }
   );
 
   y += rH;
@@ -5787,20 +12765,16 @@ function page17(doc, dynamic) {
     .font("Helvetica")
     .fontSize(9)
     .fillColor(RED)
-    .text("Marked drawing", M.l, y);
+    .text(t("Marked drawing", translations), M.l, y);
 
-  // -------------------------------------------------------
-  // 3) 2x2 photo grid (U1–U4) — no green header inside
-  // -------------------------------------------------------
+  // 2x2 photo grid (empty)
   const gridX = M.l;
   const gridW = CONTENT_W;
-  const gridY = 255; // matches your PDF placement
-  const gridH = 500; // fills page nicely above footer
-
+  const gridY = 255;
+  const gridH = 500;
   const midX = gridX + gridW / 2;
   const midY = gridY + gridH / 2;
 
-  // outer + middle lines
   doc
     .save()
     .lineWidth(1)
@@ -5831,7 +12805,6 @@ function page17(doc, dynamic) {
   const idW = 95;
 
   const drawQuad = (qx, qy, picId) => {
-    // header bottom line
     doc
       .save()
       .lineWidth(1)
@@ -5840,7 +12813,6 @@ function page17(doc, dynamic) {
       .lineTo(qx + quadW, qy + headerH)
       .stroke()
       .restore();
-    // comment bottom line
     doc
       .save()
       .lineWidth(1)
@@ -5849,7 +12821,6 @@ function page17(doc, dynamic) {
       .lineTo(qx + quadW, qy + headerH + commentH)
       .stroke()
       .restore();
-    // id divider (header only)
     doc
       .save()
       .lineWidth(1)
@@ -5859,7 +12830,6 @@ function page17(doc, dynamic) {
       .stroke()
       .restore();
 
-    // ID (black)
     doc
       .font("Helvetica")
       .fontSize(9)
@@ -5870,14 +12840,12 @@ function page17(doc, dynamic) {
         lineGap: 1,
       });
 
-    // Comments (red)
     doc
       .font("Helvetica")
       .fontSize(9)
       .fillColor(RED)
-      .text("Comments on picture", qx + 10, qy + headerH + 8);
+      .text(t("Comments on picture", translations), qx + 10, qy + headerH + 8);
 
-    // Photo line (red)
     doc
       .font("Helvetica")
       .fontSize(10)
@@ -5890,42 +12858,906 @@ function page17(doc, dynamic) {
   drawQuad(gridX, midY, "7.7.1.U3uniq\nue picture ID");
   drawQuad(midX, midY, "7.7.1.U4uni\nque picture");
 
-  footer(doc, 16);
+  footer(doc, pageNumber);
+}
+
+// Helper function to render deviation with pagination for markPictures
+async function renderDeviationPageWithPagination(
+  doc,
+  dynamic,
+  deviation,
+  basePageNumber,
+  subjectMatterId,
+  recordIndex
+) {
+  const markPictures = deviation.markPictures || [];
+  const markPictureDescriptions = deviation.markPictureDescriptions || [];
+  const markPictureIndices = deviation.markPictureIndices || [];
+
+  // Main page (always created) - shows header, meta info, drawing, and first set of markPictures
+  const mainPageNumber = parseFloat((basePageNumber + 0.1).toFixed(1));
+  const kpBlocksPerPage = 4; // Max 4 boxes per page (2 per row, max 2 rows)
+  const blocksToShowOnMainPage = Math.min(markPictures.length, kpBlocksPerPage);
+
+  await renderDeviationMainPage(
+    doc,
+    dynamic,
+    deviation,
+    mainPageNumber,
+    subjectMatterId,
+    recordIndex,
+    markPictures,
+    markPictureDescriptions,
+    markPictureIndices,
+    0,
+    blocksToShowOnMainPage
+  );
+
+  let totalPagesCreated = 1;
+  let markPictureIndex = blocksToShowOnMainPage;
+
+  // If there are more markPictures, create continuation pages
+  let continuationPageIndex = 0;
+  while (markPictureIndex < markPictures.length) {
+    continuationPageIndex++;
+    doc.addPage({ size: "A4", margin: 0 });
+
+    let continuationPageNumber;
+    if (continuationPageIndex === 1) {
+      continuationPageNumber = parseFloat((mainPageNumber + 0.01).toFixed(2));
+    } else {
+      const firstContinuation = parseFloat((mainPageNumber + 0.01).toFixed(2));
+      continuationPageNumber = parseFloat(
+        (firstContinuation + (continuationPageIndex - 1) * 0.01).toFixed(2)
+      );
+    }
+
+    const blocksToShow = Math.min(
+      markPictures.length - markPictureIndex,
+      kpBlocksPerPage
+    );
+
+    // Get baseUrl from dynamic object, environment variable, or use default
+    // Priority: dynamic.baseUrl > BASE_URL env > BACKEND_URL env > localhost:3000 (local dev)
+    const baseUrl = dynamic?.baseUrl 
+      || process.env.BASE_URL 
+      || process.env.BACKEND_URL 
+      || "http://localhost:3000";
+
+    await renderDeviationContinuationPage(
+      doc,
+      continuationPageNumber,
+      markPictures,
+      markPictureDescriptions,
+      markPictureIndices,
+      markPictureIndex,
+      blocksToShow,
+      baseUrl
+    );
+
+    totalPagesCreated++;
+    markPictureIndex += blocksToShow;
+  }
+
+  return totalPagesCreated;
+}
+
+// Helper function to render the main deviation page
+async function renderDeviationMainPage(
+  doc,
+  dynamic,
+  deviation,
+  pageNumber,
+  subjectMatterId,
+  recordIndex,
+  markPictures,
+  markPictureDescriptions,
+  markPictureIndices,
+  startMarkPictureIndex,
+  blocksToShow
+) {
+  const BLUE = HEADING_COLOR;
+  const GREY_LINE = "#d0d0d0";
+  const RED = "black";
+
+  const constructionPartRaw = dynamic.constructionPart || dynamic.specialText || "SPECIAL TEXT";
+  const constructionPart = t(constructionPartRaw, translations);
+  const professionRaw = dynamic.profession || "PROJECT SETUP";
+  const profession = t(professionRaw, translations);
+  const mainCommentsRaw = deviation.comment || deviation.description || "MAIN COMMENTS";
+  const mainComments = t(mainCommentsRaw, translations);
+
+  let y = M.t;
+
+  function fitOneLine(text, maxWidth, font = "Helvetica-Bold", size = 8) {
+    const s = String(text ?? "");
+    doc.font(font).fontSize(size);
+    if (doc.widthOfString(s) <= maxWidth) return s;
+    const ell = "...";
+    let out = s;
+    while (out.length > 0 && doc.widthOfString(out + ell) > maxWidth)
+      out = out.slice(0, -1);
+    return out.length ? out + ell : ell;
+  }
+
+  // Title row: 8.4 DEVIATIONS (left) + B7 (right)
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(13)
+    .fillColor(BLUE)
+    .text("8.4 DEVIATIONS", M.l, y, {
+      width: CONTENT_W * 0.7,
+      align: "left",
+    });
+
+  doc.font("Helvetica-Bold").fontSize(13).fillColor(BLUE).text("B7", M.l, y, {
+    width: CONTENT_W,
+    align: "right",
+  });
+
+  y += 22;
+
+  // Info rows
+  const c1 = 105;
+  const c2 = 145;
+  const c4 = 105;
+  const c3 = CONTENT_W - (c1 + c2 + c4);
+
+  const x1 = M.l;
+  const x2 = x1 + c1;
+  const x3 = x2 + c2;
+  const x4 = x3 + c3;
+
+  const rH = 16;
+  const gapAfterLine = 5;
+
+  // Top line
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor(GREY_LINE)
+    .moveTo(M.l, y)
+    .lineTo(M.l + CONTENT_W, y)
+    .stroke()
+    .restore();
+  y += 8;
+
+  // Row 1 headings
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+  doc.text(t("DATE/ID", translations), x1, y + 1, { width: c1 });
+  doc.text(t("CONTROL TYPE", translations), x2, y + 1, { width: c2 });
+
+  const label1 = t("CONSTRUCTION PART:", translations);
+  doc.text(label1, x3, y + 1, { width: c3 });
+
+  const label1W = doc.widthOfString(label1) + 3;
+  const val1MaxW = Math.max(10, c3 - label1W);
+
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(RED);
+  doc.text(
+    fitOneLine(constructionPart, val1MaxW, "Helvetica-Bold", 8),
+    x3 + label1W,
+    y + 1,
+    { width: val1MaxW }
+  );
+
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+  doc.text(t("ACCEPTANCE", translations), x4, y + 1, { width: c4, align: "right" });
+
+  y += rH;
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor(GREY_LINE)
+    .moveTo(M.l, y)
+    .lineTo(M.l + CONTENT_W, y)
+    .stroke()
+    .restore();
+  y += gapAfterLine;
+
+  // Row 2 values - use deviation data
+  const formatDate = (date) => {
+    if (!date) return "[Select Date]";
+    try {
+      return new Date(date).toLocaleDateString("en-GB");
+    } catch {
+      return "[Select Date]";
+    }
+  };
+
+  doc.font("Helvetica").fontSize(9).fillColor(BLUE);
+  doc.text(
+    deviation.submittedDate ? formatDate(deviation.submittedDate) : "[Select Date]",
+    x1,
+    y,
+    { width: c1 }
+  );
+
+  doc.font("Helvetica").fontSize(9).fillColor(BLUE);
+  doc.text(t(deviation.type || "Select an item.", translations), x2, y, { width: c2 });
+
+  const label2 = t("PROFFESSION:", translations);
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+  doc.text(label2, x3, y + 1, { width: c3 });
+
+  const label2W = doc.widthOfString(label2) + 3;
+  const val2MaxW = Math.max(10, c3 - label2W);
+
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(RED);
+  doc.text(
+    fitOneLine(profession, val2MaxW, "Helvetica-Bold", 8),
+    x3 + label2W,
+    y + 1,
+    { width: val2MaxW }
+  );
+
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+  doc.text(t("ENDORSEMENT", translations), x4, y + 1, { width: c4, align: "right" });
+
+  y += rH;
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor(GREY_LINE)
+    .moveTo(M.l, y)
+    .lineTo(M.l + CONTENT_W, y)
+    .stroke()
+    .restore();
+  y += gapAfterLine;
+
+  // Row 3 - use deviation ID
+  const deviationId = `7.7.${recordIndex}`;
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(BLUE);
+  doc.text(`ID  ${deviationId}.`, x1, y, { width: c1 });
+
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+  doc.text(t("LOCALIZATION OF CONTROLS", translations), x2, y + 1, { width: c2 + 60 });
+
+  const label3 = t("COMMENT:", translations);
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(BLUE);
+  doc.text(label3, x3, y + 1, { width: c3 });
+
+  const label3W = doc.widthOfString(label3) + 3;
+  const val3MaxW = Math.max(10, c3 - label3W);
+
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(RED);
+  doc.text(
+    fitOneLine(mainComments, val3MaxW, "Helvetica-Bold", 8),
+    x3 + label3W,
+    y + 1,
+    { width: val3MaxW }
+  );
+
+  y += rH;
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor(GREY_LINE)
+    .moveTo(M.l, y)
+    .lineTo(M.l + CONTENT_W, y)
+    .stroke()
+    .restore();
+  y += 10;
+
+  // Marked drawing - show annotated PDF if available
+  doc
+    .font("Helvetica")
+    .fontSize(9)
+    .fillColor(RED)
+    .text(t("Marked drawing", translations), M.l, y);
+
+  y += 15;
+
+  // Display annotated PDF image if available - with border and full width
+  if (
+    deviation.annotatedPdfs &&
+    Array.isArray(deviation.annotatedPdfs) &&
+    deviation.annotatedPdfs.length > 0 &&
+    deviation.annotatedPdfs[0].s3Location
+  ) {
+    try {
+      const imageBuffer = await fetchImageBuffer(deviation.annotatedPdfs[0].s3Location);
+      if (imageBuffer) {
+        const imageHeight = 200; // Increased height for better visibility
+        const imageX = M.l;
+        const imageY = y;
+        const imageW = CONTENT_W;
+
+        // Draw border around the image
+        doc
+          .save()
+          .lineWidth(1)
+          .strokeColor("#333")
+          .rect(imageX, imageY, imageW, imageHeight)
+          .stroke()
+          .restore();
+
+        // Display image inside the border
+        doc.image(imageBuffer, imageX + 2, imageY + 2, {
+          fit: [imageW - 4, imageHeight - 4],
+          align: "left",
+          valign: "top",
+        });
+
+        // Update y position after image with spacing
+        y = imageY + imageHeight + 20; // Add 20px spacing after the image
+      } else {
+        // If no image, still add spacing
+        y += 20;
+      }
+    } catch (error) {
+
+      // Add spacing even if image fails to load
+      y += 20;
+    }
+  } else {
+    // No annotated PDF, add some spacing
+    y += 20;
+  }
+
+  // Render markPictures in dynamic grid (max 2 per row) - with proper spacing from annotated PDF
+  if (blocksToShow > 0) {
+    // Get baseUrl from dynamic object, environment variable, or use default
+    // Priority: dynamic.baseUrl > BASE_URL env > BACKEND_URL env > localhost:3000 (local dev)
+    const baseUrl = dynamic?.baseUrl 
+      || process.env.BASE_URL 
+      || process.env.BACKEND_URL 
+      || "http://localhost:3000";
+    
+    await renderDeviationKPBlocks(
+      doc,
+      markPictures,
+      markPictureDescriptions,
+      markPictureIndices,
+      startMarkPictureIndex,
+      y,
+      blocksToShow,
+      deviationId,
+      baseUrl
+    );
+  }
+
+  footer(doc, pageNumber);
+}
+
+// Helper function to render continuation page
+async function renderDeviationContinuationPage(
+  doc,
+  pageNumber,
+  markPictures,
+  markPictureDescriptions,
+  markPictureIndices,
+  startMarkPictureIndex,
+  blocksToShow,
+  baseUrl = null
+) {
+  const BLUE = HEADING_COLOR;
+  let y = M.t;
+
+  // Title row
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(13)
+    .fillColor(BLUE)
+    .text("8.4 DEVIATIONS (continued)", M.l, y, {
+      width: CONTENT_W * 0.7,
+      align: "left",
+    });
+
+  doc.font("Helvetica-Bold").fontSize(13).fillColor(BLUE).text("B7", M.l, y, {
+    width: CONTENT_W,
+    align: "right",
+  });
+
+  y += 30;
+
+  // Get baseUrl from parameter, environment variable, or use default
+  // Priority: baseUrl param > BASE_URL env > BACKEND_URL env > localhost:3000 (local dev)
+  baseUrl = baseUrl 
+    || process.env.BASE_URL 
+    || process.env.BACKEND_URL 
+    || "http://localhost:3000";
+
+  // Render markPictures
+  await renderDeviationKPBlocks(
+    doc,
+    markPictures,
+    markPictureDescriptions,
+    markPictureIndices,
+    startMarkPictureIndex,
+    y,
+    blocksToShow,
+    "7.7",
+    baseUrl
+  );
+
+  footer(doc, pageNumber);
+}
+
+// Helper function to render KP blocks for markPictures in dynamic grid (max 2 per row)
+async function renderDeviationKPBlocks(
+  doc,
+  markPictures,
+  markPictureDescriptions,
+  markPictureIndices,
+  startIndex,
+  startY,
+  blocksToShow,
+  deviationIdPrefix,
+  baseUrl = null
+) {
+  if (blocksToShow === 0) return; // No boxes to render
+  
+  const gridX = M.l;
+  const maxBoxesPerRow = 2;
+  const quadW = CONTENT_W / maxBoxesPerRow;
+  const quadH = 250; // Height per box
+  const headerH = 30;
+  const commentH = 30;
+  const idW = 95;
+  const RED = "black";
+  
+  // Calculate number of rows needed (max 2 boxes per row)
+  const numRows = Math.ceil(blocksToShow / maxBoxesPerRow);
+  const gridY = startY;
+  const midX = gridX + quadW;
+  
+  // Check if any row has 2 boxes to determine grid width
+  let maxBoxesInAnyRow = 0;
+  for (let row = 0; row < numRows; row++) {
+    const boxesInRow = Math.min(maxBoxesPerRow, blocksToShow - row * maxBoxesPerRow);
+    maxBoxesInAnyRow = Math.max(maxBoxesInAnyRow, boxesInRow);
+  }
+  
+  // Grid width: full width if any row has 2 boxes, half width if all rows have only 1 box
+  const gridW = maxBoxesInAnyRow === 2 ? CONTENT_W : quadW;
+  const gridH = numRows * quadH;
+
+  // Draw outer border (complete rectangle)
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor("#333")
+    .rect(gridX, gridY, gridW, gridH)
+    .stroke()
+    .restore();
+  
+  // Draw vertical divider only if there are 2 boxes in any row
+  if (maxBoxesInAnyRow === 2) {
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor("#333")
+      .moveTo(midX, gridY)
+      .lineTo(midX, gridY + gridH)
+      .stroke()
+      .restore();
+  }
+  
+  // Draw horizontal dividers only between rows (not after the last row)
+  for (let row = 1; row < numRows; row++) {
+    const dividerY = gridY + row * quadH;
+    doc
+      .save()
+      .lineWidth(1)
+      .strokeColor("#333")
+      .moveTo(gridX, dividerY)
+      .lineTo(gridX + gridW, dividerY)
+      .stroke()
+      .restore();
+  }
+
+  // Render blocks
+  for (let i = 0; i < blocksToShow; i++) {
+    const markPictureIndex = startIndex + i;
+    const markPicture = markPictures[markPictureIndex];
+    const description = markPictureDescriptions[markPictureIndex] || "";
+    
+    // Handle both string (filename) and object (with s3Location) formats
+    let filename = null;
+    let isLocalFile = false;
+    if (markPicture) {
+      if (typeof markPicture === "string") {
+        filename = markPicture;
+        // If it's a string filename (not a URL), it's likely a local file
+        isLocalFile = !filename.startsWith("http://") && !filename.startsWith("https://");
+      } else if (markPicture.s3Location || markPicture.s3location || markPicture.location) {
+        filename = markPicture.s3Location || markPicture.s3location || markPicture.location;
+      } else if (markPicture.filename || markPicture.originalname) {
+        filename = markPicture.filename || markPicture.originalname;
+        isLocalFile = true;
+      }
+    }
+    
+    // Calculate position: max 2 boxes per row
+    const row = Math.floor(i / maxBoxesPerRow);
+    const col = i % maxBoxesPerRow;
+    const qx = col === 0 ? gridX : midX;
+    const qy = gridY + row * quadH;
+
+    // Use markPictureIndices if available, otherwise fallback to index + 1
+    // Handle case where markPictureIndices might contain objects or numbers
+    let pictureIndex = markPictureIndex + 1; // Default fallback
+    if (markPictureIndices && markPictureIndices[markPictureIndex] !== undefined) {
+      const indexValue = markPictureIndices[markPictureIndex];
+      // If it's an object, try to extract a numeric value, otherwise use the value directly
+      if (typeof indexValue === 'object' && indexValue !== null) {
+        // Try common properties that might contain the index
+        pictureIndex = indexValue.value || indexValue.index || indexValue.id || (markPictureIndex + 1);
+      } else if (typeof indexValue === 'number') {
+        pictureIndex = indexValue;
+      } else if (typeof indexValue === 'string') {
+        // Try to parse as number
+        const parsed = parseInt(indexValue, 10);
+        pictureIndex = isNaN(parsed) ? (markPictureIndex + 1) : parsed;
+      }
+    }
+    const picId = `${deviationIdPrefix}.${pictureIndex}`;
+    
+    // Debug logging
+
+    // Construct full URL if filename is a local file (not a full URL)
+    let imageUrl = filename;
+    if (filename && isLocalFile && !filename.startsWith("http://") && !filename.startsWith("https://")) {
+      // Get baseUrl from parameter, environment variable, or default to localhost:3000 (local dev)
+      // Priority: baseUrl param > BASE_URL env > BACKEND_URL env > localhost:3000
+      const effectiveBaseUrl = baseUrl 
+        || process.env.BASE_URL 
+        || process.env.BACKEND_URL 
+        || "http://localhost:3000";
+      imageUrl = `${effectiveBaseUrl}/uploads/${filename}`;
+    }
+    
+    // Collect mark picture URL for final report
+    if (imageUrl && global.markPictureUrls) {
+      global.markPictureUrls.push(imageUrl);
+    }
+
+    await drawDeviationQuad(
+      doc,
+      qx,
+      qy,
+      picId,
+      description,
+      imageUrl || filename,
+      quadW,
+      quadH,
+      headerH,
+      commentH,
+      idW,
+      RED
+    );
+  }
+}
+
+// Helper function to draw a quad block
+async function drawDeviationQuad(
+  doc,
+  qx,
+  qy,
+  picId,
+  comment,
+  filename,
+  quadW,
+  quadH,
+  headerH,
+  commentH,
+  idW,
+  RED
+) {
+  // Header bottom line
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor("#333")
+    .moveTo(qx, qy + headerH)
+    .lineTo(qx + quadW, qy + headerH)
+    .stroke()
+    .restore();
+  
+  // Comment bottom line
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor("#333")
+    .moveTo(qx, qy + headerH + commentH)
+    .lineTo(qx + quadW, qy + headerH + commentH)
+    .stroke()
+    .restore();
+  
+  // ID divider
+  doc
+    .save()
+    .lineWidth(1)
+    .strokeColor("#333")
+    .moveTo(qx + idW, qy)
+    .lineTo(qx + idW, qy + headerH)
+    .stroke()
+    .restore();
+
+  // ID text
+  doc
+    .font("Helvetica")
+    .fontSize(9)
+    .fillColor("black")
+    .text(picId, qx + 8, qy + 6, {
+      width: idW - 16,
+      align: "left",
+      lineGap: 1,
+    });
+
+  // Comments text
+  doc
+    .font("Helvetica")
+    .fontSize(9)
+    .fillColor(RED)
+    .text(comment || "Comments on picture", qx + 10, qy + headerH + 8, {
+      width: quadW - 20,
+    });
+
+  // Photo area - calculate based on actual quad dimensions
+  const photoY = qy + headerH + commentH + 14;
+  // Calculate available photo height: quad height minus header, comment, spacing, and bottom margin
+  const photoH = Math.max(0, quadH - headerH - commentH - 14 - 6); // 14px top spacing, 6px bottom margin
+  const photoX = qx + 10;
+  const photoW = Math.max(0, quadW - 20); // 10px margin on each side, ensure non-negative
+
+  // Load and display image if available
+  // filename can be a string (URL or local path) or an object with s3Location
+  let imageUrl = null;
+  if (filename) {
+    if (typeof filename === "string") {
+      imageUrl = filename;
+    } else if (filename.s3Location || filename.s3location || filename.location) {
+      imageUrl = filename.s3Location || filename.s3location || filename.location;
+    }
+  }
+
+  if (imageUrl) {
+    try {
+      // Save state and apply clipping to keep image within box boundaries
+      doc.save();
+      // Define clipping rectangle for photo area
+      doc.rect(photoX, photoY, photoW, photoH).clip();
+      
+      let imageDrawn = false;
+      
+      // Check if it's a URL
+      if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+        const imageBuffer = await fetchImageBuffer(imageUrl);
+        if (imageBuffer) {
+          // Use top-left alignment to ensure image starts within bounds
+          // Clipping will ensure it doesn't overflow
+          doc.image(imageBuffer, photoX, photoY, {
+            fit: [photoW, photoH],
+            align: "left",
+            valign: "top",
+          });
+          imageDrawn = true;
+        }
+      } else {
+        // Local file path - try to load from uploads directory
+        const fs = require("fs");
+        const path = require("path");
+        const imagePath = path.join(__dirname, "uploads", imageUrl);
+        if (fs.existsSync(imagePath)) {
+          const imageBuffer = fs.readFileSync(imagePath);
+          // Use top-left alignment to ensure image starts within bounds
+          // Clipping will ensure it doesn't overflow
+          doc.image(imageBuffer, photoX, photoY, {
+            fit: [photoW, photoH],
+            align: "left",
+            valign: "top",
+          });
+          imageDrawn = true;
+        }
+      }
+      
+      // Restore state (removes clipping)
+      doc.restore();
+      
+      // If image wasn't drawn, show placeholder text
+      if (!imageDrawn) {
+        doc
+          .font("Helvetica")
+          .fontSize(10)
+          .fillColor(RED)
+          .text("Photo from registration.", photoX, photoY);
+      }
+    } catch (error) {
+
+      // Ensure restore is called even on error
+      try {
+        doc.restore();
+      } catch (restoreError) {
+        // Ignore restore errors
+      }
+      doc
+        .font("Helvetica")
+        .fontSize(10)
+        .fillColor(RED)
+        .text("Photo from registration.", photoX, photoY);
+    }
+  } else {
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor(RED)
+      .text("Photo from registration.", photoX, photoY);
+  }
 }
 
 // PAGE 18 – 8.5 STATEMENT ANNEXES
 // PAGE 18 – 8.5 STATEMENT ANNEXES  (Side 17 af 24) - COLLISION SAFE
-function page18(doc, dynamic) {
+async function page18(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
   const GREY_LINE = "#9a9a9a";
   const LABEL_GREY = "#666666";
   const BOX_GREY = "#d9d9d9";
-  const RED = "#cc0000";
+  const RED = "black";
+
+  // Fetch data from database
+  const { projectId, companyId, subjectMatterId } = dynamic;
+  const dbToUse = dynamic.db || db;
+
+  let project = null;
+  let gamma = null;
+  let mainConstructor = null;
+  let independentController = null;
+  let signature = null;
+
+  try {
+    // Fetch project from projects collection
+    if (projectId && dbToUse) {
+      const projectObjectId = new ObjectId(projectId);
+      project = await dbToUse.collection("projects").findOne({
+        _id: projectObjectId,
+      });
+
+    }
+
+    // Fetch gamma.special from gammas collection
+    if (projectId && companyId && subjectMatterId && dbToUse) {
+      const gammaResults = await dbToUse
+        .collection("gammas")
+        .find({
+          companyId: companyId,
+          $or: [
+            { projectsId: { $in: [projectId] } },
+            { projectsId: { $in: [new ObjectId(projectId)] } },
+          ],
+          "profession.SubjectMatterId": subjectMatterId,
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+      
+      if (gammaResults.length > 0) {
+        gamma = gammaResults[0];
+      } else {
+        // Try without subjectMatterId filter
+        const gammaResults2 = await dbToUse
+          .collection("gammas")
+          .find({
+            companyId: companyId,
+            $or: [
+              { projectsId: { $in: [projectId] } },
+              { projectsId: { $in: [new ObjectId(projectId)] } },
+            ],
+          })
+          .sort({ createdAt: -1 })
+          .limit(1)
+          .toArray();
+        if (gammaResults2.length > 0) {
+          gamma = gammaResults2[0];
+        }
+      }
+
+      if (gamma) {
+
+      }
+    }
+
+    // Fetch Main Constructor user
+    if (projectId && dbToUse) {
+      const projectObjectId = new ObjectId(projectId);
+      mainConstructor = await dbToUse.collection("users").findOne({
+        role: "Main Constructor",
+        $or: [
+          { projectsId: { $in: [projectObjectId] } },
+          { projectsId: { $in: [projectId] } },
+        ],
+      });
+
+    }
+
+    // Fetch Independent Controller user
+    if (projectId && dbToUse) {
+      const projectObjectId = new ObjectId(projectId);
+      const independentControllers = await dbToUse
+        .collection("users")
+        .find({
+          role: "Independent Controller",
+          $or: [
+            { projectsId: { $in: [projectObjectId] } },
+            { projectsId: { $in: [projectId] } },
+          ],
+        })
+        .limit(1)
+        .toArray();
+      
+      if (independentControllers.length > 0) {
+        independentController = independentControllers[0];
+      }
+
+    }
+
+    // Fetch signature from static report signatures collection
+    if (projectId && companyId && subjectMatterId && dbToUse) {
+      signature = await dbToUse
+        .collection("static report signatures")
+        .findOne({
+          projectId: projectId,
+          companyId: companyId,
+          subjectMatterId: subjectMatterId,
+          $or: [
+            { type: 3 },
+            { signatureType: 3 },
+          ],
+        });
+
+    }
+  } catch (error) {
+
+  }
 
   // ---- dynamic placeholders (as in PDF) ----
-  const projectIdNameLeft = dynamic.projectIdNameLeft || "Project setup";
-  const projectIdNameRight = dynamic.projectIdNameRight || "Project setup";
-  const projectAddress = dynamic.projectAddress || "Project setup";
-  const projectPostCity = dynamic.projectPostCity || "Project setup";
-  const mainContractor = dynamic.mainContractor || "Project setup";
-  const constructionSection = dynamic.constructionSection || "Project setup";
+  const projectIdNameLeft = project?._id?.toString() || dynamic.projectIdNameLeft || "Project setup";
+  const projectIdNameRight = project?.name || dynamic.projectIdNameRight || "Project setup";
+  const projectAddress = project?.address || dynamic.projectAddress || "Project setup";
+  const projectPostCity = project?.postcode && project?.city 
+    ? `${project.postcode} ${project.city}` 
+    : project?.postcode || project?.city || dynamic.projectPostCity || "Project setup";
+  const mainContractor = mainConstructor?.name || dynamic.mainContractor || "Project setup";
+  const constructionSection = gamma?.special || dynamic.constructionSection || "Project setup";
   const independentControllerName =
-    dynamic.independentControllerName || "Project setup";
+    independentController?.name || dynamic.independentControllerName || "Project setup";
   const independentControllerCompany =
-    dynamic.independentControllerCompany || "Project setup";
+    independentController?.company || independentController?.companyName || dynamic.independentControllerCompany || "Project setup";
 
   const contractorName = dynamic.contractorName || "Name of Contractor";
   const planB2 = dynamic.planB2 || "B2.x number + special text";
-  const planB3 = dynamic.planB3 || "B3.x number + special text";
-  const planA5 = dynamic.planA5 || "A5.x number + special text";
+  
+  // Build planB3 and planA5 from gamma data
+  let planB3 = dynamic.planB3 || "B3.x number + special text";
+  let planA5 = dynamic.planA5 || "A5.x number + special text";
+  
+  if (gamma) {
+    const xNumber = gamma.x !== undefined && gamma.x !== null ? String(gamma.x).trim() : "";
+    const specialText = gamma.special !== undefined && gamma.special !== null ? String(gamma.special).trim() : "";
+    
+    if (xNumber || specialText) {
+      const b3Parts = ["B3."];
+      if (xNumber) b3Parts.push(xNumber);
+      if (specialText) b3Parts.push(specialText);
+      planB3 = b3Parts.join(" ");
+      
+      const a5Parts = ["A5."];
+      if (xNumber) a5Parts.push(xNumber);
+      if (specialText) a5Parts.push(specialText);
+      planA5 = a5Parts.join(" ");
+      
+    } else {
 
-  // bottom box dynamics
-  const icNameValue =
-    dynamic.icNameValue || "Independent Controller Project setup";
-  const icCompanyValue =
-    dynamic.icCompanyValue || "Independent Controller Project setup";
+    }
+  } else {
+
+  }
+
+  // bottom box dynamics - use fetched data
+  const icNameValue = independentController?.name || dynamic.icNameValue || "Independent Controller Project setup";
+  const icCompanyValue = independentController?.company || independentController?.companyName || dynamic.icCompanyValue || "Independent Controller Project setup";
   const icLogoNote = dynamic.icLogoNote || "";
-  const signedDate = dynamic.icSignedDate || "date.";
 
   let y = M.t;
 
@@ -5953,12 +13785,11 @@ function page18(doc, dynamic) {
   const tX = M.l;
   const tW = CONTENT_W;
   const leftW = 260;
-  const midW = 170;
-  const rightW = tW - leftW - midW;
-  const xL = tX;
-  const xM = tX + leftW;
-  const xR = xM + midW;
+  const minMidW = 170;
+  const minRightW = 100;
   const rowH = 22;
+  const padding = 8;
+  const labelPadding = 6;
 
   const rows = [
     {
@@ -5989,6 +13820,69 @@ function page18(doc, dynamic) {
 
   const tableTopY = y;
 
+  // Calculate dynamic column widths for each row
+  doc.font("Helvetica").fontSize(10);
+  const totalValueWidth = tW - leftW;
+  
+  // Calculate required widths for split row (Project ID and Name)
+  const splitRow = rows.find(r => r.split);
+  let requiredMidW = minMidW;
+  let requiredRightW = minRightW;
+  
+  if (splitRow) {
+    // Calculate text width and add padding plus a small buffer to prevent wrapping
+    const v1Width = doc.widthOfString(splitRow.v1 || "") + padding * 2 + 10;
+    const v2Width = doc.widthOfString(splitRow.v2 || "") + padding * 2 + 10;
+    requiredMidW = Math.max(minMidW, v1Width);
+    requiredRightW = Math.max(minRightW, v2Width);
+  }
+  
+  // Calculate required width for non-split rows
+  const nonSplitRows = rows.filter(r => !r.split);
+  let maxNonSplitWidth = 0;
+  nonSplitRows.forEach(r => {
+    // Add padding plus a small buffer to prevent wrapping
+    const textWidth = doc.widthOfString(r.v1 || "") + padding * 2 + 10;
+    maxNonSplitWidth = Math.max(maxNonSplitWidth, textWidth);
+  });
+  
+  // Determine final column widths
+  // For split rows, we need both columns
+  // For non-split rows, we need the combined width
+  let finalMidW = requiredMidW;
+  let finalRightW = requiredRightW;
+  
+  // If non-split rows need more space than the split columns provide, adjust
+  if (maxNonSplitWidth > requiredMidW + requiredRightW) {
+    // Distribute the needed width between columns, but keep minimums
+    const extraWidth = maxNonSplitWidth - (requiredMidW + requiredRightW);
+    finalMidW = requiredMidW + (extraWidth * 0.6); // Give 60% to mid column
+    finalRightW = requiredRightW + (extraWidth * 0.4); // Give 40% to right column
+  }
+  
+  // Ensure we don't exceed total available width
+  if (finalMidW + finalRightW > totalValueWidth) {
+    const scale = totalValueWidth / (finalMidW + finalRightW);
+    finalMidW = finalMidW * scale;
+    finalRightW = finalRightW * scale;
+  }
+  
+  // Ensure minimum widths are maintained
+  finalMidW = Math.max(finalMidW, minMidW);
+  finalRightW = Math.max(finalRightW, minRightW);
+  
+  // Final check: if still too wide, scale again
+  if (finalMidW + finalRightW > totalValueWidth) {
+    const scale = totalValueWidth / (finalMidW + finalRightW);
+    finalMidW = finalMidW * scale;
+    finalRightW = finalRightW * scale;
+  }
+
+  const xL = tX;
+  const xM = tX + leftW;
+  const xR = xM + finalMidW;
+
+  // Draw top border and vertical divider
   doc
     .save()
     .lineWidth(1)
@@ -6017,11 +13911,12 @@ function page18(doc, dynamic) {
       .font("Helvetica")
       .fontSize(11)
       .fillColor(LABEL_GREY)
-      .text(r.label, xL + 6, ry + 5, { width: leftW - 12, align: "left" });
+      .text(r.label, xL + labelPadding, ry + 5, { width: leftW - labelPadding * 2, align: "left" });
 
     doc.font("Helvetica").fontSize(10).fillColor(RED);
 
     if (r.split) {
+      // Draw vertical divider for split rows
       doc
         .save()
         .lineWidth(1)
@@ -6031,11 +13926,18 @@ function page18(doc, dynamic) {
         .stroke()
         .restore();
 
-      doc.text(r.v1, xM + 8, ry + 6, { width: midW - 16, align: "left" });
-      doc.text(r.v2, xR + 8, ry + 6, { width: rightW - 16, align: "left" });
+      // Use full column width (already calculated to fit text)
+      const v1CellWidth = finalMidW - padding * 2;
+      const v2CellWidth = finalRightW - padding * 2;
+      
+      doc.text(r.v1, xM + padding, ry + 6, { width: v1CellWidth, align: "left" });
+      doc.text(r.v2, xR + padding, ry + 6, { width: v2CellWidth, align: "left" });
     } else {
-      doc.text(r.v1, xM + 8, ry + 6, {
-        width: midW + rightW - 16,
+      // For non-split rows, use combined column width
+      const totalAvailableWidth = finalMidW + finalRightW - padding * 2;
+      
+      doc.text(r.v1, xM + padding, ry + 6, {
+        width: totalAvailableWidth,
         align: "left",
       });
     }
@@ -6327,10 +14229,10 @@ function page18(doc, dynamic) {
 
   // left labels
   doc.font("Helvetica-BoldOblique").fontSize(10).fillColor("#555555");
-  doc.text("Independent Controller Name:", b1 + 10, boxY + headH + 5, {
+  doc.text(t("Independent Controller Name:", translations), b1 + 10, boxY + headH + 5, {
     width: bColW - 20,
   });
-  doc.text("Independent Controller Company", b1 + 10, boxY + headH + r1 + 5, {
+  doc.text(t("Independent Controller Company", translations), b1 + 10, boxY + headH + r1 + 5, {
     width: bColW - 20,
   });
   doc.text(
@@ -6345,74 +14247,288 @@ function page18(doc, dynamic) {
     .fillColor("#555555")
     .text("Signed the:", b1 + 10, y3 + 4, { width: bColW - 20 });
 
-  // middle values
+  // middle values - Row 1: Name (with clipping)
+  doc.save();
+  doc.rect(b2, boxY + headH, bColW, r1).clip();
   doc.font("Helvetica-Bold").fontSize(10).fillColor(RED);
   doc.text(icNameValue, b2 + 10, boxY + headH + 5, { width: bColW - 20 });
+  doc.restore();
+
+  // Row 2: Company (with clipping)
+  doc.save();
+  doc.rect(b2, boxY + headH + r1, bColW, r2).clip();
+  doc.font("Helvetica-Bold").fontSize(10).fillColor(RED);
   doc.text(icCompanyValue, b2 + 10, boxY + headH + r1 + 5, {
     width: bColW - 20,
   });
+  doc.restore();
 
-  // signature instructions
+  // signature instructions and image
   const sigX = b2 + 10;
   const sigY = boxY + headH + r1 + r2 + 5;
+  const sigW = bColW - 20;
+  const sigH = r3 - 20; // Available height for signature
 
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(10)
-    .fillColor(RED)
-    .text("Independent Controller Signature:", sigX, sigY, {
-      width: bColW - 20,
+  // Display signature image if available
+  if (signature && signature.signature) {
+    try {
+      let imgBuffer = null;
+      
+      // Check if signature is base64 encoded
+      if (typeof signature.signature === 'string' && signature.signature.startsWith('data:image/')) {
+        // Extract base64 data
+        const base64Data = signature.signature.split(',')[1];
+        if (base64Data) {
+          imgBuffer = Buffer.from(base64Data, 'base64');
+        }
+      } else if (typeof signature.signature === 'string' && signature.signature.startsWith('http')) {
+        // It's a URL, fetch it
+        imgBuffer = await fetchImageBuffer(signature.signature);
+      } else if (Buffer.isBuffer(signature.signature)) {
+        // Already a buffer
+        imgBuffer = signature.signature;
+      }
+
+      if (imgBuffer) {
+        // Display signature image (with clipping to stay within cell)
+        doc.save();
+        doc.rect(b2, boxY + headH + r1 + r2, bColW, r3).clip();
+        doc.image(imgBuffer, sigX, sigY, {
+          fit: [sigW, sigH],
+          align: 'left',
+          valign: 'top',
+        });
+        doc.restore();
+      } else {
+        // Fallback to text if image couldn't be loaded (with clipping)
+        doc.save();
+        doc.rect(b2, boxY + headH + r1 + r2, bColW, r3).clip();
+        let currentY = sigY;
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor(RED)
+          .text("Independent Controller Signature:", sigX, currentY, {
+            width: sigW,
+            lineGap: 2,
+          });
+        currentY = doc.y + 3;
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor(RED)
+          .text("Insert from independent controller", sigX, currentY, {
+            width: sigW,
+            lineGap: 2,
+          });
+        currentY = doc.y + 2;
+        doc.text(t("signature field in static report.", translations), sigX, currentY, {
+          width: sigW,
+          lineGap: 2,
+        });
+        currentY = doc.y + 3;
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor(RED)
+          .text("NO NEW SIGNATURE.", sigX, currentY, { width: sigW });
+        doc.restore();
+      }
+    } catch (error) {
+
+      // Fallback to text (with clipping)
+      doc.save();
+      doc.rect(b2, boxY + headH + r1 + r2, bColW, r3).clip();
+      let currentY = sigY;
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9)
+        .fillColor(RED)
+        .text("Independent Controller Signature:", sigX, currentY, {
+          width: sigW,
+          lineGap: 2,
+        });
+      currentY = doc.y + 3;
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor(RED)
+        .text("Insert from independent controller", sigX, currentY, {
+          width: sigW,
+          lineGap: 2,
+        });
+      currentY = doc.y + 2;
+      doc.text("signature field in static report.", sigX, currentY, {
+        width: sigW,
+        lineGap: 2,
+      });
+      currentY = doc.y + 3;
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9)
+        .fillColor(RED)
+        .text("NO NEW SIGNATURE.", sigX, currentY, { width: sigW });
+      doc.restore();
+    }
+  } else {
+    // No signature found, show instructions (with clipping)
+    doc.save();
+    doc.rect(b2, boxY + headH + r1 + r2, bColW, r3).clip();
+    let currentY = sigY;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor(RED)
+      .text("Independent Controller Signature:", sigX, currentY, {
+        width: sigW,
+        lineGap: 2,
+      });
+    currentY = doc.y + 3;
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(RED)
+      .text("Insert from independent controller", sigX, currentY, {
+        width: sigW,
+        lineGap: 2,
+      });
+    currentY = doc.y + 2;
+    doc.text("signature field in static report.", sigX, currentY, {
+      width: sigW,
+      lineGap: 2,
     });
+    currentY = doc.y + 3;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor(RED)
+      .text("NO NEW SIGNATURE.", sigX, currentY, { width: sigW });
+    doc.restore();
+  }
 
+  // signed date (Row 4 - with clipping)
+  const signatureDate = signature?.signatureDate 
+    ? new Date(signature.signatureDate).toLocaleDateString('en-GB')
+    : dynamic.icSignedDate || "date.";
+  doc.save();
+  doc.rect(b2, y3, bColW, r4).clip();
   doc
     .font("Helvetica")
     .fontSize(10)
     .fillColor(RED)
-    .text("Insert from independent controller", sigX, doc.y + 2, {
-      width: bColW - 20,
-    });
-  doc.text("signature field in static report.", sigX, doc.y + 2, {
-    width: bColW - 20,
-  });
+    .text(signatureDate, b2 + 10, y3 + 4, { width: bColW - 20 });
+  doc.restore();
 
+  // right cell: logo note (Row 1 - with clipping)
+  doc.save();
+  doc.rect(b3, boxY + headH, bColW, r1).clip();
   doc
-    .font("Helvetica-Bold")
-    .fontSize(10)
-    .fillColor(RED)
-    .text("NO NEW SIGNATURE.", sigX, doc.y + 4, { width: bColW - 20 });
-
-  // signed date
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .fillColor(RED)
-    .text(signedDate, b2 + 10, y3 + 4, { width: bColW - 20 });
-
-  // right cell: logo note
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(10)
-    .fillColor(RED)
+    .font("Helvetica-BoldOblique")
+    .fontSize(9)
+    .fillColor("#555555")
     .text("Independent Controller Company Logo:", b3 + 10, boxY + headH + 5, {
       width: bColW - 20,
+      lineGap: 2,
     });
-
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .fillColor(RED)
-    .text(icLogoNote, b3 + 10, boxY + headH + 20, { width: bColW - 20 });
+  doc.restore();
 
   footer(doc, 17);
 }
 
 // PAGE 19 – 9. KONTROLPUNKT OVERVIEW
 // PAGE 19 – 9. KONTROLPUNKT OVERVIEW (Side 18 af 24) - LANDSCAPE
-function page19(doc, dynamic) {
+async function page19(doc, dynamic, translations = {}) {
   const BLUE = HEADING_COLOR;
-  const RED = "#cc0000";
+  const RED = "black";
   const LIGHT_LINE = "#cfcfcf";
   const DARK_BORDER = "#333333";
+
+  // Fetch gamma data from database using projectId and subjectMatterId (same as page8)
+  let gamma = {};
+  let annotatedPdf = null;
+
+  const { projectId, companyId, subjectMatterId } = dynamic;
+  const dbToUse = dynamic.db || db;
+
+  // Always try to fetch from database if we have the required parameters
+  if (projectId && companyId && subjectMatterId && dbToUse) {
+    try {
+      // Fetch gamma from database
+      let gammaResults = await dbToUse
+        .collection("gammas")
+        .find({
+          companyId: companyId,
+          $or: [
+            { projectsId: { $in: [projectId] } },
+            { projectsId: { $in: [new ObjectId(projectId)] } },
+          ],
+          "profession.SubjectMatterId": subjectMatterId,
+        })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+
+      if (gammaResults.length > 0) {
+        gamma = gammaResults[0];
+      } else {
+        // Try without subjectMatterId filter
+        gammaResults = await dbToUse
+          .collection("gammas")
+          .find({
+            companyId: companyId,
+            $or: [
+              { projectsId: { $in: [projectId] } },
+              { projectsId: { $in: [new ObjectId(projectId)] } },
+            ],
+          })
+          .sort({ createdAt: -1 })
+          .limit(1)
+          .toArray();
+        if (gammaResults.length > 0) {
+          gamma = gammaResults[0];
+        }
+      }
+    } catch (error) {
+      // If fetch fails, fall back to dynamic.gamma if available
+      gamma = dynamic.gamma || {};
+    }
+  } else {
+    // If we don't have required parameters, use dynamic.gamma as fallback
+    gamma = dynamic.gamma || {};
+  }
+
+  // Extract annotated PDF from gamma (same as page8)
+  annotatedPdf =
+    gamma.annotatedPdfs && gamma.annotatedPdfs.length > 0
+      ? gamma.annotatedPdfs[0]
+      : null;
+
+  const drawingName = annotatedPdf?.filename || annotatedPdf?.originalname || "File name.";
+  
+  // Get baseUrl for constructing full URL if path is local (same as page8)
+  const baseUrl = dynamic?.baseUrl 
+    || process.env.BASE_URL 
+    || process.env.BACKEND_URL 
+    || "http://localhost:3000";
+
+  // Construct image URL - try s3Location first, then path, then location (same as page8)
+  let imageUrl = null;
+  if (annotatedPdf) {
+    imageUrl = annotatedPdf?.s3Location || annotatedPdf?.s3location || annotatedPdf?.location || null;
+    
+    // If no s3Location but path exists, construct full URL
+    if (!imageUrl && annotatedPdf?.path) {
+      const path = annotatedPdf.path;
+      // If path is already a full URL, use it; otherwise construct from baseUrl
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        imageUrl = path;
+      } else {
+        // Remove leading slash if present and construct URL
+        const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+        imageUrl = `${baseUrl}/${cleanPath}`;
+      }
+    }
+  }
 
   // Use current page size (because this page is landscape)
   const pageW = doc.page.width;
@@ -6442,7 +14558,6 @@ function page19(doc, dynamic) {
   const boxH = (416.0 - 167.9) * sy;
 
   const greyTextY = 433.7 * sy;
-  const redTextY = 488.0 * sy;
 
   const bottomBlueLineY = 557.8 * sy;
 
@@ -6500,19 +14615,19 @@ function page19(doc, dynamic) {
     .restore();
 
   // DRAWING NAME: (blue) + File name. (red) on same line
-  const drawingNameValue = dynamic.drawingName || "File name.";
+  const drawingNameLabel = t("DRAWING NAME:", translations);
 
   doc
     .font("Helvetica-Bold")
     .fontSize(10 * sy)
     .fillColor(BLUE)
-    .text("DRAWING NAME:", xL, drawNameY, { continued: true });
+    .text(drawingNameLabel, xL, drawNameY, { continued: true });
 
   doc
     .font("Helvetica")
     .fontSize(10 * sy)
     .fillColor(RED)
-    .text(" " + drawingNameValue, { continued: false });
+    .text(" " + drawingName, { continued: false });
 
   // line before big box
   doc
@@ -6535,11 +14650,35 @@ function page19(doc, dynamic) {
     .stroke()
     .restore();
 
+  // Draw image if available (same as page8)
+  if (imageUrl) {
+    try {
+      const imgBuffer = await fetchImageBuffer(imageUrl);
+      
+      // Draw image inside the box with padding
+      doc.image(imgBuffer, xL + 8 * sx, boxY + 8 * sy, {
+        fit: [contentW - 16 * sx, boxH - 16 * sy],
+        align: "center",
+        valign: "center",
+      });
+    } catch (error) {
+      // Fallback: show placeholder text if image fails to load
   doc
     .font("Helvetica")
     .fontSize(10 * sy)
-    .fillColor(RED)
-    .text("marked main drawing", xL + 8 * sx, boxY + 8 * sy);
+    .fillColor(RED);
+    const markedMainDrawingText = t("marked main drawing", translations);
+    doc.text(markedMainDrawingText, xL + 8 * sx, boxY + 8 * sy);
+    }
+  } else {
+    // No image available - show placeholder text
+    doc
+      .font("Helvetica")
+      .fontSize(10 * sy)
+      .fillColor(RED);
+    const markedMainDrawingText = t("marked main drawing", translations);
+    doc.text(markedMainDrawingText, xL + 8 * sx, boxY + 8 * sy);
+  }
 
   // =========================
   // 5) Grey sentence under box
@@ -6549,33 +14688,15 @@ function page19(doc, dynamic) {
     .fontSize(10 * sy)
     .fillColor("#666666")
     .text(
-      "Above there are points indicated where the executor has carried out checks in accordance with the control plan.",
+      t("Above there are points indicated where the executor has carried out checks in accordance with the control plan.", translations),
       xL,
       greyTextY,
       { width: contentW, align: "left" }
     );
 
   // =========================
-  // 6) Red instructions block + bottom blue line
+  // 6) Bottom blue line
   // =========================
-  const redBlock =
-    "Down here You show the profession and Eurocode specific controlplan first checklist b1-b3 then b4 – b6.\n" +
-    "Show the Project managers name in the Responsible collom.\n" +
-    "Remember to change the scope (circumference )(%) in the b4 to b6 .\n" +
-    "If KK1 or kk2 state 10%\n" +
-    "If kk3 or kk4  state 20%\n" +
-    "Also remember to show the special text in the construction part Cullom.";
-
-  doc
-    .font("Helvetica")
-    .fontSize(10 * sy)
-    .fillColor(RED)
-    .text(redBlock, xL, redTextY, {
-      width: contentW,
-      align: "left",
-      lineGap: 3 * sy,
-    });
-
   // bottom blue line
   doc
     .save()
@@ -6592,7 +14713,7 @@ function page19(doc, dynamic) {
 
 // PAGE 20 – 7.1 B1 big table
 // PAGE 20 – 7.1 REVIEW OF THE EXECUTION BASIS FROM THE DESIGN B1 (Side 19 af 24) – LANDSCAPE
-function page20(doc, dynamic) {
+function page20(doc, dynamic, translations = {}) {
   // Reference page is landscape with coordinate system close to 792x612
   const BASE = { w: 792, h: 612 };
 
@@ -6613,7 +14734,7 @@ function page20(doc, dynamic) {
   const GREY = "#d9d9d9";
   const YELLOW = "#ffff00";
   const TXT_GREY = "#666666";
-  const RED = "#c00000";
+  const RED = "black";
   const HEADER_TXT = "#1f2e46";
   const BORDER = "#000000";
 
@@ -6724,95 +14845,52 @@ function page20(doc, dynamic) {
     { key: "control", x0: 699.0, x1: 743.76, title: "CONTROL" },
   ];
 
-  // Header top Y positions (5 blocks)
-  const headerYs = [88.44, 146.28, 213.84, 261.96, 309.96];
+  // Header top Y positions (6 blocks)
+  const headerYs = [88.44, 146.28, 213.84, 261.96, 309.96, 357.96];
   const headerH = 13.8;
 
   // Bottom of the last row block before the yellow legends (from PDF)
-  const lastBlockBottom = 357.6;
+  const lastBlockBottom = 405.6;
 
-  // Exact row text (no missing)
-  const rows = [
-    {
-      pos: "7.1.1",
-      check: "Self-monitoring",
-      subject: "Checking project material",
-      part: "Special text",
-      basis: "Documented self-\nmonitoring, via\nminutes",
-      method: "Review of\nfoundations, visual",
-      scope: "100 %",
-      acc: "The project review meeting has\nbeen completed, has been\ncomprehensive, has covered all\nrelevant parts and is documented",
-      time: "Before\nstart-up",
-      control: "IC",
-    },
-    {
-      pos: "7.1.2",
-      check: "Follow-up on\nproject material",
-      subject:
-        "Descriptions, models and construction\ndrawings contain the necessary\ninformation and prerequisites for\nproper work after the project review\nmeeting",
-      part: "Special text",
-      basis: "Completed in the\ninspection report",
-      method: "Review of the\nfoundation Visually.",
-      scope: "100%",
-      acc: "Deviations and deficiencies found\nduring the project review have\nbeen followed up",
-      time: "Before\nstart-up",
-      control: "IC",
-    },
-    {
-      pos: "7.1.3",
-      check: "Information",
-      subject: "Upon receipt of project material",
-      part: "Special text",
-      basis: "Completed in the\ninspection report",
-      method: "Visually",
-      scope: "100 %",
-      acc: "Is the necessary information\navailable for a condition-based\nbuilding?",
-      time: "Before\nstart-up",
-      control: "IC",
-    },
-    {
-      pos: "7.1.4",
-      check: "Buildability",
-      subject: "Upon receipt of project material",
-      part: "Special text",
-      basis: "Completed in the\ninspection report",
-      method: "Review of the\nfoundation Visually.",
-      scope: "100 %",
-      acc: "Deviations and deficiencies found\nduring the project review have\nbeen followed up",
-      time: "Before\nstart-up",
-      control: "IC",
-    },
-    {
-      pos: "7.1.5",
-      check: "Materials",
-      subject: "Upon receipt of project material",
-      part: "Special text",
-      basis: "Completed in the\ninspection report",
-      method: "Review of the\nfoundation Visually.",
-      scope: "100 %",
-      acc: "Are materials and types, colors,\nclassifications, dimensions clearly\ndescribed?",
-      time: "Before\nstart-up",
-      control: "IC",
-    },
-  ];
+  // Get B1 rows from dynamic data (same as extl.js)
+  const b1Rows = dynamic && Array.isArray(dynamic.b1Rows) ? dynamic.b1Rows : [];
+  const specialText = dynamic?.gamma?.special || dynamic?.specialText || "Special text";
+  
+  // Map B1 rows to table format, always show "100%" for scope and "IC" for control
+  const rows = b1Rows.map((r) => ({
+    pos: r.pos || "",
+    check: r.checkingThe || "",
+    subject: r.subject || "",
+    part: specialText, // Use special text from gamma
+    basis: r.basis || "",
+    method: r.method || "",
+    scope: "100 %", // Always 100% for B1
+    acc: r.acceptance || "",
+    time: r.timeControl || "",
+    control: "IC", // Always IC for B1
+  }));
+
+  // If no rows from database, use empty array (don't show placeholder rows)
 
   // ---------------------------------------
   // Draw each block
   // ---------------------------------------
   const pad = 4;
 
-  for (let i = 0; i < headerYs.length; i++) {
+  // Only process rows that exist (up to headerYs.length)
+  const rowsToShow = Math.min(rows.length, headerYs.length);
+  for (let i = 0; i < rowsToShow; i++) {
     const hy = headerYs[i];
     const row = rows[i];
 
     // Grey header rectangles per column
     COLS.forEach((c) => rectFill(c.x0, hy, c.x1 - c.x0, headerH, GREY));
 
-    // Yellow highlight behind header word "SCOPE" and "CONTROL"
+    // Yellow highlight behind header word "SCOPE" and "CONTROL" - REMOVED
     const scopeCol = COLS.find((c) => c.key === "scope");
     const controlCol = COLS.find((c) => c.key === "control");
-    rectFill(scopeCol.x0 + 3.0, hy + 2.04, 21.8, 9.72, YELLOW);
-    rectFill(controlCol.x0 + 0.24, hy + 2.04, 32.2, 9.72, YELLOW);
+    // rectFill(scopeCol.x0 + 3.0, hy + 2.04, 21.8, 9.72, YELLOW);
+    // rectFill(controlCol.x0 + 0.24, hy + 2.04, 32.2, 9.72, YELLOW);
 
     // Header labels
     COLS.forEach((c) => {
@@ -6835,9 +14913,9 @@ function page20(doc, dynamic) {
     const nextTop = i < headerYs.length - 1 ? headerYs[i + 1] : lastBlockBottom;
     const contentH = Math.max(20, nextTop - contentY - 2);
 
-    // Yellow highlight behind SCOPE value + CONTROL value (word-only)
-    rectFill(scopeCol.x0 + 3.0, contentY + 0.11, 20.0, 9.72, YELLOW);
-    rectFill(controlCol.x0 + 0.24, contentY + 0.11, 6.4, 9.72, YELLOW);
+    // Yellow highlight behind SCOPE value + CONTROL value (word-only) - REMOVED
+    // rectFill(scopeCol.x0 + 3.0, contentY + 0.11, 20.0, 9.72, YELLOW);
+    // rectFill(controlCol.x0 + 0.24, contentY + 0.11, 6.4, 9.72, YELLOW);
 
     // POS
     cellText(
@@ -6853,12 +14931,16 @@ function page20(doc, dynamic) {
     );
 
     // CHECKING THE (fit, because some rows are 2 lines)
+    // Translate if not number/date (following extl2.js pattern)
+    const checkText = row.check && typeof row.check === 'string' && !isNumberOrDate(row.check)
+      ? t(row.check, translations)
+      : (row.check || "");
     cellTextFit(
       COLS[1].x0 + pad,
       contentY,
       COLS[1].x1 - COLS[1].x0 - pad * 2,
       contentH,
-      row.check,
+      checkText,
       {
         size: 8,
         bold: true,
@@ -6868,12 +14950,16 @@ function page20(doc, dynamic) {
     );
 
     // SUBJECT (fit, because row 7.1.2 is long)
+    // Translate if not number/date (following extl2.js pattern)
+    const subjectText = row.subject && typeof row.subject === 'string' && !isNumberOrDate(row.subject)
+      ? t(row.subject, translations)
+      : (row.subject || "");
     cellTextFit(
       COLS[2].x0 + pad,
       contentY,
       COLS[2].x1 - COLS[2].x0 - pad * 2,
       contentH,
-      row.subject,
+      subjectText,
       {
         size: 8,
         color: TXT_GREY,
@@ -6881,16 +14967,16 @@ function page20(doc, dynamic) {
       }
     );
 
-    // CONSTRUCTION PART (red)
+    // CONSTRUCTION PART (black)
     cellText(
       COLS[3].x0 + pad,
       contentY,
       COLS[3].x1 - COLS[3].x0 - pad * 2,
       contentH,
-      row.part,
+      t(row.part, translations),
       {
         size: 8,
-        color: RED,
+        color: "black",
       }
     );
 
@@ -6900,7 +14986,7 @@ function page20(doc, dynamic) {
       contentY,
       COLS[4].x1 - COLS[4].x0 - pad * 2,
       contentH,
-      row.basis,
+      t(row.basis, translations),
       {
         size: 8,
         color: TXT_GREY,
@@ -6914,7 +15000,7 @@ function page20(doc, dynamic) {
       contentY,
       COLS[5].x1 - COLS[5].x0 - pad * 2,
       contentH,
-      row.method,
+      t(row.method, translations),
       {
         size: 8,
         color: TXT_GREY,
@@ -6941,7 +15027,7 @@ function page20(doc, dynamic) {
       contentY,
       COLS[7].x1 - COLS[7].x0 - pad * 2,
       contentH,
-      row.acc,
+      t(row.acc, translations),
       {
         size: 8,
         color: TXT_GREY,
@@ -6955,7 +15041,7 @@ function page20(doc, dynamic) {
       contentY,
       COLS[8].x1 - COLS[8].x0 - pad * 2,
       contentH,
-      row.time,
+      t(row.time, translations),
       {
         size: 8,
         color: TXT_GREY,
@@ -6985,7 +15071,7 @@ function page20(doc, dynamic) {
       .save()
       .lineWidth(2 * s)
       .strokeColor(BORDER)
-      .fillColor(YELLOW)
+      .fillColor("white") // Changed from YELLOW to white
       .rect(X(x0), Y(y0), W(x1 - x0), H(y1 - y0))
       .fillAndStroke()
       .restore();
@@ -7002,15 +15088,16 @@ function page20(doc, dynamic) {
     });
   }
 
-  legendBox(439.08, 357.6, 559.08, 391.56, "Fixed text", "100%");
-  legendBox(
-    651.0,
-    360.6,
-    771.0,
-    391.56,
-    "Fixed text",
-    "IC = Independet controler"
-  );
+  // Legend boxes removed
+  // legendBox(439.08, 405.6, 559.08, 439.56, "Fixed text", "100%");
+  // legendBox(
+  //   651.0,
+  //   408.6,
+  //   771.0,
+  //   439.56,
+  //   "Fixed text",
+  //   "IC = Independet controler"
+  // );
 
   // ---------------------------------------
   // Footer bar (blue, like the PDF)
@@ -7047,7 +15134,7 @@ function page20(doc, dynamic) {
 
 // PAGE 21 – 7.2 B2 big table
 // PAGE 21 – 7.2 VERIFICATION OF THE BASIS FOR EXECUTION OF THE WORK (B2) – LANDSCAPE
-function page21(doc, dynamic) {
+function page21(doc, dynamic, translations = {}) {
   // Base coordinates taken from your PDF page (landscape ~ 792x612)
   const BASE = { w: 792, h: 612 };
   const s = Math.min(doc.page.width / BASE.w, doc.page.height / BASE.h);
@@ -7065,7 +15152,7 @@ function page21(doc, dynamic) {
   const GREY = "#d9d9d9";
   const YELLOW = "#ffff00";
   const TXT_GREY = "#666666";
-  const RED = "#c00000";
+  const RED = "black";
   const HEADER_TXT = "#1f2e46";
 
   // ---------- helpers ----------
@@ -7158,149 +15245,23 @@ function page21(doc, dynamic) {
   const contentStartOffset = 16.56; // header->content (matches PDF text start)
   const lastBlockEndY = 522.0; // stop before legend boxes
 
-  // Dynamic placeholders (keep exactly like PDF for now)
-  const specialText = dynamic.specialText || "Special text";
-  const scopeVal = dynamic.scopeVal || "XX%";
-  const controlVal = dynamic.controlVal || "IC";
-
-  // Rows (exact text from your PDF)
-  const rows = [
-    {
-      pos: "7.2.1",
-      check: "Working drawings,\ninstructions, self-\ncontrol",
-      subject:
-        "Checking working drawings,\ninstructions and assembly\ninstructions",
-      part: specialText,
-      basis: "Documented self-\nmonitoring",
-      method: "Review of the basis\nVisually",
-      scope: scopeVal,
-      acc:
-        "A self-monitoring report is available\n" +
-        "to review whether the basis\n" +
-        "contains sufficient information for\n" +
-        "correct execution, including\n" +
-        "locations and tolerances",
-      time: "Before\nstarting\nwork",
-      control: controlVal,
-    },
-    {
-      pos: "7.2.2",
-      check:
-        "Working drawings,\ninstructions and\nassembly\n\nBuildability guides",
-      subject:
-        "Checking information in working\ndrawings, instructions and\nassembly instructions",
-      part: specialText,
-      basis: "Documented self-\nmonitoring",
-      method: "Review of the basis\nVisually",
-      scope: scopeVal,
-      acc:
-        "A self-control report is available for\n" +
-        "a review of whether the basis for\n" +
-        "the work is in accordance with the\n" +
-        "basis from the design",
-      time: "Before\nstarting\nwork",
-      control: controlVal,
-    },
-    {
-      pos: "7.2.3",
-      check: "Working\nenvironment\nrules",
-      subject:
-        "Check working drawings, assembly\n" +
-        "instructions + Instructions contain\n" +
-        "the necessary information and\n" +
-        "prerequisites for correct work",
-      part: specialText,
-      basis: "Documented self-\nmonitoring",
-      method: "Review of the basis\nVisually",
-      scope: scopeVal,
-      acc:
-        "The basis for execution of the work\n" +
-        "contains the necessary information\n" +
-        "(execution classes, material\n" +
-        "requirements and tolerances) and\n" +
-        "the information is clear,\n" +
-        "understandable and accessible",
-      time: "Before\nstarting\nwork",
-      control: controlVal,
-    },
-    {
-      pos: "7.2.4",
-      check: "Comprehension",
-      subject:
-        "Inspection work drawings, assembly\n" +
-        "instructions and instructions contain\n" +
-        "the necessary information and\n" +
-        "prerequisites for correct work",
-      part: specialText,
-      basis: "Documented self-\nmonitoring",
-      method: "Review of the basis\nVisually",
-      scope: scopeVal,
-      acc:
-        "The basis for execution of the work\n" +
-        "contains the necessary information\n" +
-        "(execution classes, material\n" +
-        "requirements and tolerances) and\n" +
-        "the information is clear,\n" +
-        "understandable and accessible",
-      time:
-        "Before the\nwork begins,\n" +
-        "to\nunderstand\n" +
-        "the project's\n" +
-        "structure/exec\n" +
-        "ution method.",
-      control: controlVal,
-    },
-    {
-      pos: "7.2.5",
-      check: "Coordination",
-      subject:
-        "Checking of working drawings,\n" +
-        "assembly instructions and\n" +
-        "instructions contain the necessary\n" +
-        "information and prerequisites for\n" +
-        "correct work",
-      part: specialText,
-      basis: "Documented self-\nmonitoring",
-      method: "Review of the basis\nVisually",
-      scope: scopeVal,
-      acc:
-        "The basis for execution of the work\n" +
-        "contains the necessary information\n" +
-        "(execution classes, material\n" +
-        "requirements and tolerances) and\n" +
-        "the information is clear,\n" +
-        "understandable and accessible",
-      time:
-        "Before the\nwork begins,\n" +
-        "it\ncoordinated\n" +
-        "with the\nconstruction\n" +
-        "management",
-      control: controlVal,
-    },
-    {
-      pos: "7.2.6",
-      check: "Interfaces",
-      subject:
-        "Checking of working drawings,\n" +
-        "assembly instructions and\n" +
-        "instructions contain the necessary\n" +
-        "information and prerequisites for\n" +
-        "correct work",
-      part: specialText,
-      basis: "Documented self-\nmonitoring",
-      method: "Review of the basis\nVisually",
-      scope: scopeVal,
-      acc:
-        "The basis for execution of the work\n" +
-        "contains the necessary information\n" +
-        "(execution classes, material\n" +
-        "requirements and tolerances) and\n" +
-        "the information is clear,\n" +
-        "understandable and accessible",
-      time: "Before work\n" + "begins, interfac\n" + "are aligned.",
-      control: controlVal,
-    },
-  ];
+  // Get B2 rows from dynamic data (same as extl.js)
+  const b2Rows = dynamic && Array.isArray(dynamic.b2Rows) ? dynamic.b2Rows : [];
+  const specialText = dynamic?.gamma?.special || dynamic?.specialText || "Special text";
+  
+  // Map B2 rows to table format
+  const rows = b2Rows.map((r) => ({
+    pos: r.pos || "",
+    check: r.checkingThe || "",
+    subject: r.subject || "",
+    part: specialText, // Use special text from gamma
+    basis: r.basis || "",
+    method: r.method || "",
+    scope: r.scope || "100%", // Use scope from row, default to 100%
+    acc: r.acceptance || "",
+    time: r.timeControl || "",
+    control: "IC", // Always IC for B2
+  }));
 
   // highlight sizes from PDF
   const scopeHeaderHL = { x: 488.16, w: 21.6, yOff: 2.4, h: 9.72 };
@@ -7310,8 +15271,9 @@ function page21(doc, dynamic) {
 
   const pad = 5;
 
-  // draw blocks
-  for (let i = 0; i < headerYs.length; i++) {
+  // draw blocks - only process rows that exist
+  const rowsToShow = Math.min(rows.length, headerYs.length);
+  for (let i = 0; i < rowsToShow; i++) {
     const hy = headerYs[i];
     const row = rows[i];
 
@@ -7320,21 +15282,21 @@ function page21(doc, dynamic) {
       fillRect(c.x0, hy, c.x1 - c.x0, headerH, GREY);
     }
 
-    // yellow highlights for header words (scope/control)
-    fillRect(
-      scopeHeaderHL.x,
-      hy + scopeHeaderHL.yOff,
-      scopeHeaderHL.w,
-      scopeHeaderHL.h,
-      YELLOW
-    );
-    fillRect(
-      controlHeaderHL.x,
-      hy + controlHeaderHL.yOff,
-      controlHeaderHL.w,
-      controlHeaderHL.h,
-      YELLOW
-    );
+    // yellow highlights for header words (scope/control) - REMOVED
+    // fillRect(
+    //   scopeHeaderHL.x,
+    //   hy + scopeHeaderHL.yOff,
+    //   scopeHeaderHL.w,
+    //   scopeHeaderHL.h,
+    //   YELLOW
+    // );
+    // fillRect(
+    //   controlHeaderHL.x,
+    //   hy + controlHeaderHL.yOff,
+    //   controlHeaderHL.w,
+    //   controlHeaderHL.h,
+    //   YELLOW
+    // );
 
     // header labels
     for (const c of COLS) {
@@ -7353,21 +15315,21 @@ function page21(doc, dynamic) {
     const blockEnd = i < headerYs.length - 1 ? headerYs[i + 1] : lastBlockEndY;
     const contentH = Math.max(22, blockEnd - contentY - 2);
 
-    // yellow highlights for values (XX% / IC)
-    fillRect(
-      scopeValueHL.x,
-      hy + scopeValueHL.yOff,
-      scopeValueHL.w,
-      scopeValueHL.h,
-      YELLOW
-    );
-    fillRect(
-      controlValueHL.x,
-      hy + controlValueHL.yOff,
-      controlValueHL.w,
-      controlValueHL.h,
-      YELLOW
-    );
+    // yellow highlights for values (XX% / IC) - REMOVED
+    // fillRect(
+    //   scopeValueHL.x,
+    //   hy + scopeValueHL.yOff,
+    //   scopeValueHL.w,
+    //   scopeValueHL.h,
+    //   YELLOW
+    // );
+    // fillRect(
+    //   controlValueHL.x,
+    //   hy + controlValueHL.yOff,
+    //   controlValueHL.w,
+    //   controlValueHL.h,
+    //   YELLOW
+    // );
 
     // cells (auto-fit to never cut text)
     cellTextFit(
@@ -7384,7 +15346,7 @@ function page21(doc, dynamic) {
       contentY,
       COLS[1].x1 - COLS[1].x0 - pad * 2,
       contentH,
-      row.check,
+      t(row.check, translations),
       { size: 8, bold: true, color: TXT_GREY }
     );
 
@@ -7393,7 +15355,7 @@ function page21(doc, dynamic) {
       contentY,
       COLS[2].x1 - COLS[2].x0 - pad * 2,
       contentH,
-      row.subject,
+      t(row.subject, translations),
       { size: 8, color: TXT_GREY }
     );
 
@@ -7402,8 +15364,8 @@ function page21(doc, dynamic) {
       contentY,
       COLS[3].x1 - COLS[3].x0 - pad * 2,
       contentH,
-      row.part,
-      { size: 8, color: RED }
+      t(row.part, translations),
+      { size: 8, color: "black" }
     );
 
     cellTextFit(
@@ -7411,7 +15373,7 @@ function page21(doc, dynamic) {
       contentY,
       COLS[4].x1 - COLS[4].x0 - pad * 2,
       contentH,
-      row.basis,
+      t(row.basis, translations),
       { size: 8, color: TXT_GREY }
     );
 
@@ -7420,7 +15382,7 @@ function page21(doc, dynamic) {
       contentY,
       COLS[5].x1 - COLS[5].x0 - pad * 2,
       contentH,
-      row.method,
+      t(row.method, translations),
       { size: 8, color: TXT_GREY }
     );
 
@@ -7438,7 +15400,7 @@ function page21(doc, dynamic) {
       contentY,
       COLS[7].x1 - COLS[7].x0 - pad * 2,
       contentH,
-      row.acc,
+      t(row.acc, translations),
       { size: 8, color: TXT_GREY }
     );
 
@@ -7447,7 +15409,7 @@ function page21(doc, dynamic) {
       contentY,
       COLS[8].x1 - COLS[8].x0 - pad * 2,
       contentH,
-      row.time,
+      t(row.time, translations),
       { size: 8, color: TXT_GREY }
     );
 
@@ -7460,37 +15422,6 @@ function page21(doc, dynamic) {
       { size: 8, color: "#000" }
     );
   }
-
-  // ---------- LEGEND BOXES (exact positions from PDF) ----------
-  // left box: Rect(441.6, 526.8) -> (561.6, 568.2)
-  fillRect(441.6, 526.8, 561.6 - 441.6, 568.2 - 526.8, YELLOW);
-  strokeRect(441.6, 526.8, 561.6 - 441.6, 568.2 - 526.8, "#000", 2);
-
-  cellTextFit(441.6, 540.5, 561.6 - 441.6, 14, "Scope 10% if KK1 or kk2", {
-    size: 10,
-    color: RED,
-    align: "center",
-  });
-  cellTextFit(441.6, 552.8, 561.6 - 441.6, 14, "scope 20% if KK3 or KK4", {
-    size: 10,
-    color: RED,
-    align: "center",
-  });
-
-  // right box: Rect(657.6, 522.6) -> (777.6, 553.56)
-  fillRect(657.6, 522.6, 777.6 - 657.6, 553.56 - 522.6, YELLOW);
-  strokeRect(657.6, 522.6, 777.6 - 657.6, 553.56 - 522.6, "#000", 2);
-
-  cellTextFit(657.6, 530.7, 777.6 - 657.6, 14, "Fixed text", {
-    size: 10,
-    color: RED,
-    align: "center",
-  });
-  cellTextFit(657.6, 543.0, 777.6 - 657.6, 14, "IC = Independet controler", {
-    size: 10,
-    color: RED,
-    align: "center",
-  });
 
   // ---------- FOOTER (blue bar + texts) ----------
   // thin light-blue line (from PDF)
@@ -7537,31 +15468,301 @@ function page21(doc, dynamic) {
 }
 
 // PAGE 22 – 7.3 B3 big table
-function page22(doc, dynamic) {
-  doc.font("Helvetica").fontSize(12).fillColor("black");
-  doc.text("PAGE 22 – placeholder (7.3 B3 table)", M.l, M.t);
-  footer(doc, 21);
-}
+// PAGE 22 – 7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS (B3) – LANDSCAPE
+function page22(doc, dynamic, translations = {}) {
+  // Base coordinates taken from your PDF page (landscape ~ 792x612)
+  const BASE = { w: 792, h: 612 };
+  const s = Math.min(doc.page.width / BASE.w, doc.page.height / BASE.h);
+  const oX = (doc.page.width - BASE.w * s) / 2;
+  const oY = (doc.page.height - BASE.h * s) / 2;
 
-// PAGE 23 – 7.4 B4 table
-function page23(doc, dynamic) {
-  doc.font("Helvetica").fontSize(12).fillColor("black");
-  doc.text("PAGE 23 – placeholder (7.4 B4 table)", M.l, M.t);
-  footer(doc, 22);
-}
+  const X = (v) => oX + v * s;
+  const Y = (v) => oY + v * s;
+  const W = (v) => v * s;
+  const H = (v) => v * s;
 
-// PAGE 24 – 7.5 B5 table
-function page24(doc, dynamic) {
-  doc.font("Helvetica").fontSize(12).fillColor("black");
-  doc.text("PAGE 24 – placeholder (7.5 B5 table)", M.l, M.t);
-  footer(doc, 23);
-}
+  // Colors (matched to PDF)
+  const BLUE = "#244061";
+  const LIGHT_BLUE = "#5989c1";
+  const GREY = "#d9d9d9";
+  const YELLOW = "#ffff00";
+  const TXT_GREY = "#666666";
+  const RED = "black";
+  const HEADER_TXT = "#1f2e46";
 
-// PAGE 25 – 7.6 B6 table
-function page25(doc, dynamic) {
-  doc.font("Helvetica").fontSize(12).fillColor("black");
-  doc.text("PAGE 25 – placeholder (7.6 B6 table)", M.l, M.t);
-  footer(doc, 24);
+  // ---------- helpers ----------
+  function fillRect(x, y, w, h, color) {
+    doc.save().fillColor(color).rect(X(x), Y(y), W(w), H(h)).fill().restore();
+  }
+
+  function strokeRect(x, y, w, h, color = "#000", lw = 1) {
+    doc
+      .save()
+      .lineWidth(lw * s)
+      .strokeColor(color)
+      .rect(X(x), Y(y), W(w), H(h))
+      .stroke()
+      .restore();
+  }
+
+  function cellTextFit(x0, y0, w, h, text, style = {}) {
+    const font = style.font || (style.bold ? "Helvetica-Bold" : "Helvetica");
+    const color = style.color || "black";
+    const align = style.align || "left";
+    const lineGap = style.lineGap != null ? style.lineGap : 1;
+
+    const maxW = W(w);
+    const maxH = H(h);
+
+    let size = style.size || 8;
+
+    // shrink until it fits the cell height (so NO text is cut)
+    for (let i = 0; i < 22; i++) {
+      doc.font(font).fontSize(size * s);
+      const needed = doc.heightOfString(String(text ?? ""), {
+        width: maxW,
+        lineGap: lineGap * s,
+      });
+      if (needed <= maxH) break;
+      size -= 0.25;
+      if (size < 6) break;
+    }
+
+    doc
+      .font(font)
+      .fontSize(size * s)
+      .fillColor(color)
+      .text(String(text ?? ""), X(x0), Y(y0), {
+        width: maxW,
+        height: maxH,
+        lineGap: lineGap * s,
+        align,
+      });
+  }
+
+  // ---------- TOP BAR ----------
+  // From PDF: x 53.76..737.40, y 54.60..75.96
+  fillRect(53.76, 54.6, 737.4 - 53.76, 75.96 - 54.6, BLUE);
+
+  cellTextFit(
+    60.9,
+    58.4,
+    737.4 - 60.9 - 70,
+    16,
+    t("7.3 VERIFICATION OF DOCUMENTATION OF MATERIALS AND PRODUCTS", translations),
+    { bold: true, size: 11, color: "white" }
+  );
+
+  cellTextFit(53.76, 58.4, 737.4 - 53.76 - 10, 16, t("B3", translations), {
+    bold: true,
+    size: 11,
+    color: "white",
+    align: "right",
+  });
+
+  // ---------- TABLE COLS (exact from PDF) ----------
+  const COLS = [
+    { key: "pos", x0: 54.0, x1: 82.32, title: "POS" },
+    { key: "check", x0: 82.32, x1: 146.4, title: "CHECKING THE" },
+    { key: "subject", x0: 146.4, x1: 265.68, title: "SUBJECT" },
+    { key: "part", x0: 265.68, x1: 350.88, title: "CONSTRUCTION PART" },
+    { key: "basis", x0: 350.88, x1: 415.92, title: "BASIS" },
+    { key: "method", x0: 415.92, x1: 488.16, title: "CONTROL METHOD" },
+    { key: "scope", x0: 488.16, x1: 524.52, title: "SCOPE" },
+    { key: "acc", x0: 524.52, x1: 646.56, title: "ACCEPTANCE CRITERIA" },
+    { key: "time", x0: 646.56, x1: 695.88, title: "TIME" },
+    { key: "control", x0: 695.88, x1: 737.16, title: "CONTROL" },
+  ];
+
+  // Header Y positions (6 blocks) from PDF
+  const headerYs = [88.44, 156.36, 216.6, 294.36, 372.12, 449.88];
+  const headerH = 14.16; // matches 88.44..102.60
+  const contentStartOffset = 16.56; // header->content (matches PDF text start)
+  const lastBlockEndY = 522.0; // stop before legend boxes
+
+  // Get B3 rows from dynamic data
+  const b3Rows = dynamic && Array.isArray(dynamic.b3Rows) ? dynamic.b3Rows : [];
+  const specialText = dynamic?.gamma?.special || dynamic?.specialText || "Special text";
+  
+  // Map B3 rows to table format
+  const rows = b3Rows.map((r) => ({
+    pos: r.pos || "",
+    check: r.checkingThe || "",
+    subject: r.subject || "",
+    part: specialText, // Use special text from gamma
+    basis: r.basis || "",
+    method: r.method || "",
+    scope: r.scope || "10%", // Use scope from row, default to 10%
+    acc: r.acceptance || "",
+    time: r.timeControl || "",
+    control: "IC", // Always IC for B3
+  }));
+
+  const pad = 5;
+
+  // draw blocks - only process rows that exist
+  const rowsToShow = Math.min(rows.length, headerYs.length);
+  for (let i = 0; i < rowsToShow; i++) {
+    const hy = headerYs[i];
+    const row = rows[i];
+
+    // grey headers
+    for (const c of COLS) {
+      fillRect(c.x0, hy, c.x1 - c.x0, headerH, GREY);
+    }
+
+    // header labels (no yellow highlights)
+    for (const c of COLS) {
+      cellTextFit(
+        c.x0 + pad,
+        hy + 2.2,
+        c.x1 - c.x0 - pad * 2,
+        headerH - 2,
+        c.title,
+        { bold: true, size: 8, color: HEADER_TXT }
+      );
+    }
+
+    // content height for this block
+    const contentY = hy + contentStartOffset;
+    const blockEnd = i < headerYs.length - 1 ? headerYs[i + 1] : lastBlockEndY;
+    const contentH = Math.max(22, blockEnd - contentY - 2);
+
+    // cells (auto-fit to never cut text)
+    cellTextFit(
+      COLS[0].x0 + pad,
+      contentY,
+      COLS[0].x1 - COLS[0].x0 - pad * 2,
+      contentH,
+      row.pos,
+      { size: 8, color: "#333" }
+    );
+
+    cellTextFit(
+      COLS[1].x0 + pad,
+      contentY,
+      COLS[1].x1 - COLS[1].x0 - pad * 2,
+      contentH,
+      t(row.check, translations),
+      { size: 8, bold: true, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[2].x0 + pad,
+      contentY,
+      COLS[2].x1 - COLS[2].x0 - pad * 2,
+      contentH,
+      t(row.subject, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    // CONSTRUCTION PART (black, not red)
+    cellTextFit(
+      COLS[3].x0 + pad,
+      contentY,
+      COLS[3].x1 - COLS[3].x0 - pad * 2,
+      contentH,
+      t(row.part, translations),
+      { size: 8, color: "black" }
+    );
+
+    cellTextFit(
+      COLS[4].x0 + pad,
+      contentY,
+      COLS[4].x1 - COLS[4].x0 - pad * 2,
+      contentH,
+      t(row.basis, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[5].x0 + pad,
+      contentY,
+      COLS[5].x1 - COLS[5].x0 - pad * 2,
+      contentH,
+      t(row.method, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[6].x0 + pad,
+      contentY,
+      COLS[6].x1 - COLS[6].x0 - pad * 2,
+      contentH,
+      row.scope,
+      { size: 8, color: "#000" }
+    );
+
+    cellTextFit(
+      COLS[7].x0 + pad,
+      contentY,
+      COLS[7].x1 - COLS[7].x0 - pad * 2,
+      contentH,
+      t(row.acc, translations),
+      { size: 8, color: TXT_GREY, lineGap: 1 }
+    );
+
+    cellTextFit(
+      COLS[8].x0 + pad,
+      contentY,
+      COLS[8].x1 - COLS[8].x0 - pad * 2,
+      contentH,
+      t(row.time, translations),
+      { size: 8, color: TXT_GREY }
+    );
+
+    cellTextFit(
+      COLS[9].x0 + pad,
+      contentY,
+      COLS[9].x1 - COLS[9].x0 - pad * 2,
+      contentH,
+      row.control,
+      { size: 8, color: "#000" }
+    );
+  }
+
+  // ---------- FOOTER (blue bar + texts) ----------
+  // thin light-blue line (from PDF)
+  fillRect(48.36, 557.28, 733.44 - 48.36, 557.76 - 557.28, LIGHT_BLUE);
+
+  // footer bar (from PDF)
+  fillRect(53.04, 557.52, 741.6 - 53.04, 585.0 - 557.52, BLUE);
+
+  // left brand
+  cellTextFit(80, 563.2, 220, 16, "Assurement", {
+    bold: true,
+    size: 10,
+    color: "white",
+  });
+
+  // center
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04,
+    16,
+    "Part of Kvalitetssikring Danmark ApS",
+    {
+      bold: true,
+      size: 9,
+      color: "white",
+      align: "center",
+    }
+  );
+
+  // right page number
+  cellTextFit(
+    53.04,
+    563.2,
+    741.6 - 53.04 - 10,
+    16,
+    `Page 21 af ${TOTAL_PAGES}`,
+    {
+      size: 10,
+      color: "white",
+      align: "right",
+    }
+  );
 }
 
 /* ------------------------------------------------------------------
@@ -7570,20 +15771,23 @@ function page25(doc, dynamic) {
 
 // Download route – generates and streams the Static Control Report
 app.get("/download", async (req, res) => {
+  const targetLang = req.query.target_lang || req.query.lang || "EN";
+  logTranslation("ENDPOINT_CALLED", {
+    endpoint: "/download",
+    targetLang,
+    queryParams: req.query
+  });
   try {
     // Get parameters from query string
     var subjectMatterId = req.query.subjectMatterId || "KP06";
     var projectId = req.query.projectId || "693d2acb1291ff43b9ea32a3";
     var companyId = req.query.companyId || "693d25ef252d1b388fff0648";
-    const targetLang = req.query.target_lang || req.query.lang || "EN";
 
-    // Log all received parameters
-    console.log("📥 download-extl3 - Received parameters:", {
+    logTranslation("PARAMS_RECEIVED", {
       subjectMatterId,
       projectId,
       companyId,
-      target_lang: targetLang,
-      allQueryParams: req.query,
+      targetLang
     });
 
     // Validate required parameters
@@ -7602,46 +15806,32 @@ app.get("/download", async (req, res) => {
     // Fetch company data if companyId is provided
     let company = null;
     if (companyId) {
-      console.log("Fetching company with ID:", companyId);
+
       company = await db.collection("companies").findOne({
         _id: new ObjectId(companyId),
       });
-      console.log("Company found:", company ? "Yes" : "No");
+
       if (company) {
-        console.log("Company data:", {
-          name: company.name,
-          address: company.address,
-          cvr: company.cvr,
-          contactPhone: company.contactPhone,
-        });
+
       }
     }
 
     // Fetch project data if projectId is provided
     let project = null;
     if (projectId && companyId) {
-      console.log(
-        "Fetching project with ID:",
-        projectId,
-        "and companyId:",
-        companyId
-      );
+
       project = await db.collection("projects").findOne({
         _id: new ObjectId(projectId),
         companyId: companyId,
       });
-      console.log("Project found:", project ? "Yes" : "No");
+
       if (project) {
-        console.log("Project name:", project.name);
+
       }
     }
 
     // Fetch gamma data - get the most recent one
-    console.log("Fetching gamma with:", {
-      companyId,
-      projectId,
-      subjectMatterId,
-    });
+
     let gammaResults = await db
       .collection("gammas")
       .find({
@@ -7660,7 +15850,7 @@ app.get("/download", async (req, res) => {
 
     // If no gamma found with subjectMatterId, try without it
     if (!gamma) {
-      console.log("Gamma not found with subjectMatterId, trying without it...");
+
       gammaResults = await db
         .collection("gammas")
         .find({
@@ -7675,10 +15865,9 @@ app.get("/download", async (req, res) => {
         .toArray();
       gamma = gammaResults.length > 0 ? gammaResults[0] : null;
     }
-    console.log("Gamma found:", gamma ? "Yes" : "No");
 
     // Fetch eurocode from projectprofessioneurocodes
-    console.log("Fetching eurocode...");
+
     const eurocodeRecord = await db
       .collection("projectprofessioneurocodes")
       .findOne({
@@ -7690,18 +15879,16 @@ app.get("/download", async (req, res) => {
       eurocodeRecord?.euroCodes && eurocodeRecord.euroCodes.length > 0
         ? String(eurocodeRecord.euroCodes[0])
         : "mentioned number and name of the Eurocode.";
-    console.log("Eurocode found:", eurocode);
 
     // Fetch user with role Main Contractor or Main Constructor
-    console.log("Fetching Main Contractor/Constructor...");
+
     const mainUser = await db.collection("users").findOne({
       projectsId: { $in: [projectId] },
       role: { $in: ["Main Contractor", "Main Constructor"] },
     });
-    console.log("Main user found:", mainUser ? "Yes" : "No");
 
     // Fetch signatures from static report signatures
-    console.log("Fetching signatures...");
+
     const signatures = await db
       .collection("static report signatures")
       .find({
@@ -7711,21 +15898,18 @@ app.get("/download", async (req, res) => {
       })
       .sort({ signatureType: 1, createdAt: -1 })
       .toArray();
-    console.log("Signatures found:", signatures.length);
 
     // Organize signatures by signatureType
     const signatureByType = {};
     signatures.forEach((sig) => {
       if (sig.signatureType !== undefined && sig.signatureType !== null) {
         signatureByType[sig.signatureType] = sig;
-        console.log(
-          `Signature found - Type: ${sig.signatureType}, Name: ${sig.name}`
-        );
+
       }
     });
 
     // Fetch Independent Controller users for the project
-    console.log("Fetching Independent Controller users...");
+
     const projectObjectId = new ObjectId(projectId);
     const independentControllers = await db
       .collection("users")
@@ -7738,22 +15922,17 @@ app.get("/download", async (req, res) => {
       })
       .toArray();
 
-    console.log(
-      `Found ${independentControllers.length} Independent Controller users for project ${projectId}`
-    );
-
     // Fetch specialcontrol records
-    console.log("Fetching specialcontrol records...");
+
     const specialControls = await db
       .collection("specialcontrol")
       .find({
         projectsId: { $in: [projectId, projectObjectId] },
       })
       .toArray();
-    console.log("Special controls found:", specialControls.length);
 
     // Fetch deviations records
-    console.log("Fetching deviations records...");
+
     const deviations = await db
       .collection("deviations")
       .find({
@@ -7762,8 +15941,135 @@ app.get("/download", async (req, res) => {
         type: "Static Report",
       })
       .toArray();
-    console.log("Deviations found:", deviations.length);
 
+    // Extract staticDocumentCheckList from professionAssociatedData (same as extl.js)
+    let b1Rows = [];
+    let b2Rows = [];
+    let b3Rows = [];
+
+    if (project && project.professionAssociatedData) {
+      const professionData = project.professionAssociatedData[subjectMatterId];
+      if (professionData && professionData.staticDocumentCheckList) {
+        const checklist = professionData.staticDocumentCheckList;
+
+        // Helper function to map checklist item to table row
+        const mapChecklistItemToRow = (item) => {
+          return {
+            pos: item.ItemId || item.pos || "",
+            checkingThe:
+              item.checkingThe ||
+              item["Control of"] ||
+              item["Contol of"] ||
+              item["CHECKING THE"] ||
+              "",
+            subject: item.Subject || item.subject || item["SUBJECT"] || "",
+            constructionPart:
+              item["Construction part"] ||
+              item.constructionPart ||
+              item["CONSTRUCTION PART"] ||
+              "",
+            basis: item.Basis || item.basis || "",
+            method:
+              item["Control method"] ||
+              item["Control methode"] ||
+              item["CONTROL METHOD"] ||
+              item.controlMethod ||
+              item.method ||
+              "",
+            scope:
+              item.Scope ||
+              item.scope ||
+              item.circumference ||
+              (item.extent ? `${item.extent * 100}%` : "") ||
+              "",
+            acceptance:
+              item["Acceptance criteria"] ||
+              item["Acceptance Criteria"] ||
+              item.acceptanceCriteria ||
+              item.acceptance ||
+              "",
+            timeControl:
+              item.Time ||
+              item.time ||
+              item["TIME CONTROL"] ||
+              item.timeControl ||
+              "",
+          };
+        };
+
+        // Filter, deduplicate, and sort B1 items (exclude records where ItemId is null or empty)
+        b1Rows = checklist
+          .filter(
+            (item) =>
+              item.DS_GroupId === "B1" &&
+              item.ItemId != null &&
+              item.ItemId !== ""
+          )
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+
+        // Filter, deduplicate, and sort B2 items
+        const b2Filtered = checklist.filter(
+          (item) =>
+            item.DS_GroupId === "B2" &&
+            item.ItemId != null &&
+            item.ItemId !== ""
+        );
+        b2Rows = b2Filtered
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+
+        // Filter, deduplicate, and sort B3 items
+        const b3Filtered = checklist.filter(
+          (item) =>
+            item.DS_GroupId === "B3" &&
+            item.ItemId != null &&
+            item.ItemId !== ""
+        );
+        b3Rows = b3Filtered
+          .reduce((acc, item) => {
+            const itemId = item.ItemId || "";
+            if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+              acc.push(item);
+            }
+            return acc;
+          }, [])
+          .sort((a, b) => {
+            const aId = a.ItemId || "";
+            const bId = b.ItemId || "";
+            return aId.localeCompare(bId);
+          })
+          .map(mapChecklistItemToRow);
+
+      } else {
+
+      }
+    } else {
+
+    }
+    
     // Build dynamic object from database data
     const dynamic = {
       company: company,
@@ -7775,6 +16081,10 @@ app.get("/download", async (req, res) => {
       independentControllers: independentControllers,
       specialControls: specialControls,
       deviations: deviations,
+      // B1, B2, B3 rows for pages 20, 21, 22
+      b1Rows: b1Rows,
+      b2Rows: b2Rows,
+      b3Rows: b3Rows,
       companyInfo: company
         ? `${company.name || ""}\n${company.address || ""}\nCVR: ${
             company.cvr || ""
@@ -7787,6 +16097,7 @@ app.get("/download", async (req, res) => {
       subjectMatterId: subjectMatterId,
       projectId: projectId,
       companyId: companyId,
+      db: routeDb, // Pass db through dynamic object so page9 can access it
     };
 
     res.setHeader("Content-Type", "application/pdf");
@@ -7795,17 +16106,25 @@ app.get("/download", async (req, res) => {
       'attachment; filename="static-control-report.pdf"'
     );
 
-    await generateStaticControlReport(dynamic, res);
+    logTranslation("CALLING_GENERATE_FUNCTION", { targetLang });
+    await generateStaticControlReport(dynamic, res, targetLang);
+    logTranslation("GENERATE_FUNCTION_COMPLETED", { targetLang });
   } catch (error) {
-    console.error("Error generating PDF:", error);
-    res.status(500).json({ error: error.message });
+
+    // Check if headers have already been sent (PDF stream may have started)
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    } else {
+      // Headers already sent, can't send JSON response - just log the error
+
+    }
   }
 });
 
 // Simple home route
 app.get("/", (req, res) => {
   res.send(
-    '<h2>Static Control Report PDF</h2><p>Download: <a href="/download">/download</a></p>'
+    '<h2>Static Control Report PDF</h2><p>Download: <a href="/download">/download</a></p><p>Generate: <a href="/generate-static-control-report">/generate-static-control-report</a></p>'
   );
 });
 
@@ -7813,16 +16132,491 @@ app.get("/", (req, res) => {
 async function startServer() {
   // Connect to MongoDB before starting server
   await connectToMongoDB();
+  
+  // Mount the router for generate-static-control-report route after DB connection
+  const router = createStaticControlReportRoutes(db);
+  app.use("/", router);
 
   app.listen(PORT, () => {
-    console.log(
-      `Static Control Report server running at http://localhost:${PORT}`
-    );
+
   });
 }
 
-// Initialize and start server
-startServer().catch((error) => {
-  console.error("Failed to start server:", error);
-  process.exit(1);
-});
+  // Route handler function that can be used in main server
+function createStaticControlReportRoutes(db) {
+    const router = express.Router();
+    
+    // Test endpoint to verify logging works
+    router.get("/translation-test", (req, res) => {
+      logTranslation("TEST_LOG", { message: "This is a test log entry", timestamp: new Date().toISOString() });
+      res.json({
+        success: true,
+        message: "Test log entry written. Check /translation-status to see it.",
+        logFile: TRANSLATION_LOG_FILE
+      });
+    });
+
+    // Status endpoint to check translation logs
+    router.get("/translation-status", (req, res) => {
+      // Read full log file if requested
+      let fullLogs = [];
+      try {
+        if (fs.existsSync(TRANSLATION_LOG_FILE)) {
+          const logContent = fs.readFileSync(TRANSLATION_LOG_FILE, 'utf8');
+          fullLogs = logContent.split('\n').filter(line => line.trim()).slice(-50); // Last 50 lines
+        }
+      } catch (err) {
+        // Ignore read errors
+      }
+
+      if (req.query.format === 'html') {
+        // Return HTML page
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Extl3 Translation Status</title>
+  <style>
+    body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #d4d4d4; }
+    h1 { color: #4ec9b0; }
+    .stats { background: #252526; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    .stat { margin: 5px 0; }
+    .log-entry { background: #2d2d30; padding: 10px; margin: 5px 0; border-left: 3px solid #007acc; border-radius: 3px; }
+    .log-time { color: #858585; font-size: 0.9em; }
+    .log-message { color: #4ec9b0; font-weight: bold; margin: 5px 0; }
+    .log-data { color: #ce9178; margin-left: 20px; white-space: pre-wrap; font-size: 0.9em; }
+    .success { border-left-color: #4ec9b0; }
+    .error { border-left-color: #f48771; }
+    .warning { border-left-color: #dcdcaa; }
+    button { background: #007acc; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 3px; margin: 10px 5px; }
+    button:hover { background: #005a9e; }
+    .refresh-info { color: #858585; font-size: 0.8em; margin-top: 20px; }
+  </style>
+  <script>
+    function refreshLogs() { location.reload(); }
+    setInterval(refreshLogs, 5000);
+  </script>
+</head>
+<body>
+  <h1>🔍 Extl3 Translation Status</h1>
+  <div class="stats">
+    <div class="stat"><strong>Log File:</strong> ${TRANSLATION_LOG_FILE}</div>
+    <div class="stat"><strong>Total Logs in Memory:</strong> ${translationLogBuffer.length}</div>
+    <div class="stat"><strong>Recent Logs Shown:</strong> ${fullLogs.length}</div>
+    <button onclick="refreshLogs()">🔄 Refresh</button>
+    <button onclick="location.href='?format=json'">📄 View as JSON</button>
+  </div>
+  <h2>Recent Translation Logs:</h2>
+  ${fullLogs.reverse().map(line => {
+    try {
+      const match = line.match(/^\[(.+?)\] (.+)$/);
+      if (match) {
+        const [, timestamp, rest] = match;
+        let message = rest;
+        let data = null;
+        const dataMatch = rest.match(/^(.+?) (.+)$/);
+        if (dataMatch && dataMatch[2].startsWith('{')) {
+          message = dataMatch[1];
+          try { data = JSON.parse(dataMatch[2]); } catch (e) { data = dataMatch[2]; }
+        }
+        const entryClass = 
+          message.includes('ERROR') || message.includes('TRANSLATE_ERROR') ? 'error' :
+          message.includes('SUCCESS') || message.includes('COMPLETED') ? 'success' :
+          message.includes('SKIPPED') || message.includes('NO_') ? 'warning' : '';
+        const dataHtml = data ? '<div class="log-data">' + JSON.stringify(data, null, 2).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+        return '<div class="log-entry ' + entryClass + '"><div class="log-time">' + timestamp + '</div><div class="log-message">' + message.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' + dataHtml + '</div>';
+      }
+      return '<div class="log-entry">' + line.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+    } catch (e) {
+      return '<div class="log-entry">' + line.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+    }
+  }).join('')}
+  <div class="refresh-info">Auto-refreshing every 5 seconds...</div>
+</body>
+</html>
+        `;
+        res.send(html);
+      } else {
+        res.json({
+          success: true,
+          logFile: TRANSLATION_LOG_FILE,
+          recentLogs: translationLogBuffer.slice(-20),
+          fullLogs: fullLogs,
+          totalLogs: translationLogBuffer.length
+        });
+      }
+    });
+    
+    router.get("/generate-static-control-report", async (req, res) => {
+      const targetLang = req.query.target_lang || req.query.lang || "EN";
+      logTranslation("ENDPOINT_CALLED", {
+        endpoint: "/generate-static-control-report",
+        targetLang,
+        queryParams: req.query
+      });
+      try {
+        // Use the db passed to the route handler, not the module-level db
+        const routeDb = db || (typeof db !== 'undefined' ? db : null);
+        if (!routeDb) {
+          return res.status(500).json({ error: "Database not connected" });
+        }
+        
+        // Get parameters from query string
+        var subjectMatterId = req.query.subjectMatterId || "KP06";
+        var projectId = req.query.projectId || "693d2acb1291ff43b9ea32a3";
+        var companyId = req.query.companyId || "693d25ef252d1b388fff0648";
+        
+        logTranslation("PARAMS_RECEIVED", {
+          subjectMatterId,
+          projectId,
+          companyId,
+          targetLang
+        });
+
+        // Validate required parameters
+        if (!projectId || !companyId || !subjectMatterId) {
+          return res.status(400).json({
+            error:
+              "projectId, companyId, and subjectMatterId are required query parameters",
+          });
+        }
+
+        // Check if database is connected
+        if (!routeDb) {
+          return res.status(500).json({ error: "Database not connected" });
+        }
+
+        // Fetch company data if companyId is provided
+        let company = null;
+        if (companyId) {
+
+          company = await routeDb.collection("companies").findOne({
+            _id: new ObjectId(companyId),
+          });
+
+          if (company) {
+
+          }
+        }
+
+        // Fetch project data if projectId is provided
+        let project = null;
+        if (projectId && companyId) {
+
+          project = await routeDb.collection("projects").findOne({
+            _id: new ObjectId(projectId),
+            companyId: companyId,
+          });
+
+          if (project) {
+
+          }
+        }
+
+        // Fetch gamma data - get the most recent one
+
+        let gammaResults = await routeDb
+          .collection("gammas")
+          .find({
+            companyId: companyId,
+            $or: [
+              { projectsId: { $in: [projectId] } },
+              { projectsId: { $in: [new ObjectId(projectId)] } },
+            ],
+            "profession.SubjectMatterId": subjectMatterId,
+          })
+          .sort({ createdAt: -1 })
+          .limit(1)
+          .toArray();
+
+        let gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+
+        // If no gamma found with subjectMatterId, try without it
+        if (!gamma) {
+
+          gammaResults = await routeDb
+            .collection("gammas")
+            .find({
+              companyId: companyId,
+              $or: [
+                { projectsId: { $in: [projectId] } },
+                { projectsId: { $in: [new ObjectId(projectId)] } },
+              ],
+            })
+            .sort({ createdAt: -1 })
+            .limit(1)
+            .toArray();
+          gamma = gammaResults.length > 0 ? gammaResults[0] : null;
+        }
+
+        // Fetch eurocode from projectprofessioneurocodes
+
+        const eurocodeRecord = await routeDb
+          .collection("projectprofessioneurocodes")
+          .findOne({
+            projectId: projectId,
+            companyId: companyId,
+            subjectMatterId: subjectMatterId,
+          });
+        const eurocode =
+          eurocodeRecord?.euroCodes && eurocodeRecord.euroCodes.length > 0
+            ? String(eurocodeRecord.euroCodes[0])
+            : "mentioned number and name of the Eurocode.";
+
+        // Fetch user with role Main Contractor or Main Constructor
+
+        const mainUser = await routeDb.collection("users").findOne({
+          projectsId: { $in: [projectId] },
+          role: { $in: ["Main Contractor", "Main Constructor"] },
+        });
+
+        // Fetch signatures from static report signatures
+
+        const signatures = await routeDb
+          .collection("static report signatures")
+          .find({
+            projectId: projectId,
+            companyId: companyId,
+            subjectMatterId: subjectMatterId,
+          })
+          .sort({ signatureType: 1, createdAt: -1 })
+          .toArray();
+
+        // Organize signatures by signatureType
+        const signatureByType = {};
+        signatures.forEach((sig) => {
+          if (sig.signatureType !== undefined && sig.signatureType !== null) {
+            signatureByType[sig.signatureType] = sig;
+
+          }
+        });
+
+        // Fetch Independent Controller users for the project
+
+        const projectObjectId = new ObjectId(projectId);
+        const independentControllers = await routeDb
+          .collection("users")
+          .find({
+            role: "Independent Controller",
+            $or: [
+              { projectsId: { $in: [projectObjectId] } },
+              { projectsId: { $in: [projectId] } },
+            ],
+          })
+          .toArray();
+
+        // Fetch specialcontrol records
+
+        const specialControls = await routeDb
+          .collection("specialcontrol")
+          .find({
+            projectsId: { $in: [projectId, projectObjectId] },
+          })
+          .toArray();
+
+        // Fetch deviations records
+
+        const deviations = await routeDb
+          .collection("deviations")
+          .find({
+            "profession.SubjectMatterId": subjectMatterId,
+            projectsId: { $in: [projectId, projectObjectId] },
+            type: "Static Report",
+          })
+          .toArray();
+
+        // Extract staticDocumentCheckList from professionAssociatedData (same as extl.js)
+        let b1Rows = [];
+        let b2Rows = [];
+        let b3Rows = [];
+
+        if (project && project.professionAssociatedData) {
+          const professionData = project.professionAssociatedData[subjectMatterId];
+          if (professionData && professionData.staticDocumentCheckList) {
+            const checklist = professionData.staticDocumentCheckList;
+
+            // Helper function to map checklist item to table row
+            const mapChecklistItemToRow = (item) => {
+              return {
+                pos: item.ItemId || item.pos || "",
+                checkingThe:
+                  item.checkingThe ||
+                  item["Control of"] ||
+                  item["Contol of"] ||
+                  item["CHECKING THE"] ||
+                  "",
+                subject: item.Subject || item.subject || item["SUBJECT"] || "",
+                constructionPart:
+                  item["Construction part"] ||
+                  item.constructionPart ||
+                  item["CONSTRUCTION PART"] ||
+                  "",
+                basis: item.Basis || item.basis || "",
+                method:
+                  item["Control method"] ||
+                  item["Control methode"] ||
+                  item["CONTROL METHOD"] ||
+                  item.controlMethod ||
+                  item.method ||
+                  "",
+                scope:
+                  item.Scope ||
+                  item.scope ||
+                  item.circumference ||
+                  (item.extent ? `${item.extent * 100}%` : "") ||
+                  "",
+                acceptance:
+                  item["Acceptance criteria"] ||
+                  item["Acceptance Criteria"] ||
+                  item.acceptanceCriteria ||
+                  item.acceptance ||
+                  "",
+                timeControl:
+                  item.Time ||
+                  item.time ||
+                  item["TIME CONTROL"] ||
+                  item.timeControl ||
+                  "",
+              };
+            };
+
+            // Filter, deduplicate, and sort B1 items
+            b1Rows = checklist
+              .filter(
+                (item) =>
+                  item.DS_GroupId === "B1" &&
+                  item.ItemId != null &&
+                  item.ItemId !== ""
+              )
+              .reduce((acc, item) => {
+                const itemId = item.ItemId || "";
+                if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+                  acc.push(item);
+                }
+                return acc;
+              }, [])
+              .sort((a, b) => {
+                const aId = a.ItemId || "";
+                const bId = b.ItemId || "";
+                return aId.localeCompare(bId);
+              })
+              .map(mapChecklistItemToRow);
+
+            // Filter, deduplicate, and sort B2 items
+            const b2Filtered = checklist.filter(
+              (item) =>
+                item.DS_GroupId === "B2" &&
+                item.ItemId != null &&
+                item.ItemId !== ""
+            );
+            b2Rows = b2Filtered
+              .reduce((acc, item) => {
+                const itemId = item.ItemId || "";
+                if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+                  acc.push(item);
+                }
+                return acc;
+              }, [])
+              .sort((a, b) => {
+                const aId = a.ItemId || "";
+                const bId = b.ItemId || "";
+                return aId.localeCompare(bId);
+              })
+              .map(mapChecklistItemToRow);
+
+            // Filter, deduplicate, and sort B3 items
+            const b3Filtered = checklist.filter(
+              (item) =>
+                item.DS_GroupId === "B3" &&
+                item.ItemId != null &&
+                item.ItemId !== ""
+            );
+            b3Rows = b3Filtered
+              .reduce((acc, item) => {
+                const itemId = item.ItemId || "";
+                if (!acc.find((existing) => (existing.ItemId || "") === itemId)) {
+                  acc.push(item);
+                }
+                return acc;
+              }, [])
+              .sort((a, b) => {
+                const aId = a.ItemId || "";
+                const bId = b.ItemId || "";
+                return aId.localeCompare(bId);
+              })
+              .map(mapChecklistItemToRow);
+
+          } else {
+
+          }
+        } else {
+
+        }
+
+        // Build dynamic object from database data
+        const dynamic = {
+          company: company,
+          project: project,
+          gamma: gamma,
+          eurocode: eurocode,
+          mainUser: mainUser,
+          signatures: signatureByType,
+          independentControllers: independentControllers,
+          specialControls: specialControls,
+          deviations: deviations,
+          // B1, B2, B3 rows for pages 20, 21, 22
+          b1Rows: b1Rows,
+          b2Rows: b2Rows,
+          b3Rows: b3Rows,
+          companyInfo: company
+            ? `${company.name || ""}\n${company.address || ""}\nCVR: ${
+                company.cvr || ""
+              }\n${company.contactPhone || ""}`
+            : "",
+          projectName: project ? project.name : "",
+          constructionPart: gamma?.special ? String(gamma.special) : "Special text",
+          specialText: gamma?.special ? String(gamma.special) : "Special text",
+          documentType: "STATIC INSPECTION REPORT",
+          subjectMatterId: subjectMatterId,
+          projectId: projectId,
+          companyId: companyId,
+          db: routeDb, // Pass db through dynamic object so page9 can access it
+        };
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          'attachment; filename="static-control-report.pdf"'
+        );
+
+        logTranslation("CALLING_GENERATE_FUNCTION", { targetLang });
+        await generateStaticControlReport(dynamic, res, targetLang);
+        logTranslation("GENERATE_FUNCTION_COMPLETED", { targetLang });
+      } catch (error) {
+
+        // Check if headers have already been sent (PDF stream may have started)
+        if (!res.headersSent) {
+          res.status(500).json({ error: error.message });
+        } else {
+          // Headers already sent, can't send JSON response - just log the error
+
+        }
+      }
+    });
+
+    return router;
+}
+
+// Export the generateStaticControlReport function for use in other files
+module.exports = {
+  generateStaticControlReport,
+  createStaticControlReportRoutes,
+};
+
+// Initialize and start server (only if running as standalone)
+if (require.main === module) {
+  startServer().catch((error) => {
+
+    process.exit(1);
+  });
+}

@@ -57,29 +57,92 @@ class DualStorage {
 
       // If S3 is configured, also upload to S3
       if (isS3Configured && s3Client) {
-        const fileStream = fs.createReadStream(localFile.path);
-        const uniqueSuffix = crypto.randomBytes(16).toString("hex");
-        const s3Filename = uniqueSuffix + "-" + file.originalname;
+        // Resolve path to absolute path if it's relative
+        // localFile.path from multer should be absolute, but handle both cases
+        let filePath = localFile.path;
+        
+        // If path is relative, try to resolve it
+        if (!path.isAbsolute(filePath)) {
+          // Try multiple possible base paths
+          const possiblePaths = [
+            path.resolve(process.cwd(), filePath), // Most likely - relative to cwd
+            path.resolve(__dirname, '..', filePath),
+            path.resolve(__dirname, '..', '..', filePath),
+            path.resolve(process.cwd(), 'reports_backend', 'aws_backend_assurement', filePath),
+          ];
+          
+          // Find the first path that exists
+          const existingPath = possiblePaths.find(p => {
+            try {
+              return fs.existsSync(p);
+            } catch (e) {
+              return false;
+            }
+          });
+          
+          filePath = existingPath || possiblePaths[0];
+        }
+        
+        // Check if local file exists before trying to read it
+        if (!fs.existsSync(filePath)) {
+          console.warn(`⚠️ Local file not found for S3 upload:`);
+          console.warn(`   Attempted path: ${filePath}`);
+          console.warn(`   Original path: ${localFile.path}`);
+          console.warn(`   Current working directory: ${process.cwd()}`);
+          console.warn(`   __dirname: ${__dirname}`);
+          console.warn(`   File will be stored locally only (no S3 upload)`);
+          // Continue with local file info only - don't fail the upload
+          cb(null, fileInfo);
+          return;
+        }
 
-        const uploadParams = {
-          Bucket: process.env.S3_BUCKET_NAME,
-          Key: s3Filename,
-          Body: fileStream,
-          ContentType: file.mimetype,
-        };
-
-        s3Client
-          .send(new PutObjectCommand(uploadParams))
-          .then((data) => {
-            fileInfo.s3Key = s3Filename;
-            fileInfo.s3Location = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Filename}`;
+        try {
+          // Double-check file exists right before reading (in case of race conditions)
+          if (!fs.existsSync(filePath)) {
+            console.warn(`⚠️ File disappeared before S3 upload: ${filePath}`);
             cb(null, fileInfo);
-          })
-          .catch((s3Error) => {
-            console.error("S3 upload error:", s3Error);
-            // Continue with local file even if S3 fails
+            return;
+          }
+
+          const fileStream = fs.createReadStream(filePath);
+          
+          // Handle file stream errors
+          fileStream.on('error', (streamError) => {
+            console.error(`❌ Error reading file stream for S3 upload: ${filePath}`, streamError);
+            // Continue with local file info even if stream fails
             cb(null, fileInfo);
           });
+
+          const uniqueSuffix = crypto.randomBytes(16).toString("hex");
+          const s3Filename = uniqueSuffix + "-" + file.originalname;
+
+          const uploadParams = {
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: s3Filename,
+            Body: fileStream,
+            ContentType: file.mimetype,
+          };
+
+          s3Client
+            .send(new PutObjectCommand(uploadParams))
+            .then((data) => {
+              fileInfo.s3Key = s3Filename;
+              fileInfo.s3Location = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Filename}`;
+              console.log(`✅ Successfully uploaded to S3: ${file.originalname} -> ${s3Filename}`);
+              cb(null, fileInfo);
+            })
+            .catch((s3Error) => {
+              console.error("❌ S3 upload error:", s3Error);
+              // Continue with local file even if S3 fails
+              cb(null, fileInfo);
+            });
+        } catch (readError) {
+          console.error(`❌ Error reading local file for S3 upload: ${filePath}`, readError);
+          console.error(`   Error details: ${readError.message}`);
+          console.error(`   Stack: ${readError.stack}`);
+          // Continue with local file info even if read fails
+          cb(null, fileInfo);
+        }
       } else {
         // S3 not configured, just use local storage
         cb(null, fileInfo);

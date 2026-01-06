@@ -190,6 +190,48 @@ function createStaticReportControlsRoutes(db) {
         );
       }
 
+      // If projectId is provided, check approval status for each entry
+      if (projectId) {
+        console.log("🔍 Checking approval status for entries...");
+        
+        // Get all approved entries for this project + subjectMatterId
+        const approvedEntries = await db
+          .collection("approved static report entries")
+          .find({
+            projectId: projectId,
+            subjectMatterId: subjectMatterId,
+            approvedStatus: "approved",
+          })
+          .toArray();
+
+        // Create a map of approved entries by pos
+        const approvedMap = new Map();
+        approvedEntries.forEach((approved) => {
+          approvedMap.set(approved.pos, {
+            isApproved: true,
+            approvedDate: approved.approvedDate,
+            approvedBy: approved.approvedBy,
+            approvedStatus: approved.approvedStatus,
+          });
+        });
+
+        // Add approval status to each entry
+        entries = entries.map((entry) => {
+          const approval = approvedMap.get(entry.pos);
+          return {
+            ...entry,
+            isApproved: approval ? true : false,
+            approvedDate: approval ? approval.approvedDate : null,
+            approvedBy: approval ? approval.approvedBy : null,
+            approvedStatus: approval ? approval.approvedStatus : null,
+          };
+        });
+
+        console.log(
+          `✅ Found ${approvedEntries.length} approved entries out of ${entries.length} total entries`
+        );
+      }
+
       res.status(200).json({
         meta: {
           requestedProjectEuroCodes: euroCodesStr,
@@ -582,26 +624,38 @@ function createStaticReportControlsRoutes(db) {
     try {
       const { projectId, subjectMatterId } = req.body;
 
+      console.log('🔍 [check-control-plan-approval] Request received:', { projectId, subjectMatterId });
+
       if (!projectId || !subjectMatterId) {
+        console.log('❌ [check-control-plan-approval] Missing required fields');
         return res.status(400).json({
           success: false,
           message: "projectId and subjectMatterId are required",
         });
       }
 
-      const approval = await db.collection("approved control plan").findOne({
+      const query = {
         projectId: projectId,
         subjectMatterId: subjectMatterId,
-      });
+      };
+      
+      console.log('🔍 [check-control-plan-approval] Query:', JSON.stringify(query));
+
+      const approval = await db.collection("approved control plan").findOne(query);
+
+      console.log('📊 [check-control-plan-approval] Found approval document:', approval ? JSON.stringify(approval) : 'null');
 
       if (approval) {
-        return res.status(200).json({
+        const response = {
           success: true,
           isApproved: approval.status === "approved",
           status: approval.status || null,
           approval: approval,
-        });
+        };
+        console.log('✅ [check-control-plan-approval] Returning:', JSON.stringify(response));
+        return res.status(200).json(response);
       } else {
+        console.log('⚠️ [check-control-plan-approval] No approval document found');
         return res.status(200).json({
           success: true,
           isApproved: false,
@@ -611,6 +665,126 @@ function createStaticReportControlsRoutes(db) {
       }
     } catch (error) {
       console.error("❌ Error checking control plan approval:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to check approval status",
+        error: error.message,
+      });
+    }
+  });
+
+  // New endpoint to approve individual POS entry
+  router.post("/approve-static-report-entry", async (req, res) => {
+    try {
+      const { projectId, subjectMatterId, pos, approvedBy } = req.body;
+
+      if (!projectId || !subjectMatterId || !pos) {
+        return res.status(400).json({
+          success: false,
+          message: "projectId, subjectMatterId, and pos are required",
+        });
+      }
+
+      // Check if entry is already approved
+      const existingApproval = await db
+        .collection("approved static report entries")
+        .findOne({
+          projectId: projectId,
+          subjectMatterId: subjectMatterId,
+          pos: pos,
+        });
+
+      if (existingApproval && existingApproval.approvedStatus === "approved") {
+        return res.status(400).json({
+          success: false,
+          message: "This entry is already approved",
+        });
+      }
+
+      const approvalData = {
+        projectId: projectId,
+        subjectMatterId: subjectMatterId,
+        pos: pos,
+        approvedStatus: "approved",
+        approvedDate: new Date().toISOString(),
+        approvedBy: approvedBy || "unknown",
+        createdAt: existingApproval ? existingApproval.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (existingApproval) {
+        // Update existing approval
+        await db.collection("approved static report entries").updateOne(
+          {
+            projectId: projectId,
+            subjectMatterId: subjectMatterId,
+            pos: pos,
+          },
+          {
+            $set: approvalData,
+          }
+        );
+        console.log(
+          `✅ Entry approved (updated) - projectId: ${projectId}, subjectMatterId: ${subjectMatterId}, pos: ${pos}`
+        );
+      } else {
+        // Create new approval
+        await db.collection("approved static report entries").insertOne(approvalData);
+        console.log(
+          `✅ Entry approved (new) - projectId: ${projectId}, subjectMatterId: ${subjectMatterId}, pos: ${pos}`
+        );
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Entry approved successfully",
+        approval: approvalData,
+      });
+    } catch (error) {
+      console.error("❌ Error approving static report entry:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to approve entry",
+        error: error.message,
+      });
+    }
+  });
+
+  // New endpoint to check approval status for individual entries
+  router.post("/check-static-report-entry-approval", async (req, res) => {
+    try {
+      const { projectId, subjectMatterId, pos } = req.body;
+
+      if (!projectId || !subjectMatterId || !pos) {
+        return res.status(400).json({
+          success: false,
+          message: "projectId, subjectMatterId, and pos are required",
+        });
+      }
+
+      const approval = await db.collection("approved static report entries").findOne({
+        projectId: projectId,
+        subjectMatterId: subjectMatterId,
+        pos: pos,
+      });
+
+      if (approval && approval.approvedStatus === "approved") {
+        return res.status(200).json({
+          success: true,
+          isApproved: true,
+          approvedDate: approval.approvedDate,
+          approvedBy: approval.approvedBy,
+          approvedStatus: approval.approvedStatus,
+        });
+      } else {
+        return res.status(200).json({
+          success: true,
+          isApproved: false,
+          approvedStatus: null,
+        });
+      }
+    } catch (error) {
+      console.error("❌ Error checking entry approval status:", error);
       return res.status(500).json({
         success: false,
         message: "Failed to check approval status",

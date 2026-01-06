@@ -6,10 +6,11 @@ const path = require("path");
 const app = express();
 
 // Core middleware
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Increase body size limit for translation batches and file uploads
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Static assets
 app.use("/uploads", express.static("uploads"));
